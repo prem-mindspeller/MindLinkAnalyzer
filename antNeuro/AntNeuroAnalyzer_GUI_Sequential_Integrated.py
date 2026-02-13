@@ -745,10 +745,12 @@ class AntNeuroDeviceManager:
                 # Set up data callback to populate buffers
                 def on_data(data):
                     for sample in data:
+                        # Truncate to 64 EEG channels (device sends 88: 64 EEG + 24 bipolar)
+                        eeg_sample = sample[:64] if len(sample) > 64 else sample
                         # Add Fz (channel 0) to single-channel buffer for compatibility
-                        self.live_data_buffer.append(sample[0])
-                        # Add full sample to multichannel buffer
-                        self.multichannel_buffer.append(sample)
+                        self.live_data_buffer.append(eeg_sample[0])
+                        # Add full 64-ch EEG sample to multichannel buffer
+                        self.multichannel_buffer.append(eeg_sample)
                 
                 self.edi2_client.set_data_callback(on_data)
                 
@@ -820,10 +822,14 @@ class AntNeuroDeviceManager:
                     # Reshape to channels x samples
                     samples = data.reshape(-1, self.channel_count)
                     
-                    for sample in samples:
+                    # Truncate to 64 EEG channels (device may send 88: 64 EEG + 24 bipolar)
+                    eeg_channels = 64
+                    eeg_samples = samples[:, :eeg_channels] if samples.shape[1] > eeg_channels else samples
+                    
+                    for sample in eeg_samples:
                         # Add Fz (channel 0) to single-channel buffer for compatibility
                         self.live_data_buffer.append(sample[0])
-                        # Add full sample to multichannel buffer
+                        # Add full 64-ch EEG sample to multichannel buffer
                         self.multichannel_buffer.append(sample)
                 
                 time.sleep(0.01)  # 10ms polling

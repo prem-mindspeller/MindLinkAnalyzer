@@ -343,97 +343,129 @@ class EDI2Client:
             if not self._connect_grpc():
                 return False
         
-        try:
-            # IMPORTANT: Dispose old amplifier handle before creating new one
-            # This prevents "amplifier with id X not found" errors from stale handles
-            if self.amplifier_handle is not None:
-                try:
-                    print(f"[EDI2] Disposing old amplifier handle: {self.amplifier_handle}")
-                    self.stub.Amplifier_Dispose(
-                        edi.Amplifier_DisposeRequest(
-                            AmplifierHandle=self.amplifier_handle
+        # Retry logic for "Amplifier in use" errors
+        max_retries = 1
+        for attempt in range(max_retries + 1):
+            try:
+                # IMPORTANT: Dispose old amplifier handle before creating new one
+                # This prevents "amplifier with id X not found" errors from stale handles
+                if self.amplifier_handle is not None:
+                    try:
+                        print(f"[EDI2] Disposing old amplifier handle: {self.amplifier_handle}")
+                        self.stub.Amplifier_Dispose(
+                            edi.Amplifier_DisposeRequest(
+                                AmplifierHandle=self.amplifier_handle
+                            )
                         )
+                    except Exception as e:
+                        # Handle may already be disposed - that's OK
+                        print(f"[EDI2] Old handle disposal (expected): {e}")
+                    self.amplifier_handle = None
+                
+                # Get devices
+                device_resp = self.stub.DeviceManager_GetDevices(
+                    edi.DeviceManager_GetDevicesRequest()
+                )
+                
+                if not device_resp.DeviceInfoList:
+                    print("[EDI2] No devices found")
+                    return False
+                
+                # Find matching device or use first
+                device_info = None
+                for dev in device_resp.DeviceInfoList:
+                    if device_serial is None or dev.Serial == device_serial:
+                        device_info = dev
+                        break
+                
+                if not device_info:
+                    print(f"[EDI2] Device {device_serial} not found")
+                    return False
+                
+                # Create amplifier
+                create_resp = self.stub.Controller_CreateDevice(
+                    edi.Controller_CreateDeviceRequest(
+                        DeviceInfoList=[device_info]
                     )
-                except Exception as e:
-                    # Handle may already be disposed - that's OK
-                    print(f"[EDI2] Old handle disposal (expected): {e}")
-                self.amplifier_handle = None
-            
-            # Get devices
-            device_resp = self.stub.DeviceManager_GetDevices(
-                edi.DeviceManager_GetDevicesRequest()
-            )
-            
-            if not device_resp.DeviceInfoList:
-                print("[EDI2] No devices found")
-                return False
-            
-            # Find matching device or use first
-            device_info = None
-            for dev in device_resp.DeviceInfoList:
-                if device_serial is None or dev.Serial == device_serial:
-                    device_info = dev
-                    break
-            
-            if not device_info:
-                print(f"[EDI2] Device {device_serial} not found")
-                return False
-            
-            # Create amplifier
-            create_resp = self.stub.Controller_CreateDevice(
-                edi.Controller_CreateDeviceRequest(
-                    DeviceInfoList=[device_info]
                 )
-            )
-            
-            self.amplifier_handle = create_resp.AmplifierHandle
-            print(f"[EDI2] Created amplifier (handle: {self.amplifier_handle})")
-            
-            # Get device info (use correct method name)
-            info_resp = self.stub.Amplifier_GetDeviceInformation(
-                edi.Amplifier_GetDeviceInformationRequest(
-                    AmplifierHandle=self.amplifier_handle
+                
+                self.amplifier_handle = create_resp.AmplifierHandle
+                print(f"[EDI2] Created amplifier (handle: {self.amplifier_handle})")
+                
+                # Get device info (use correct method name)
+                info_resp = self.stub.Amplifier_GetDeviceInformation(
+                    edi.Amplifier_GetDeviceInformationRequest(
+                        AmplifierHandle=self.amplifier_handle
+                    )
                 )
-            )
-            
-            # Get channel list (use correct method name)
-            ch_resp = self.stub.Amplifier_GetChannelsAvailable(
-                edi.Amplifier_GetChannelsAvailableRequest(
-                    AmplifierHandle=self.amplifier_handle
+                
+                # Get channel list (use correct method name)
+                ch_resp = self.stub.Amplifier_GetChannelsAvailable(
+                    edi.Amplifier_GetChannelsAvailableRequest(
+                        AmplifierHandle=self.amplifier_handle
+                    )
                 )
-            )
-            
-            self.channels = []
-            for idx, ch in enumerate(ch_resp.ChannelList):
-                # Note: SDK returns "none" when no electrode layout is configured
-                # We preserve this so the GUI can detect it and use appropriate fallback
-                ch_name = ch.Name if ch.Name and ch.Name.lower() != 'none' else f"Ch{ch.ChannelIndex+1}"
-                self.channels.append(ChannelInfo(
-                    index=ch.ChannelIndex,
-                    name=ch_name,
-                    polarity=ch.ChannelPolarity,
-                    channel_type=ch.UnitType
-                ))
-            
-            # Store device info (DeviceInformation is a nested message)
-            dev_info = info_resp.DeviceInformation
-            self.device_info = DeviceInfo(
-                serial=dev_info.Serial if hasattr(dev_info, 'Serial') else device_info.Serial,
-                device_type=device_info.AmplifierType,
-                key=device_info.Key,
-                channel_count=len(self.channels),
-                firmware_version=getattr(dev_info, 'FirmwareVersion', '')
-            )
-            
-            self.is_connected = True
-            print(f"[EDI2] Connected to {self.device_info.serial}")
-            print(f"[EDI2]   Channels: {self.device_info.channel_count}")
-            
-            return True
-            
-        except grpc.RpcError as e:
-            print(f"[EDI2] Connection error: {e}")
-            return False
+                
+                self.channels = []
+                for idx, ch in enumerate(ch_resp.ChannelList):
+                    # Note: SDK returns "none" when no electrode layout is configured
+                    # We preserve this so the GUI can detect it and use appropriate fallback
+                    ch_name = ch.Name if ch.Name and ch.Name.lower() != 'none' else f"Ch{ch.ChannelIndex+1}"
+                    self.channels.append(ChannelInfo(
+                        index=ch.ChannelIndex,
+                        name=ch_name,
+                        polarity=ch.ChannelPolarity,
+                        channel_type=ch.UnitType
+                    ))
+                
+                # Store device info (DeviceInformation is a nested message)
+                dev_info = info_resp.DeviceInformation
+                self.device_info = DeviceInfo(
+                    serial=dev_info.Serial if hasattr(dev_info, 'Serial') else device_info.Serial,
+                    device_type=device_info.AmplifierType,
+                    key=device_info.Key,
+                    channel_count=len(self.channels),
+                    firmware_version=getattr(dev_info, 'FirmwareVersion', '')
+                )
+                
+                self.is_connected = True
+                print(f"[EDI2] Connected to {self.device_info.serial}")
+                print(f"[EDI2]   Channels: {self.device_info.channel_count}")
+                
+                return True
+                
+            except grpc.RpcError as e:
+                error_message = str(e)
+                print(f"[EDI2] Connection error: {e}")
+                
+                # Check if it's an "Amplifier in use" error and we haven't retried yet
+                if "Amplifier in use" in error_message and attempt < max_retries:
+                    print(f"[EDI2] Amplifier in use - restarting gRPC server to clear stale handles...")
+                    print(f"[EDI2] Retry attempt {attempt + 1}/{max_retries}")
+                    
+                    # Stop and restart gRPC server to clear all handles
+                    self._stop_server()
+                    import time
+                    time.sleep(1)  # Give it time to fully stop
+                    
+                    if not self._start_server():
+                        print("[EDI2] Failed to restart server")
+                        return False
+                    
+                    # Reconnect gRPC channel
+                    self.stub = None
+                    if not self._connect_grpc():
+                        print("[EDI2] Failed to reconnect gRPC")
+                        return False
+                    
+                    print("[EDI2] Server restarted, retrying connection...")
+                    continue  # Retry the connection
+                else:
+                    # Not "Amplifier in use" error, or we've already retried
+                    return False
+        
+        # If we exhausted all retries
+        return False
     
     def disconnect(self):
         """Disconnect from the device"""

@@ -76,7 +76,8 @@ class StandaloneAnalyzerConfig:
     mode: str = "aggregate_only"
     dependence_correction: str = "Kost-McDermott"
     use_permutation_for_sumP: bool = True
-    n_perm: int = 100
+    n_perm: int = 1000  # Updated from 100 for publication-grade p-value resolution
+    n_perm_fast: int = 100  # Fast mode permutation count
     discretization_bins: int = 5
     export_profile: str = "full"
     effect_measure: str = "delta"
@@ -88,10 +89,20 @@ class StandaloneAnalyzerConfig:
     min_effect_size: float = 0.5
     min_percent_change: float = 10.0
     correlation_guard: bool = True
-    block_seconds: float = 8.0
+    block_seconds: float = 4.0  # Updated from 8.0 for better power
     mt_tapers: int = 3
     fast_mode: bool = True
     nmin_sessions: int = 2
+    min_blocks_per_condition: int = 8
+    # Preprocessing config
+    line_noise_freq: float = 60.0  # 50.0 for EU/Asia
+    apply_notch_filter: bool = True
+    emg_adaptive_threshold: bool = True
+    emg_fixed_ratio: float = 1.5
+    # Bootstrap CI
+    compute_bootstrap_ci: bool = True
+    bootstrap_ci_samples: int = 1000
+    n_boot: int = 100  # Fast mode bootstrap (use bootstrap_ci_samples for publication)
 
 
 class OfflineEEGAnalyzer:
@@ -129,6 +140,12 @@ class OfflineEEGAnalyzer:
         
         self.results = None
         self.session_info = {}
+        
+        # Create config for report generation
+        self.config = StandaloneAnalyzerConfig(
+            fast_mode=fast_mode,
+            n_perm=n_permutations
+        )
         
     def load_data(self) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """
@@ -188,10 +205,14 @@ class OfflineEEGAnalyzer:
                         ]
                     }
             
+            # Extract subject metadata from markers if available
+            subject_metadata = markers.get('subject_metadata', {})
+            
             self.session_info.update({
                 'session_id': markers.get('session_id', self.csv_file.stem),
                 'sample_rate': markers.get('sample_rate', 500),
-                'user_email': markers.get('user_email', 'unknown')
+                'user_email': markers.get('user_email', 'unknown'),
+                'subject_metadata': subject_metadata
             })
             
             return df, markers
@@ -236,6 +257,8 @@ class OfflineEEGAnalyzer:
             config.fast_mode = self.fast_mode
             config.n_perm = self.n_permutations
             config.use_permutation_for_sumP = not self.fast_mode
+            # Set bootstrap iterations: 100 for fast mode, 1000 for publication
+            config.n_boot = 100 if self.fast_mode else config.bootstrap_ci_samples
             
             # Create engine
             engine = OfflineMultichannelEngine(
@@ -380,6 +403,20 @@ class OfflineEEGAnalyzer:
                     'note': 'Full statistical analysis requires GUI engine components'
                 }
             
+            # Update session_info with baseline and task counts for report
+            calibration_data = getattr(engine, 'calibration_data', {})
+            ec_windows = len(calibration_data.get('eyes_closed', {}).get('features', []))
+            eo_windows = len(calibration_data.get('eyes_open', {}).get('features', []))
+            tasks = calibration_data.get('tasks', {})
+            
+            self.session_info.update({
+                'baseline_ec_windows': ec_windows,
+                'baseline_eo_windows': eo_windows,
+                'tasks_executed': len(tasks)
+            })
+            
+            logger.info(f"Session info updated: EC={ec_windows}, EO={eo_windows}, tasks={len(tasks)}")
+            
             # Store results
             self.results = {
                 'session_info': self.session_info,
@@ -450,9 +487,10 @@ class OfflineEEGAnalyzer:
             multi_task_results = self.results.get('multi_task_results', {})
             per_task = multi_task_results.get('per_task', {})
             
-            # Count baseline windows if available
-            baseline_ec_windows = 0
-            baseline_eo_windows = 0
+            # Get baseline/task counts from updated session_info
+            baseline_ec_windows = self.results['session_info'].get('baseline_ec_windows', 0)
+            baseline_eo_windows = self.results['session_info'].get('baseline_eo_windows', 0)
+            tasks_executed = self.results['session_info'].get('tasks_executed', len(per_task))
             
             results_for_report = {
                 'session_info': {
@@ -464,7 +502,7 @@ class OfflineEEGAnalyzer:
                     'sample_rate': self.results['session_info'].get('sample_rate', 250),
                     'baseline_ec_windows': baseline_ec_windows,
                     'baseline_eo_windows': baseline_eo_windows,
-                    'tasks_executed': len(per_task)
+                    'tasks_executed': tasks_executed
                 },
                 'artifact_summary': self.results.get('artifact_summary', {}),
                 'analysis_results': self.results.get('analysis_results', {}),
@@ -475,7 +513,8 @@ class OfflineEEGAnalyzer:
             lines = Enhanced64ChannelReportGenerator.generate_text_report(
                 results=results_for_report,
                 fast_mode=self.fast_mode,
-                n_permutations=self.n_permutations
+                n_permutations=self.n_permutations,
+                config=self.config
             )
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(lines))
@@ -695,10 +734,10 @@ class OfflineEEGAnalyzer:
     def _generate_pdf_report(self, output_path: Path):
         """Generate PDF report (requires reportlab)."""
         try:
-            from reportlab.lib.pagesizes import letter
-            from reportlab.lib.styles import getSampleStyleSheet
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted
-            from reportlab.lib.units import inch
+            from reportlab.lib.pagesizes import letter  # type: ignore
+            from reportlab.lib.styles import getSampleStyleSheet  # type: ignore
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted  # type: ignore
+            from reportlab.lib.units import inch  # type: ignore
         except ImportError:
             logger.error("reportlab not installed. Generating text report instead.")
             self._generate_text_report(output_path.with_suffix('.txt'))

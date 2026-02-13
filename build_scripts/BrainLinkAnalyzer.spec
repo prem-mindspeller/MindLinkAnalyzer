@@ -1,5 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
+# Get workspace root - SPECPATH is the directory containing this spec file
+WORKSPACE_ROOT = os.path.dirname(SPECPATH)
 
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
@@ -27,11 +31,37 @@ scipy_datas, scipy_binaries, scipy_hiddenimports = collect_all('scipy')
 numpy_datas, numpy_binaries, numpy_hiddenimports = collect_all('numpy')
 pandas_datas, pandas_binaries, pandas_hiddenimports = collect_all('pandas')
 
+# Collect grpcio for EDI2 client (ANT Neuro communication)
+try:
+    grpc_datas, grpc_binaries, grpc_hiddenimports = collect_all('grpc')
+except Exception:
+    grpc_datas, grpc_binaries, grpc_hiddenimports = [], [], []
+
 datas = [
-    ('assets', 'assets'),
-    ('BrainLinkParser', 'BrainLinkParser'),
-    ('TroubleshootingGuide.md', '.'),
-    ('MindLink_User_Manual.txt', '.'),
+    (os.path.join(WORKSPACE_ROOT, 'assets'), 'assets'),
+    (os.path.join(WORKSPACE_ROOT, 'BrainLinkParser'), 'BrainLinkParser'),
+    (os.path.join(WORKSPACE_ROOT, 'docs', 'TroubleshootingGuide.md'), '.'),
+    (os.path.join(WORKSPACE_ROOT, 'config', 'MindLink_User_Manual.txt'), '.'),
+    # === MULTICHANNEL ANALYSIS PACKAGES ===
+    # antNeuro package - 64-channel EEG analysis engine (gRPC/EDI2 based)
+    (os.path.join(WORKSPACE_ROOT, 'antNeuro', '__init__.py'), 'antNeuro'),
+    (os.path.join(WORKSPACE_ROOT, 'antNeuro', 'enhanced_multichannel_analysis.py'), 'antNeuro'),
+    (os.path.join(WORKSPACE_ROOT, 'antNeuro', 'offline_multichannel_analysis.py'), 'antNeuro'),
+    (os.path.join(WORKSPACE_ROOT, 'antNeuro', 'edi2_client.py'), 'antNeuro'),
+    (os.path.join(WORKSPACE_ROOT, 'antNeuro', 'EdigRPC_pb2.py'), 'antNeuro'),
+    (os.path.join(WORKSPACE_ROOT, 'antNeuro', 'EdigRPC_pb2_grpc.py'), 'antNeuro'),
+    # ANT Neuro EDI DLL directories (gRPC server binaries)
+    (os.path.join(WORKSPACE_ROOT, 'antNeuro', 'edi_dlls'), 'antNeuro/edi_dlls'),
+    (os.path.join(WORKSPACE_ROOT, 'antNeuro', 'edi_dlls_impl'), 'antNeuro/edi_dlls_impl'),
+    # utils package - report generator, LED stimulator, etc.
+    (os.path.join(WORKSPACE_ROOT, 'utils', '__init__.py'), 'utils'),
+    (os.path.join(WORKSPACE_ROOT, 'utils', 'enhanced_report_generator.py'), 'utils'),
+    (os.path.join(WORKSPACE_ROOT, 'utils', 'led_stimulator.py'), 'utils'),
+    (os.path.join(WORKSPACE_ROOT, 'utils', 'prompttask.py'), 'utils'),
+    (os.path.join(WORKSPACE_ROOT, 'utils', 'splash_screen.py'), 'utils'),
+    # Main GUI scripts (needed for imports)
+    (os.path.join(WORKSPACE_ROOT, 'BrainLinkAnalyzer_GUI.py'), '.'),
+    (os.path.join(WORKSPACE_ROOT, 'BrainLinkAnalyzer_GUI_Enhanced.py'), '.'),
 ]
 datas += pyside_datas
 datas += shiboken_datas
@@ -39,6 +69,7 @@ datas += pyqtgraph_datas
 datas += scipy_datas
 datas += numpy_datas
 datas += pandas_datas
+datas += grpc_datas
 
 binaries = []
 binaries += pyside_binaries
@@ -47,6 +78,7 @@ binaries += pyqtgraph_binaries
 binaries += scipy_binaries
 binaries += numpy_binaries
 binaries += pandas_binaries
+binaries += grpc_binaries
 
 hiddenimports = [
     # Data processing and scientific computing
@@ -56,6 +88,7 @@ hiddenimports = [
     'scipy.signal',
     'scipy.integrate',
     'scipy.stats',
+    'scipy.stats.mstats',
     
     # Plotting and visualization
     'pyqtgraph',
@@ -73,6 +106,15 @@ hiddenimports = [
     'certifi',
     'ssl',
     
+    # gRPC for ANT Neuro EDI2 communication
+    'grpc',
+    'grpc._cython',
+    'grpc._cython.cygrpc',
+    'google.protobuf',
+    
+    # Progress bars (optional, has fallback)
+    'tqdm',
+    
     # Standard library modules that might need explicit inclusion
     'json',
     'threading',
@@ -87,6 +129,28 @@ hiddenimports = [
     'copy',
     'math',
     'random',
+    'warnings',
+    'logging',
+    'subprocess',
+    'atexit',
+    
+    # === MULTICHANNEL ANALYSIS MODULES ===
+    # antNeuro package modules (gRPC/EDI2 based)
+    'antNeuro',
+    'antNeuro.enhanced_multichannel_analysis',
+    'antNeuro.offline_multichannel_analysis',
+    'antNeuro.edi2_client',
+    'antNeuro.EdigRPC_pb2',
+    'antNeuro.EdigRPC_pb2_grpc',
+    # utils package modules
+    'utils',
+    'utils.enhanced_report_generator',
+    'utils.led_stimulator',
+    'utils.prompttask',
+    'utils.splash_screen',
+    # Main GUI modules (imported by Sequential_Integrated)
+    'BrainLinkAnalyzer_GUI',
+    'BrainLinkAnalyzer_GUI_Enhanced',
 ]
 hiddenimports += pyside_hiddenimports
 hiddenimports += shiboken_hiddenimports
@@ -94,6 +158,7 @@ hiddenimports += pyqtgraph_hiddenimports
 hiddenimports += scipy_hiddenimports
 hiddenimports += numpy_hiddenimports
 hiddenimports += pandas_hiddenimports
+hiddenimports += grpc_hiddenimports
 
 excludes = [
     'PyQt5', 'PyQt6',
@@ -103,14 +168,14 @@ excludes = [
 
 
 a = Analysis(
-    ['BrainLinkAnalyzer_GUI_Sequential_Integrated.py'],
+    [os.path.join(WORKSPACE_ROOT, 'BrainLinkAnalyzer_GUI_Sequential_Integrated.py')],
     pathex=[],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=['runtime_hook_pyside6.py'],
+    runtime_hooks=[],
     excludes=excludes,
     noarchive=False,
     optimize=0,
@@ -118,7 +183,7 @@ a = Analysis(
 pyz = PYZ(a.pure)
 
 splash = Splash(
-    'assets\\splash.png',
+    os.path.join(WORKSPACE_ROOT, 'assets', 'splash.png'),
     binaries=a.binaries,
     datas=a.datas,
     text_pos=None,  # Disable text overlay - image already has "Starting..." text
@@ -149,7 +214,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets\\favicon.ico'],
+    icon=[os.path.join(WORKSPACE_ROOT, 'assets', 'favicon.ico')],
 )
 
 coll = COLLECT(

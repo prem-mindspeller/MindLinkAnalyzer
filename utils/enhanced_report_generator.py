@@ -18,9 +18,31 @@ class Enhanced64ChannelReportGenerator:
     """Generates comprehensive reports for 64-channel EEG analysis."""
     
     @staticmethod
-    def generate_text_report(results: Dict[str, Any], fast_mode: bool, n_permutations: int) -> List[str]:
-        """Generate enhanced text report matching single-channel format exactly."""
+    def generate_text_report(results: Dict[str, Any], fast_mode: bool, n_permutations: int,
+                             config: Any = None) -> List[str]:
+        """
+        Generate enhanced text report matching single-channel format exactly.
+        
+        Parameters
+        ----------
+        results : dict
+            Analysis results dictionary
+        fast_mode : bool
+            Whether analysis used fast/parametric mode
+        n_permutations : int
+            Number of permutations used (for block-level SumP test)
+        config : EnhancedAnalyzerConfig, optional
+            Configuration object with preprocessing settings
+        
+        Returns
+        -------
+        List[str]
+            Lines of formatted report text
+        """
         lines = []
+        
+        # Tasks to exclude from report (data collection only, analyzed offline separately)
+        excluded_tasks = {'40hz_stimulation', 'gamma_entrainment'}
         
         # ===== HEADER =====
         lines.append("MindLink Enhanced 64-Channel Multi-Task Analysis Report")
@@ -29,6 +51,20 @@ class Enhanced64ChannelReportGenerator:
         
         # Get session info
         session_info = results.get('session_info', {})
+        
+        # Extract and display subject metadata if available
+        subject_metadata = session_info.get('subject_metadata', {})
+        if subject_metadata:
+            lines.append("")
+            lines.append("Subject Information")
+            lines.append("-"*72)
+            subject_id = subject_metadata.get('id', 'UNKNOWN')
+            subject_age = subject_metadata.get('age', 'N/A')
+            subject_email = subject_metadata.get('email', 'N/A')
+            lines.append(f"Subject ID: {subject_id}")
+            lines.append(f"Age: {subject_age} years" if subject_age != 'N/A' else "Age: N/A")
+            lines.append(f"Email: {subject_email}")
+            lines.append("")
         
         # Count baseline and task windows from session_info or multi_task_results
         baseline_ec = session_info.get('baseline_ec_windows', 0)
@@ -50,15 +86,227 @@ class Enhanced64ChannelReportGenerator:
         lines.append(f"System: {n_channels}-channel EEG @ {sample_rate} Hz")
         lines.append("")
         
+        # ===== DATA QUALITY VALIDATION =====
+        # Check for invalid/unreliable recordings
+        data_quality_warnings = []
+        is_recording_invalid = False  # Flag for catastrophic quality issues
+        
+        # Critical: No baseline data
+        if baseline_ec == 0 and baseline_eo == 0:
+            data_quality_warnings.append("CRITICAL: No baseline data recorded")
+            is_recording_invalid = True
+        
+        # Critical: No task data
+        if tasks_executed == 0 and len(per_task) == 0:
+            data_quality_warnings.append("CRITICAL: No task data recorded")
+            is_recording_invalid = True
+        
+        # Effect size quality notes (informational only)
+        # NOTE: Effect size checks (mean/median |d|) proved unreliable for distinguishing
+        # cap-not-worn from legitimate cognitive effects. Both produce median|d|~1-2.
+        # Channel quality (poor channel %) is the reliable discriminator.
+        # Keep median|d| > 5.0 only as extreme safety net for fully disconnected sensors.
+        for task_name, task_data in per_task.items():
+            task_summary = task_data.get('summary', {})
+            median_d = task_summary.get('effect_size_median', 0)
+            if median_d > 5.0:
+                # This threshold only triggers if >50% of ALL features have |d|>5
+                # which indicates wholesale noise, not selective task effects
+                data_quality_warnings.append(
+                    f"CRITICAL: Extreme effect sizes across majority of features in {task_name} "
+                    f"(median|d|={median_d:.1f}). Indicates electromagnetic noise or fully disconnected cap."
+                )
+                is_recording_invalid = True
+        
+        # Check channel quality from artifact summary
+        artifact_summary = results.get('artifact_summary', {})
+        channel_quality = artifact_summary.get('channel_quality', {})
+        
+        # Define regions for coverage check
+        region_channels = {
+            'frontal': ['Fp1', 'Fp2', 'F7', 'F3', 'Fz', 'F4', 'F8', 'AF7', 'AF3', 'AF4', 'AF8', 'F5', 'F1', 'F2', 'F6', 'F9', 'F10'],
+            'central': ['FC5', 'FC1', 'FC2', 'FC6', 'C3', 'C4', 'FC3', 'FCz', 'FC4', 'C5', 'C1', 'C2', 'C6'],
+            'temporal': ['T7', 'T8', 'T9', 'T10', 'FT7', 'FT8', 'TP7', 'TP8'],
+            'parietal': ['CP5', 'CP1', 'CP2', 'CP6', 'P7', 'P3', 'Pz', 'P4', 'P8', 'CP3', 'CP4', 'P5', 'P1', 'P2', 'P6', 'P9', 'P10'],
+            'occipital': ['O1', 'O2', 'PO5', 'PO3', 'PO4', 'PO6', 'PO7', 'PO8', 'POz']
+        }
+        
+        if channel_quality:
+            good_channels = sum(1 for q in channel_quality.values() if q >= 0.7)
+            poor_channels = sum(1 for q in channel_quality.values() if q < 0.4)
+            total_channels = len(channel_quality)
+            
+            # Check regional coverage
+            all_regions_zero = True
+            for region_name, region_ch_list in region_channels.items():
+                region_good = sum(1 for ch in region_ch_list 
+                                 if ch in channel_quality and channel_quality[ch] >= 0.7)
+                if region_good > 0:
+                    all_regions_zero = False
+                    break
+            
+            # CRITICAL: 0% good channel coverage in ALL regions
+            if all_regions_zero:
+                data_quality_warnings.append(
+                    "CRITICAL: Zero good channels in all brain regions (0% coverage)"
+                )
+                is_recording_invalid = True
+            
+            # CRITICAL: >30% poor channels (cap-not-worn detection)
+            # Validated: cap-not-worn = 39% poor (CRITICAL), properly worn = 5% (OK)
+            if total_channels > 0 and poor_channels / total_channels > 0.30:
+                data_quality_warnings.append(
+                    f"CRITICAL: High proportion of poor channels ({poor_channels}/{total_channels} channels < 40% quality, {poor_channels/total_channels*100:.0f}%). "
+                    f"Headset likely not worn correctly or poor electrode contact."
+                )
+                is_recording_invalid = True
+            # WARNING: 20-30% poor channels
+            elif total_channels > 0 and poor_channels / total_channels > 0.20:
+                data_quality_warnings.append(
+                    f"WARNING: Elevated poor channel count ({poor_channels}/{total_channels} channels < 40% quality, {poor_channels/total_channels*100:.0f}%). "
+                    f"Check electrode contact and impedances."
+                )
+            
+            # CRITICAL: Almost no good channels (<10%)
+            if total_channels > 0 and good_channels / total_channels < 0.1:
+                if not any("Zero good channels" in w for w in data_quality_warnings):
+                    data_quality_warnings.append(
+                        "CRITICAL: Minimal good channel coverage (headset may not be worn properly)"
+                    )
+                is_recording_invalid = True
+        
+        # Check per-task data quality for abnormal effect sizes / cap-not-worn
+        multi_task = results.get('multi_task_results', {})
+        per_task_dq = multi_task.get('per_task', {})
+        tasks_with_critical_quality = 0
+        for _tname, _tdata in per_task_dq.items():
+            _tdq = _tdata.get('summary', {}).get('data_quality', {})
+            if _tdq and not _tdq.get('reliable', True):
+                tasks_with_critical_quality += 1
+                for _w in _tdq.get('warnings', []):
+                    if 'CRITICAL' in _w and _w not in data_quality_warnings:
+                        data_quality_warnings.append(_w)
+        
+        # If ALL tasks have critical quality issues, the recording is invalid
+        if tasks_with_critical_quality > 0 and tasks_with_critical_quality >= len(per_task_dq):
+            is_recording_invalid = True
+        # Even a single task with abnormal effect sizes is concerning
+        elif tasks_with_critical_quality > 0:
+            if not any('effect sizes' in w for w in data_quality_warnings):
+                data_quality_warnings.append(
+                    f"WARNING: {tasks_with_critical_quality}/{len(per_task_dq)} tasks show abnormal data quality"
+                )
+        
+        # TOP-LEVEL CRITICAL BANNER (before normal header)
+        if is_recording_invalid:
+            # Insert critical banner at the top (after header but before baseline counts)
+            critical_banner = [
+                "",
+                "█" * 72,
+                "█" + " " * 70 + "█",
+                "█" + " " * 16 + "⚠️  CRITICAL DATA QUALITY ALERT  ⚠️" + " " * 16 + "█",
+                "█" + " " * 70 + "█",
+                "█  RECORDING STATUS: INVALID / UNRELIABLE - CAP LIKELY NOT WORN  " + " " * 6 + "█",
+                "█" + " " * 70 + "█",
+                "█  NO USABLE EEG DATA - ELECTROMAGNETIC NOISE OR DISCONNECTED CAP" + " " * 3 + "█",
+                "█" + " " * 70 + "█",
+                "█" * 72,
+                ""
+            ]
+            # Find where to insert (after "System: ..." line)
+            for i, line in enumerate(lines):
+                if line.startswith("System:"):
+                    lines = lines[:i+1] + critical_banner + lines[i+1:]
+                    break
+        
+        # Emit detailed warnings
+        if data_quality_warnings:
+            lines.append("=" * 72)
+            lines.append("⚠️  DATA QUALITY WARNINGS")
+            lines.append("=" * 72)
+            
+            for warning in data_quality_warnings:
+                if "CRITICAL" in warning:
+                    lines.append(f"🚨 {warning}")
+                else:
+                    lines.append(f"⚠️  {warning}")
+            
+            lines.append("")
+            
+            if is_recording_invalid:
+                lines.append("Possible causes:")
+                if baseline_ec == 0 and baseline_eo == 0:
+                    lines.append("  • Recording interrupted during baseline phase")
+                    lines.append("  • Headset disconnected before data collection")
+                if tasks_executed == 0:
+                    lines.append("  • Tasks not executed or recording stopped prematurely")
+                if any("headset may not be worn" in w or "Zero good channels" in w 
+                       for w in data_quality_warnings):
+                    lines.append("  • EEG cap not placed on head (cap-off recording)")
+                    lines.append("  • Recording ran without headset connected")
+                    lines.append("  • All electrodes have poor contact / no conductive gel")
+                    lines.append("  • Impedances >100 kΩ or open circuit")
+                if any("Majority poor channel quality" in w for w in data_quality_warnings):
+                    lines.append("  • Catastrophic signal quality across most channels")
+                    lines.append("  • Environmental electromagnetic interference")
+                
+                lines.append("")
+                lines.append("⚠️  ANALYSIS RESULTS BELOW ARE UNRELIABLE AND SHOULD BE DISCARDED")
+                lines.append("")
+                lines.append("Recommendation:")
+                lines.append("  1. DO NOT USE these results for any purpose")
+                lines.append("  2. Recollect data with proper headset placement")
+                lines.append("  3. Verify impedances are < 20 kΩ before starting")
+                lines.append("  4. Check electrode gel application and skin contact")
+                lines.append("  5. Complete full baseline + task protocol without interruption")
+                lines.append("")
+            
+            lines.append("=" * 72)
+            lines.append("")
+        
         # ===== PER-TASK STATISTICAL SUMMARIES =====
         if per_task:
-            lines.append("Per-Task Statistical Summaries")
-            lines.append("-"*40)
+            if is_recording_invalid:
+                lines.append("[SUPPRESSED - INVALID RECORDING]")
+                lines.append("-" * 40)
+                lines.append("Per-task statistical summaries suppressed due to invalid data quality.")
+                lines.append("See data quality warnings above for details.")
+                lines.append("")
+            else:
+                lines.append("Per-Task Statistical Summaries")
+                lines.append("-"*40)
             
             for task_name in sorted(per_task.keys()):
+                if task_name.lower() in excluded_tasks:
+                    continue
                 task_data = per_task[task_name]
                 lines.extend(Enhanced64ChannelReportGenerator._generate_detailed_task_summary(
                     task_name, task_data, n_permutations))
+        
+        # ===== CROSS-TASK FAMILY-WISE ERROR CORRECTION =====
+        cross_task_correction = multi_task.get('cross_task_correction', {})
+        if cross_task_correction and cross_task_correction.get('n_tasks', 0) >= 2:
+            lines.append("")
+            lines.append("Cross-Task Family-Wise Error Correction")
+            lines.append("-"*45)
+            lines.append(f"  Method: {cross_task_correction.get('method', 'Holm-Bonferroni')}")
+            lines.append(f"  Tasks compared: {cross_task_correction.get('n_tasks', 0)}")
+            lines.append(f"  Family-wise alpha: {cross_task_correction.get('alpha', 0.05)}")
+            lines.append("")
+            lines.append("  Per-Task Omnibus Results (FWER-corrected):")
+            raw_pvals = cross_task_correction.get('raw_pvals', {})
+            adj_pvals = cross_task_correction.get('adjusted_pvals', {})
+            sig_tasks = cross_task_correction.get('significant_tasks', [])
+            for task_name in sorted(raw_pvals.keys()):
+                if task_name.lower() in excluded_tasks:
+                    continue
+                raw_p = raw_pvals.get(task_name, 1.0)
+                adj_p = adj_pvals.get(task_name, 1.0)
+                sig_marker = " [SIGNIFICANT*]" if task_name in sig_tasks else ""
+                lines.append(f"    {task_name}: Fisher_KM_p={raw_p:.6f} -> adjusted_p={adj_p:.6f}{sig_marker}")
+            lines.append("")
+            lines.append("  * Significant after family-wise error correction")
+            lines.append("")
         
         # ===== COMBINED TASK AGGREGATE =====
         combined = multi_task.get('combined', {})
@@ -94,12 +342,59 @@ class Enhanced64ChannelReportGenerator:
         lines.append("-"*40)
         mode_str = "FAST" if fast_mode else "aggregate_only"
         lines.append(f"Mode={mode_str} | alpha=0.05 | dependence=Kost-McDermott")
-        perm_str = f"n_perm={n_permutations}" if not fast_mode else "n_perm=N/A (parametric)"
-        lines.append(f"Permutation preset=None ({perm_str}) | effect_measure=delta")
-        lines.append("Discretization bins=5 | FDR alpha=0.05")
+        
+        # Permutation testing details
+        if not fast_mode:
+            pval_resolution = 1.0 / (n_permutations + 1)
+            lines.append(f"Permutation testing: n_perm={n_permutations} (block-level SumP, p-value resolution: {pval_resolution:.4f})")
+        else:
+            lines.append("Permutation testing: Disabled (parametric tests only)")
+        
+        lines.append("Effect measure: delta | Discretization bins: 5 | FDR alpha: 0.05")
         lines.append("Multi-channel: 64-channel EEG (10-20 extended system)")
         lines.append("Baseline: eyes-closed only (eyes-open retained for reference, not pooled).")
         lines.append("")
+        
+        # Preprocessing configuration (from config object if available)
+        lines.append("Preprocessing Applied:")
+        if config is not None:
+            # Line noise filtering
+            line_freq = getattr(config, 'line_noise_freq', 60.0)
+            apply_notch = getattr(config, 'apply_notch_filter', True)
+            if apply_notch:
+                lines.append(f"  - Notch filter: {line_freq} Hz + harmonics (Q=30)")
+            else:
+                lines.append("  - Notch filter: Disabled")
+            
+            # EMG threshold mode
+            emg_adaptive = getattr(config, 'emg_adaptive_threshold', True)
+            emg_fixed = getattr(config, 'emg_fixed_ratio', 1.5)
+            if emg_adaptive:
+                lines.append(f"  - EMG threshold: Adaptive (baseline_mean + 2xSD)")
+            else:
+                lines.append(f"  - EMG threshold: Fixed ratio > {emg_fixed}")
+            
+            # Bootstrap CI
+            compute_ci = getattr(config, 'compute_bootstrap_ci', True)
+            n_boot = getattr(config, 'bootstrap_ci_samples', 1000)
+            if compute_ci:
+                lines.append(f"  - Bootstrap 95% CI: {n_boot} iterations (percentile method)")
+            else:
+                lines.append("  - Bootstrap 95% CI: Disabled")
+            
+            # Block parameters
+            block_sec = getattr(config, 'block_seconds', 4.0)
+            min_blocks = getattr(config, 'min_blocks_per_condition', 8)
+            lines.append(f"  - Block aggregation: {block_sec}s blocks (min {min_blocks} per condition)")
+        else:
+            # Default descriptions when no config available
+            lines.append("  - Notch filter: 60 Hz + harmonics (Q=30)")
+            lines.append("  - EMG threshold: Adaptive (baseline_mean + 2xSD)")
+            lines.append("  - Bootstrap 95% CI: 1000 iterations (percentile method)")
+            lines.append("  - Block aggregation: 4.0s blocks (min 8 per condition)")
+        lines.append("  - Average reference: Applied")
+        lines.append("")
+        
         lines.append("Phase-Based Recording:")
         lines.append("  • Only phases marked 'record=True' in task definitions are processed")
         lines.append("  • Cognitive tasks (mental_math, etc.): Record only 'task' phase (52s)")
@@ -147,7 +442,10 @@ class Enhanced64ChannelReportGenerator:
         ess_info = summary.get('ess', {})
         composite_info = summary.get('composite', {})
         expectation = summary.get('expectation', {})
-        analysis = task_data.get('analysis', {})
+        # analysis contains {'per_feature': {...}, 'omnibus': {...}, 'summary': {...}}
+        # We need the per_feature dict which has actual feature names as keys
+        analysis_parent = task_data.get('analysis', {})
+        analysis = analysis_parent.get('per_feature', {})
         
         # ==================================================================
         # DATA QUALITY CHECK - Prominently display any reliability warnings
@@ -217,7 +515,8 @@ class Enhanced64ChannelReportGenerator:
         # CompositeScore and Mean|d| - use actual structure
         composite = composite_info.get('score', summary.get('composite_score', 0.0))
         mean_d = summary.get('effect_size_mean', 0.0)
-        lines.append(f"  CompositeScore={composite:.3f} Mean|d|={mean_d:.6f}")
+        median_d = summary.get('effect_size_median', 0.0)
+        lines.append(f"  CompositeScore={composite:.3f} Mean|d|={mean_d:.6f} Median|d|={median_d:.6f}")
         
         # Decision thresholds - get from fisher alpha
         alpha = fisher.get('alpha', 0.05)
@@ -232,19 +531,22 @@ class Enhanced64ChannelReportGenerator:
             guard_factor = m_eff / total_features
             lines.append(f"  Correlation guard factor={guard_factor:.5f} (m_eff={m_eff:.4f}/{total_features})")
         
-        # Significant Features (top 5)
+        # Significant Features (top 5 with 95% CI for Cohen's d)
         if analysis:
-            sig_features = [(k, v) for k, v in analysis.items() if v.get('significant_change')]
-            sig_features.sort(key=lambda x: abs(x[1].get('effect_size_d', 0)), reverse=True)
+            # Note: engine stores 'significant', 'hedges_g', 'g_ci_lower/upper'
+            sig_features = [(k, v) for k, v in analysis.items() if v.get('significant') or v.get('significant_change')]
+            sig_features.sort(key=lambda x: abs(x[1].get('hedges_g', x[1].get('effect_size_d', 0))), reverse=True)
             
             lines.append(f"  Significant Features (adjusted thresholds, top 5 shown):")
             for feat_name, feat_data in sig_features[:5]:
                 p = feat_data.get('p_value', 1.0)
                 q = feat_data.get('q_value', p)
-                delta = feat_data.get('delta', 0.0)
-                d = feat_data.get('effect_size_d', 0.0)
                 task_mean = feat_data.get('task_mean', 0.0)
                 base_mean = feat_data.get('baseline_mean', 0.0)
+                delta = feat_data.get('delta', task_mean - base_mean)  # Compute if not present
+                d = feat_data.get('hedges_g', feat_data.get('effect_size_d', 0.0))
+                d_ci_lo = feat_data.get('g_ci_lower', feat_data.get('d_ci_lower', np.nan))
+                d_ci_hi = feat_data.get('g_ci_upper', feat_data.get('d_ci_upper', np.nan))
                 bin_idx = feat_data.get('bin', 0)
                 
                 if p == 0:
@@ -256,7 +558,18 @@ class Enhanced64ChannelReportGenerator:
                 else:
                     q_str = f"{q:.6g}"
                 
-                lines.append(f"    {feat_name}: p={p_str} q={q_str} Δ={delta:+.6f} d={d:+.5f} task_mean={task_mean:.6f} base_mean={base_mean:.6f} bin={bin_idx}")
+                # Format CI if available
+                if not np.isnan(d_ci_lo) and not np.isnan(d_ci_hi):
+                    ci_str = f" 95%CI=[{d_ci_lo:+.3f},{d_ci_hi:+.3f}]"
+                else:
+                    ci_str = ""
+                
+                # Add gamma reliability warning for gamma features
+                gamma_warn = ""
+                if 'gamma' in feat_name.lower():
+                    gamma_warn = " [GAMMA: EMG caution]"
+                
+                lines.append(f"    {feat_name}: p={p_str} q={q_str} d={d:+.5f}{ci_str} Δ={delta:+.6f}{gamma_warn}")
             
             # Top 5 Features by p-value
             all_features = [(k, v) for k, v in analysis.items()]
@@ -266,11 +579,11 @@ class Enhanced64ChannelReportGenerator:
             for feat_name, feat_data in all_features[:5]:
                 p = feat_data.get('p_value', 1.0)
                 q = feat_data.get('q_value', p)
-                sig = feat_data.get('significant_change', False)
-                delta = feat_data.get('delta', 0.0)
-                d = feat_data.get('effect_size_d', 0.0)
+                sig = feat_data.get('significant') or feat_data.get('significant_change', False)
                 task_mean = feat_data.get('task_mean', 0.0)
                 base_mean = feat_data.get('baseline_mean', 1.0)
+                delta = feat_data.get('delta', task_mean - base_mean)  # Compute if not present
+                d = feat_data.get('hedges_g', feat_data.get('effect_size_d', 0.0))
                 ratio = task_mean / base_mean if base_mean != 0 else 0.0
                 
                 if p == 0:
@@ -283,6 +596,26 @@ class Enhanced64ChannelReportGenerator:
                     q_str = f"{q:.6g}"
                 
                 lines.append(f"    {feat_name}: p={p_str} q={q_str} sig={sig} Δ={delta:+.6f} d={d:+.5f} ratio={ratio:.6f}")
+            
+            # ==================================================================
+            # GAMMA BAND RELIABILITY WARNING
+            # Gamma (>30 Hz) is susceptible to EMG contamination and should be 
+            # interpreted with caution when significant effects are observed.
+            # ==================================================================
+            gamma_sig_features = [f for f, v in sig_features if 'gamma' in f.lower()]
+            if gamma_sig_features:
+                lines.append("")
+                lines.append("  --- GAMMA BAND RELIABILITY WARNING ---")
+                lines.append("  Significant gamma features detected. Scalp EEG gamma (>30 Hz) is")
+                lines.append("  highly susceptible to muscle artifact (EMG) contamination.")
+                lines.append("  Consider these results as secondary outcomes requiring:")
+                lines.append("    - Subject verification of minimal jaw clenching during task")
+                lines.append("    - Laplacian/CSD transform for spatial filtering (if available)")
+                lines.append("    - Source localization to confirm cortical origin")
+                lines.append(f"  Gamma features: {', '.join(gamma_sig_features[:5])}")
+                if len(gamma_sig_features) > 5:
+                    lines.append(f"    ... and {len(gamma_sig_features) - 5} more")
+                lines.append("")
             
             # Expectation-Alignment Analysis
             lines.append("  --- Expectation-Alignment Analysis ---")
@@ -362,6 +695,10 @@ class Enhanced64ChannelReportGenerator:
             'emotion': {'up': ['frontal_alpha', 'asymmetry'], 'down': []},
             'working_memory': {'up': ['theta', 'beta'], 'down': ['alpha']},
             'cognitive_load': {'up': ['theta'], 'down': ['alpha']},
+            '40hz_stimulation': {'up': ['gamma', '40'], 'down': []},  # Gamma entrainment
+            'gamma_entrainment': {'up': ['gamma', '40'], 'down': []},
+            'meditation': {'up': ['alpha', 'theta'], 'down': ['beta', 'gamma']},
+            'relaxation': {'up': ['alpha'], 'down': ['beta', 'gamma']},
         }
         
         expectations = task_expectations.get(task_name, {'up': [], 'down': []})
@@ -369,11 +706,11 @@ class Enhanced64ChannelReportGenerator:
         # Check alignment
         passed_features = []
         for feat_name, feat_data in sig_features:
-            delta = feat_data.get('delta', 0.0)
-            d = feat_data.get('effect_size_d', 0.0)
-            p = feat_data.get('p_value', 1.0)
             task_mean = feat_data.get('task_mean', 0.0)
             base_mean = feat_data.get('baseline_mean', 1.0)
+            delta = feat_data.get('delta', task_mean - base_mean)  # Compute if not present
+            d = feat_data.get('hedges_g', feat_data.get('effect_size_d', 0.0))
+            p = feat_data.get('p_value', 1.0)
             
             # Check if matches expectations
             expected_up = any(exp in feat_name.lower() for exp in expectations['up'])
@@ -428,9 +765,9 @@ class Enhanced64ChannelReportGenerator:
         # Top Drivers
         lines.append("  Top Drivers (by |d|):")
         if sig_features:
-            top_drivers = sorted(sig_features, key=lambda x: abs(x[1].get('effect_size_d', 0)), reverse=True)[:3]
+            top_drivers = sorted(sig_features, key=lambda x: abs(x[1].get('hedges_g', x[1].get('effect_size_d', 0))), reverse=True)[:3]
             for feat_name, feat_data in top_drivers:
-                d = abs(feat_data.get('effect_size_d', 0))
+                d = abs(feat_data.get('hedges_g', feat_data.get('effect_size_d', 0)))
                 lines.append(f"    {feat_name}: |d|={d:.6f}")
         else:
             lines.append("    (none)")
@@ -479,7 +816,8 @@ class Enhanced64ChannelReportGenerator:
         # CompositeScore from composite.score, Mean|d| from effect_size_mean
         composite = composite_info.get('score', summary.get('composite_score', 0.0))
         mean_d = summary.get('effect_size_mean', 0.0)
-        lines.append(f"CompositeScore={composite:.3f} Mean|d|={mean_d:.6f}")
+        median_d = summary.get('effect_size_median', 0.0)
+        lines.append(f"CompositeScore={composite:.3f} Mean|d|={mean_d:.6f} Median|d|={median_d:.6f}")
         
         # Get alpha from fisher
         alpha = fisher.get('alpha', 0.05)
@@ -704,9 +1042,18 @@ class Enhanced64ChannelReportGenerator:
         lines.append("")
         
         # Look for coherence features in analysis_results
+        # Match: 'coherence', 'connectivity', 'coh_*', 'dwpli_*', 'wpli_*'
         coherence_features = {}
         for feat_name, feat_data in analysis_results.items():
-            if 'coherence' in feat_name.lower() or 'connectivity' in feat_name.lower():
+            feat_lower = feat_name.lower()
+            is_connectivity = (
+                'coherence' in feat_lower or 
+                'connectivity' in feat_lower or
+                feat_lower.startswith('coh_') or
+                feat_lower.startswith('dwpli_') or
+                feat_lower.startswith('wpli_')
+            )
+            if is_connectivity:
                 is_sig = feat_data.get('significant_change', False)
                 d = feat_data.get('effect_size_d', 0.0)
                 p = feat_data.get('p_value', 1.0)

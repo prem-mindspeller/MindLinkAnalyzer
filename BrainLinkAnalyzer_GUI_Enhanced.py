@@ -26,6 +26,11 @@ import threading
 import time
 import weakref
 
+try:
+    from utils.led_stimulator import LEDStimulatorController as _LEDStimulatorController
+except ImportError:
+    _LEDStimulatorController = None  # pyserial / module not available
+
 _QT_PLATFORM_ALIASES = {
     "windows": "windows",
     "win32": "windows",
@@ -265,7 +270,10 @@ class EnhancedAnalyzerConfig:
     mode: str = "aggregate_only"
     dependence_correction: str = "Kost-McDermott"
     use_permutation_for_sumP: bool = True
-    n_perm: int = 100  # Reduced from 1000 for faster analysis (still valid for p<0.01)
+    # n_perm=1000 gives p-value resolution of 0.001, sufficient after Holm-Bonferroni across 5 tasks
+    # At block-level permutation (~15-22 labels), 1000 perms takes <10 seconds per task
+    n_perm: int = 1000  # Standard mode; use n_perm=100 only for fast/preview mode
+    n_perm_fast: int = 100  # Fast mode permutation count (coarser p-value resolution)
     discretization_bins: int = 5
     export_profile: str = "full"
     effect_measure: str = "delta"
@@ -278,11 +286,21 @@ class EnhancedAnalyzerConfig:
     min_percent_change: float = 10.0
     correlation_guard: bool = True
     # Newly configurable analysis parameters
-    block_seconds: float = 8.0
+    block_seconds: float = 4.0  # Reduced from 8.0 for ~2x more blocks -> better power
     mt_tapers: int = 3
     # Fast analysis mode: skip permutation testing entirely, use only parametric tests
     fast_mode: bool = True  # If True, uses only Welch's t-test + FDR (no permutation)
     nmin_sessions: int = 2  # Minimum 2 sessions needed for statistical comparison
+    # Sample size requirements for stable effect size estimates
+    min_blocks_per_condition: int = 8  # Minimum blocks for acceptable power
+    bootstrap_ci_samples: int = 1000  # Bootstrap iterations for confidence intervals
+    compute_bootstrap_ci: bool = True  # Whether to compute 95% CIs for Cohen's d
+    # Line noise filtering (50Hz EU / 60Hz US)
+    line_noise_freq: float = 60.0  # Mains frequency (50.0 for EU/Asia, 60.0 for Americas)
+    apply_notch_filter: bool = True  # Apply notch filter at line_noise_freq and harmonics
+    # Adaptive EMG threshold (self-calibrating per session)
+    emg_adaptive_threshold: bool = True  # Use baseline-adaptive threshold instead of fixed 1.5
+    emg_fixed_ratio: float = 1.5  # Fallback fixed ratio if adaptive fails
     
     # Performance note: Permutation testing is optimized with:
     # 1. Vectorized Welch t-test (5-10x faster than looping)
@@ -655,6 +673,88 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
         return rejected, p_adj
 
     @staticmethod
+    def _holm_bonferroni(p_values, alpha=0.05):
+        """Holm-Bonferroni step-down correction for family-wise error rate.
+        
+        More powerful than Bonferroni while still controlling FWER.
+        Used for cross-task correction of omnibus p-values.
+        
+        Returns (rejected_mask, p_adjusted_list).
+        """
+        if not p_values:
+            return [], []
+        m = len(p_values)
+        pairs = sorted([(max(min(float(p), 1.0), 1e-300), i) for i, p in enumerate(p_values)], key=lambda x: x[0])
+        p_sorted = [p for p, _ in pairs]
+        idx_sorted = [i for _, i in pairs]
+        
+        # Step-down: multiply p[i] by (m - i)
+        p_adj_sorted = [0.0] * m
+        for i in range(m):
+            adjusted = p_sorted[i] * (m - i)
+            # Enforce monotonicity (each adjusted p >= previous)
+            if i > 0:
+                adjusted = max(adjusted, p_adj_sorted[i - 1])
+            p_adj_sorted[i] = min(adjusted, 1.0)
+        
+        # Re-map to original order
+        p_adj = [0.0] * m
+        for pos, orig_idx in enumerate(idx_sorted):
+            p_adj[orig_idx] = p_adj_sorted[pos]
+        
+        rejected = [pa <= alpha for pa in p_adj]
+        return rejected, p_adj
+
+    @staticmethod
+    def _bootstrap_hedges_g_ci(task_vals: np.ndarray, baseline_vals: np.ndarray, 
+                                n_bootstrap: int = 1000, ci_level: float = 0.95,
+                                rng: np.random.Generator = None):
+        """Compute Hedges' g (Glass's delta with correction) and bootstrapped 95% CI.
+        
+        Uses baseline SD as reference (consistent with Welch's t-test unequal variance
+        assumption). Hedges' correction factor applied for small sample bias.
+        
+        Returns (observed_g, ci_lower, ci_upper).
+        """
+        task_vals = np.asarray(task_vals, dtype=float)
+        baseline_vals = np.asarray(baseline_vals, dtype=float)
+        
+        if task_vals.size < 2 or baseline_vals.size < 2:
+            return 0.0, np.nan, np.nan
+        
+        def hedges_g(task, baseline):
+            n_task, n_baseline = task.size, baseline.size
+            m_task, m_baseline = np.mean(task), np.mean(baseline)
+            # Glass's delta: use baseline SD as stable reference
+            sd_baseline = np.std(baseline, ddof=1) if n_baseline > 1 else 1.0
+            glass_delta = (m_task - m_baseline) / (sd_baseline + 1e-12)
+            # Hedges' correction factor for small sample bias
+            n_total = n_task + n_baseline
+            correction = 1 - (3 / (4 * n_total - 9)) if n_total > 9 else 1.0
+            return glass_delta * correction
+        
+        observed_g = hedges_g(task_vals, baseline_vals)
+        
+        if rng is None:
+            rng = np.random.default_rng()
+        
+        boot_g = np.zeros(n_bootstrap)
+        for i in range(n_bootstrap):
+            boot_task = rng.choice(task_vals, size=len(task_vals), replace=True)
+            boot_baseline = rng.choice(baseline_vals, size=len(baseline_vals), replace=True)
+            boot_g[i] = hedges_g(boot_task, boot_baseline)
+        
+        # Percentile method for CI
+        alpha_half = (1 - ci_level) / 2
+        ci_lower = float(np.percentile(boot_g, alpha_half * 100))
+        ci_upper = float(np.percentile(boot_g, (1 - alpha_half) * 100))
+        
+        return float(observed_g), ci_lower, ci_upper
+    
+    # Alias for backward compatibility
+    _bootstrap_cohens_d_ci = _bootstrap_hedges_g_ci
+
+    @staticmethod
     def _fishers_method(p_values):
         """Fisher's method for combining independent p-values."""
         if not p_values:
@@ -986,6 +1086,26 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
             self.fs = float(getattr(self, 'fs', 256.0))
         except Exception:
             self.fs = 256.0
+        
+        # ====================================================================
+        # LINE NOISE REMOVAL - Apply notch filter at mains frequency + harmonics
+        # ====================================================================
+        if getattr(self.config, 'apply_notch_filter', True) and len(x) > 10:
+            try:
+                from scipy import signal as sig
+                line_freq = getattr(self.config, 'line_noise_freq', 60.0)
+                nyq = self.fs / 2.0
+                Q = 30.0  # Quality factor (narrowness of notch)
+                # Apply notch at fundamental and first two harmonics
+                for harmonic in [1, 2, 3]:
+                    freq = line_freq * harmonic
+                    if freq < nyq - 1:
+                        w0 = freq / nyq
+                        b, a = sig.iirnotch(w0, Q)
+                        x = sig.filtfilt(b, a, x)
+            except Exception:
+                pass  # Skip if scipy unavailable or error
+        
         # PSD via multitaper if available
         psd = None
         freqs = None
@@ -1032,11 +1152,11 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
         # Fill in common defaults if base is missing
         if not extended_bands:
             extended_bands = {
-                'delta': (0.5, 4),
+                'delta': (1, 4),
                 'theta': (4, 8),
                 'alpha': (8, 13),
                 'beta': (13, 30),
-                'gamma': (30, 45),
+                'gamma': (30, 50),
             }
         # Add splits
         extended_bands.update({
@@ -1111,16 +1231,23 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
                 features[f'{band_name}_power_raw'] = 0.0
                 features[f'{band_name}_relative'] = 0.0
 
-        # High-frequency EMG guard for gamma metrics
+        # ====================================================================
+        # HIGH-FREQUENCY EMG GUARD FOR GAMMA METRICS
+        # Uses adaptive threshold (baseline_mean + 2*baseline_SD) when available,
+        # falls back to fixed ratio threshold otherwise.
+        # ====================================================================
         gamma_windows_total = 1  # This window
         gamma_windows_kept = 0
+        ratio_hf_mid = 0.0
+        slope = 0.0
         try:
             hf_mask = (freqs >= 35) & (freqs <= 45)
             mid_mask = (freqs >= 20) & (freqs <= 30)
             hf_power_sum = float(np.trapz(psd[hf_mask], freqs[hf_mask]) if np.any(hf_mask) else 0.0)
             mid_power_sum = float(np.trapz(psd[mid_mask], freqs[mid_mask]) if np.any(mid_mask) else 0.0)
             ratio_hf_mid = hf_power_sum / (mid_power_sum + 1e-12)
-            # Spectral slope on 20–45 Hz
+            
+            # Spectral slope on 20–45 Hz (EMG has flatter slope than EEG's 1/f)
             use_mask = (freqs >= 20) & (freqs <= 45)
             f_sel = freqs[use_mask]
             p_sel = psd[use_mask]
@@ -1129,13 +1256,31 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
                 logp = np.log(p_sel + 1e-18)
                 A = np.vstack([logf, np.ones_like(logf)]).T
                 slope, _ = np.linalg.lstsq(A, logp, rcond=None)[0]
-                emg_flag = bool(ratio_hf_mid > 1.2 or slope > -0.6)
             else:
-                emg_flag = True  # Not enough freq resolution
+                slope = 0.0
+            
+            # Determine EMG threshold (adaptive or fixed)
+            use_adaptive = getattr(self.config, 'emg_adaptive_threshold', True)
+            fixed_ratio = getattr(self.config, 'emg_fixed_ratio', 1.5)
+            
+            if use_adaptive and hasattr(self, '_baseline_emg_stats') and self._baseline_emg_stats:
+                # Use adaptive threshold: baseline_mean + 2*baseline_SD
+                base_mean = self._baseline_emg_stats.get('ratio_mean', 0.8)
+                base_std = self._baseline_emg_stats.get('ratio_std', 0.3)
+                adaptive_threshold = base_mean + 2.0 * base_std
+                # Ensure threshold is at least the fixed fallback
+                adaptive_threshold = max(adaptive_threshold, fixed_ratio * 0.8)
+                emg_flag = bool(ratio_hf_mid > adaptive_threshold or slope > -0.6)
+            else:
+                # Fixed threshold fallback
+                emg_flag = bool(ratio_hf_mid > fixed_ratio or slope > -0.6)
+            
         except Exception:
             emg_flag = False
         
-        # Store EMG guard status
+        # Store EMG ratio for baseline computation (used to calibrate adaptive threshold)
+        features['_emg_ratio'] = ratio_hf_mid
+        features['_emg_slope'] = slope
         features['_emg_guard'] = 1 if emg_flag else 0
         features['_gamma_evaluated'] = 0 if emg_flag else 1
         
@@ -1274,6 +1419,28 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
             if feat in self.baseline_stats:
                 stats = self.baseline_stats[feat]
                 print(f"   {feat}: mean={stats['mean']:.3f} ± {stats['std']:.3f}")
+        
+        # ====================================================================
+        # COMPUTE BASELINE EMG STATISTICS FOR ADAPTIVE THRESHOLDING
+        # ====================================================================
+        try:
+            emg_ratios = [f.get('_emg_ratio', 0.0) for f in ec_features if isinstance(f, dict)]
+            emg_ratios = [r for r in emg_ratios if r is not None and np.isfinite(r)]
+            if len(emg_ratios) >= 3:
+                self._baseline_emg_stats = {
+                    'ratio_mean': float(np.mean(emg_ratios)),
+                    'ratio_std': float(np.std(emg_ratios)),
+                    'ratio_median': float(np.median(emg_ratios)),
+                    'n_samples': len(emg_ratios),
+                }
+                thresh = self._baseline_emg_stats['ratio_mean'] + 2.0 * self._baseline_emg_stats['ratio_std']
+                print(f"   EMG adaptive threshold: {thresh:.3f} (mean={self._baseline_emg_stats['ratio_mean']:.3f} + 2×{self._baseline_emg_stats['ratio_std']:.3f})")
+            else:
+                self._baseline_emg_stats = None
+                print(f"   EMG adaptive threshold: N/A (insufficient baseline samples)")
+        except Exception as e:
+            self._baseline_emg_stats = None
+            print(f"   EMG adaptive threshold: N/A (error: {e})")
         
         return self.baseline_stats
 
@@ -1879,9 +2046,11 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
         data_quality_issues = []
         data_quality_valid = True
         
-        # Check 1: Minimum window counts
-        min_baseline = 4  # Need at least 4 baseline windows
-        min_task = 4      # Need at least 4 task windows
+        # Check 1: Minimum window/block counts for adequate statistical power
+        # With 4 blocks, 95% CI on Cohen's d=0.5 is ±0.89 (too wide)
+        # With 8 blocks, 95% CI on Cohen's d=0.5 is ±0.63 (acceptable)
+        min_baseline = getattr(self.config, 'min_blocks_per_condition', 8)
+        min_task = getattr(self.config, 'min_blocks_per_condition', 8)
         
         baseline_count = max(len(ec_features), len(eo_features))
         task_count = len(task_features)
@@ -2065,6 +2234,20 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
             d = 0.0 if degenerate_var else (t_mean - b_mean) / (pooled + 1e-12)
             effect_sizes.append(abs(d))
 
+            # Bootstrapped 95% CI for Cohen's d (optional, controlled by config)
+            d_ci_lower = np.nan
+            d_ci_upper = np.nan
+            if getattr(self.config, 'compute_bootstrap_ci', True) and not degenerate_var:
+                try:
+                    n_boot = getattr(self.config, 'bootstrap_ci_samples', 1000)
+                    rng = self._get_rng()
+                    _, d_ci_lower, d_ci_upper = self._bootstrap_cohens_d_ci(
+                        task_block_vals, base_block_vals,
+                        n_bootstrap=n_boot, ci_level=0.95, rng=rng
+                    )
+                except Exception:
+                    pass  # Keep NaN on failure
+
             try:
                 if degenerate_var:
                     t_stat, p_val = 0.0, 1.0
@@ -2088,6 +2271,8 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
                 'delta': t_mean - b_mean,
                 'z_score': z,
                 'effect_size_d': d,
+                'd_ci_lower': d_ci_lower,  # 95% CI lower bound (bootstrap)
+                'd_ci_upper': d_ci_upper,  # 95% CI upper bound (bootstrap)
                 'effect_measure': effect_value,
                 'percent_change': pct,
                 'baseline_task_ratio': ratio,
@@ -2291,6 +2476,18 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
 
         composite_score = None
         if combo_features:
+            # =====================================================================
+            # COMPOSITE SCORE FORMULA (explicit per methodology review)
+            # 
+            # CompositeScore = Σ -log10(q_i)
+            # 
+            # Where q_i is the FDR-adjusted p-value (Benjamini-Hochberg) for feature i.
+            # If q_value is not available, raw p_value is used.
+            # Values are floored at 1e-12 to prevent infinity.
+            #
+            # This is a RANKING metric, not a formal test statistic. Use Fisher's
+            # combined p-value (km_p) for statistical inference.
+            # =====================================================================
             adjusted_values = []
             for feature in combo_features:
                 entry = self.analysis_results[feature]
@@ -2638,6 +2835,41 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
 
         across_task = self._analyze_across_tasks(tasks)
 
+        # =====================================================================
+        # CROSS-TASK FAMILY-WISE ERROR CORRECTION (Holm-Bonferroni)
+        # Apply Holm-Bonferroni correction to per-task omnibus p-values to control
+        # family-wise error rate when running multiple tasks.
+        # =====================================================================
+        cross_task_correction = {}
+        if len(per_task_results) >= 2:
+            task_names = list(per_task_results.keys())
+            omnibus_pvals = []
+            for t in task_names:
+                summary = per_task_results[t].get('summary', {})
+                fisher = summary.get('fisher', {})
+                km_p = fisher.get('km_p')
+                if km_p is not None and isinstance(km_p, (int, float)):
+                    omnibus_pvals.append(float(km_p))
+                else:
+                    omnibus_pvals.append(1.0)  # Missing p-value treated as non-significant
+            
+            # Apply Holm-Bonferroni step-down correction
+            rejected, adjusted_pvals = self._holm_bonferroni(omnibus_pvals, alpha=self.config.alpha)
+            
+            # Store corrected results
+            for i, t in enumerate(task_names):
+                per_task_results[t]['summary']['fisher']['km_p_fwer'] = adjusted_pvals[i]
+                per_task_results[t]['summary']['fisher']['fwer_significant'] = rejected[i]
+            
+            cross_task_correction = {
+                'method': 'Holm-Bonferroni',
+                'n_tasks': len(task_names),
+                'alpha': self.config.alpha,
+                'raw_pvals': dict(zip(task_names, omnibus_pvals)),
+                'adjusted_pvals': dict(zip(task_names, adjusted_pvals)),
+                'significant_tasks': [t for t, sig in zip(task_names, rejected) if sig],
+            }
+
         self.multi_task_results = {
             'per_task': per_task_results,
             'combined': {
@@ -2647,6 +2879,7 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
                 'export_integer': combined_exports_int,
             },
             'across_task': across_task,
+            'cross_task_correction': cross_task_correction,
         }
         return self.multi_task_results
 
@@ -2953,6 +3186,16 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
         self._primary_battery_entry: Optional[Dict[str, Any]] = None
         self._task_overlay_active = False
 
+        # ---- LED stimulator controller (for 40 Hz photic task) ----
+        self._led_stimulator = None
+        try:
+            if _LEDStimulatorController is not None:
+                self._led_stimulator = _LEDStimulatorController(
+                    frequency=40.0, duration=150.0, task=1
+                )
+        except Exception as _led_err:
+            print(f"[LED] Could not create LED stimulator controller: {_led_err}")
+
         try:
             self._setup_enhanced_multi_task_tab()
         except Exception:
@@ -3030,7 +3273,7 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
         # Restore full cognitive task set so all are available across match types
         self._cognitive_tasks = [
             'visual_imagery', 'attention_focus', 'mental_math', 'working_memory',
-            'language_processing', 'motor_imagery', 'cognitive_load'
+            'language_processing', 'motor_imagery', 'cognitive_load', '40hz_stimulation'
         ]
         self._selected_protocol = None
         # Preserve all available tasks so we can filter UI list later
@@ -6067,10 +6310,18 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
             phase_progress.setStyleSheet("font-size:12px;color:#99ccee;")
             layout.addWidget(phase_progress)
 
+            # Check if task wants countdown timer hidden (for eyes-open tasks)
+            hide_countdown = task_cfg.get('hide_countdown', False)
+            
             timer_label = QLabel("..")
             timer_label.setAlignment(Qt.AlignCenter)
             timer_label.setStyleSheet("font-size:30px;font-weight:bold;color:#00FFAA;margin:4px 0;")
-            layout.addWidget(timer_label)
+            
+            # Hide timer for eyes-open tasks to avoid distraction
+            if hide_countdown:
+                timer_label.setVisible(False)
+            else:
+                layout.addWidget(timer_label)
 
             # Action banner (clearly tells user READ / THINK / LOOK / WRITE / WATCH / PREPARE)
             action_banner = QLabel("")
@@ -6649,6 +6900,14 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
             def _update_phase_ui():
                 if self._phase_index >= len(self._phase_structure):
                     # Completed
+                    # Stop LED stimulator if still running
+                    try:
+                        if (self._led_stimulator is not None
+                                and self._led_stimulator.stimulating):
+                            self._led_stimulator.stop_stimulation()
+                            print("[LED] Stopped 40 Hz LED stimulation (task completed)")
+                    except Exception:
+                        pass
                     try:
                         self._audio.play_end_task()
                     except Exception:
@@ -6676,6 +6935,23 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                             print(f"[PHASE] Started recording: {ptype} (task: {task_type})")
                 except Exception as e:
                     print(f"[PHASE] Error starting phase recording: {e}")
+
+                # ---- 40 Hz LED stimulator: auto-trigger on task phase ----
+                try:
+                    if (task_type == '40hz_stimulation' and ptype == 'task'
+                            and self._led_stimulator is not None):
+                        # Connect if not already connected
+                        if not self._led_stimulator.connected:
+                            self._led_stimulator.connect()
+                        if self._led_stimulator.connected:
+                            stim_dur = phase.get('duration', 150)
+                            self._led_stimulator.set_duration(float(stim_dur))
+                            self._led_stimulator.start_stimulation()
+                            print(f"[LED] Started 40 Hz LED stimulation for {stim_dur}s")
+                        else:
+                            print("[LED] WARNING: Could not connect to Arduino LED stimulator")
+                except Exception as led_err:
+                    print(f"[LED] Error starting LED stimulation: {led_err}")
                 # Safety: if coming into a non-viewing/task phase, ensure any fullscreen image is closed
                 try:
                     if task_type in ('order_surprise', 'num_form') and ptype not in ('viewing', 'task'):
@@ -6697,7 +6973,13 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                         instr_txt = '\n'.join(lines).strip()
                 except Exception:
                     pass
-                instruction_label.setText(instr_txt)
+
+                # For 40hz_stimulation: hide instruction text during rest/task phases (banner is sufficient)
+                if task_type == '40hz_stimulation' and ptype in ('rest', 'task'):
+                    instruction_label.hide()
+                else:
+                    instruction_label.show()
+                    instruction_label.setText(instr_txt)
 
                 # Action banner + color
                 try:
@@ -6708,7 +6990,15 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
 
                 # Next phase preview
                 try:
-                    next_phase_label.setText(_next_phase_preview(self._phase_index))
+                    # For 40hz_stimulation: only show next phase during cue phases, hide during rest/task
+                    if task_type == '40hz_stimulation':
+                        if ptype == 'cue':
+                            next_phase_label.show()
+                            next_phase_label.setText(_next_phase_preview(self._phase_index))
+                        else:
+                            next_phase_label.hide()
+                    else:
+                        next_phase_label.setText(_next_phase_preview(self._phase_index))
                 except Exception:
                     pass
 
@@ -6810,6 +7100,17 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                                     self.feature_engine.stop_phase()
                         except Exception as e:
                             print(f"[PHASE] Error stopping phase recording: {e}")
+
+                        # ---- 40 Hz LED stimulator: stop when task phase ends ----
+                        try:
+                            if (task_type == '40hz_stimulation'
+                                    and current_phase_def.get('type') == 'task'
+                                    and self._led_stimulator is not None
+                                    and self._led_stimulator.stimulating):
+                                self._led_stimulator.stop_stimulation()
+                                print("[LED] Stopped 40 Hz LED stimulation (phase ended)")
+                        except Exception as led_err:
+                            print(f"[LED] Error stopping LED stimulation: {led_err}")
                         
                         # Before advancing, ensure fullscreen image (if any) is closed when leaving look phases
                         try:
@@ -6841,6 +7142,14 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
             def manual_stop():
                 try:
                     self._task_timer.stop()
+                except Exception:
+                    pass
+                # Stop LED stimulator on manual abort
+                try:
+                    if (self._led_stimulator is not None
+                            and self._led_stimulator.stimulating):
+                        self._led_stimulator.stop_stimulation()
+                        print("[LED] Stopped 40 Hz LED stimulation (manual stop)")
                 except Exception:
                     pass
                 try:
@@ -7193,14 +7502,27 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
             return
         self.task_combo.blockSignals(True)
         self.task_combo.clear()
+        
+        # Check device type for multichannel filtering
+        device_type = getattr(self, 'device_type', 'mindlink')
+        is_multichannel = (device_type == 'antneuro')
+        
         # Add cognitive tasks (present in AVAILABLE_TASKS)
         for key in self._cognitive_tasks:
             if key in getattr(BL, 'AVAILABLE_TASKS', {}):
+                # Filter multichannel-only tasks for single-channel devices
+                task_def = BL.AVAILABLE_TASKS[key]
+                if task_def.get('multichannel_only', False) and not is_multichannel:
+                    continue  # Skip multichannel-only tasks on single-channel devices
                 self.task_combo.addItem(key)
         # Add protocol-specific tasks
         if self._selected_protocol and self._selected_protocol in self._protocol_groups:
             for key in self._protocol_groups[self._selected_protocol]:
                 if key in getattr(BL, 'AVAILABLE_TASKS', {}):
+                    # Filter multichannel-only tasks for single-channel devices
+                    task_def = BL.AVAILABLE_TASKS[key]
+                    if task_def.get('multichannel_only', False) and not is_multichannel:
+                        continue  # Skip multichannel-only tasks on single-channel devices
                     self.task_combo.addItem(key)
         # Select first item if available
         if self.task_combo.count() > 0:

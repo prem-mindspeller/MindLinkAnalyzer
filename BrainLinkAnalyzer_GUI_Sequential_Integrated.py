@@ -840,7 +840,6 @@ class MindLinkStatusBar(QFrame):
             """)
             self.channel_quality_button.clicked.connect(self.show_channel_quality_dialog)
             layout.addWidget(self.channel_quality_button)
-            self.channel_quality_dialog = None
         
         layout.addStretch()
         
@@ -946,22 +945,23 @@ class MindLinkStatusBar(QFrame):
             self.help_dialog.activateWindow()
     
     def show_channel_quality_dialog(self):
-        """Show live channel quality monitoring dialog for multi-channel devices"""
-        if not hasattr(self, 'channel_quality_dialog') or self.channel_quality_dialog is None or not self.channel_quality_dialog.isVisible():
-            self.channel_quality_dialog = ChannelQualityDialog(self.main_window, parent=self)
-            self.channel_quality_dialog.show()
+        """Show live 64-channel EEG monitoring dialog for multi-channel devices"""
+        # Use shared instance from main_window to avoid duplicate dialogs
+        if not hasattr(self.main_window, 'multichannel_dialog') or self.main_window.multichannel_dialog is None or not self.main_window.multichannel_dialog.isVisible():
+            self.main_window.multichannel_dialog = MultiChannelViewDialog(self.main_window, parent=None)
+            self.main_window.multichannel_dialog.show()
         else:
             # Bring existing dialog to front
-            self.channel_quality_dialog.raise_()
-            self.channel_quality_dialog.activateWindow()
+            self.main_window.multichannel_dialog.raise_()
+            self.main_window.multichannel_dialog.activateWindow()
     
     def cleanup(self):
         """Stop the update timer and close help dialog"""
         self.update_timer.stop()
         if self.help_dialog and self.help_dialog.isVisible():
             self.help_dialog.close()
-        if hasattr(self, 'channel_quality_dialog') and self.channel_quality_dialog and self.channel_quality_dialog.isVisible():
-            self.channel_quality_dialog.close()
+        if hasattr(self.main_window, 'multichannel_dialog') and self.main_window.multichannel_dialog and self.main_window.multichannel_dialog.isVisible():
+            self.main_window.multichannel_dialog.close()
 
 
 def add_status_bar_to_dialog(dialog: QDialog, main_window) -> MindLinkStatusBar:
@@ -1048,7 +1048,7 @@ def add_protocol_filter_to_enhanced_window():
         }
         self._cognitive_tasks = [
             'visual_imagery', 'attention_focus', 'mental_math', 'working_memory',
-            'language_processing', 'motor_imagery', 'cognitive_load'
+            'language_processing', 'motor_imagery', 'cognitive_load', '40hz_stimulation'
         ]
     
     def _apply_protocol_filter(self):
@@ -1060,15 +1060,40 @@ def add_protocol_filter_to_enhanced_window():
         self.task_combo.blockSignals(True)
         self.task_combo.clear()
         
+        # Check device type for multichannel filtering
+        device_type = getattr(self, 'device_type', 'mindlink')
+        is_multichannel = (device_type == 'antneuro')
+        print(f"[PROTOCOL FILTER] device_type='{device_type}', is_multichannel={is_multichannel}")
+        print(f"[PROTOCOL FILTER] _cognitive_tasks={self._cognitive_tasks}")
+        
         # Add cognitive tasks (present in AVAILABLE_TASKS)
+        available_tasks = getattr(BL, 'AVAILABLE_TASKS', {})
+        print(f"[PROTOCOL FILTER] BL.AVAILABLE_TASKS has {len(available_tasks)} tasks")
         for key in self._cognitive_tasks:
-            if key in getattr(BL, 'AVAILABLE_TASKS', {}):
+            print(f"[TASK FILTER] Checking cognitive task '{key}'...")
+            if key in available_tasks:
+                # Filter multichannel-only tasks for single-channel devices
+                task_def = available_tasks[key]
+                multichannel_only = task_def.get('multichannel_only', False)
+                if multichannel_only and not is_multichannel:
+                    print(f"[TASK FILTER] ❌ Skipping '{key}' - multichannel_only=True, device={device_type}")
+                    continue  # Skip multichannel-only tasks on single-channel devices
+                print(f"[TASK FILTER] ✓ Adding cognitive task '{key}' (multichannel_only={multichannel_only})")
                 self.task_combo.addItem(key)
+            else:
+                print(f"[TASK FILTER] ⚠ '{key}' NOT FOUND in BL.AVAILABLE_TASKS")
         
         # Add protocol-specific tasks
         if self._selected_protocol and self._selected_protocol in self._protocol_groups:
             for key in self._protocol_groups[self._selected_protocol]:
                 if key in getattr(BL, 'AVAILABLE_TASKS', {}):
+                    # Filter multichannel-only tasks for single-channel devices
+                    task_def = BL.AVAILABLE_TASKS[key]
+                    multichannel_only = task_def.get('multichannel_only', False)
+                    if multichannel_only and not is_multichannel:
+                        print(f"[TASK FILTER] ❌ Skipping protocol task '{key}' - multichannel_only=True, device={device_type}")
+                        continue  # Skip multichannel-only tasks on single-channel devices
+                    print(f"[TASK FILTER] ✓ Adding protocol task '{key}' (multichannel_only={multichannel_only})")
                     self.task_combo.addItem(key)
         
         # Select first item if available
@@ -1079,6 +1104,7 @@ def add_protocol_filter_to_enhanced_window():
             except Exception:
                 pass
         
+        print(f"[PROTOCOL FILTER] Populated task_combo with {self.task_combo.count()} tasks")
         self.task_combo.blockSignals(False)
     
     # Monkey-patch both methods onto the class
@@ -1648,37 +1674,96 @@ class HelpDialog(QDialog):
 # ============================================================================
 
 class HeadMapWidget(QWidget):
-    """Custom widget to draw 64-channel head map with feedback"""
+    """Custom widget to draw 64-channel head map with NA-265 electrode layout"""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(600, 600)
+        self.setMinimumSize(700, 700)
         self.impedances = {}
-        # Colors
+        # Colors based on ANT Neuro datasheet thresholds
         self.colors = {
-            'good': QColor("#22c55e"),      # Green (< 10 kΩ)
-            'acceptable': QColor("#eab308"), # Yellow (10-20 kΩ)
-            'poor': QColor("#ef4444"),       # Red (> 20 kΩ)
+            'preferred': QColor("#059669"),  # Bright green (< 20 kΩ - best contact)
+            'good': QColor("#22c55e"),       # Green (< 50 kΩ - acceptable)
+            'poor': QColor("#f97316"),       # Orange (50-100 kΩ)
+            'bad': QColor("#ef4444"),         # Red (> 100 kΩ)
             'unknown': QColor("#cbd5e1")     # Gray (No signal)
         }
         
-        # 10-20 System relative coordinates (Normalized: Center=0,0, Radius=1.0)
+        # NA-265 waveguard net 64-channel cap electrode layout
+        # Mapped from screenshot / datasheet to normalized coordinates
         # Y+ is Anterior (Front/Nose), X+ is Right
-        # ANT Neuro SDK provides channels 0-63 as numbered EEG reference channels
-        # Create a standard 64-channel layout grid approximating typical cap positions
-        self.coords = {}
+        # Channel index (0-63) -> (name, x, y)
+        # Using CHANNEL_NAMES from ImpedanceCheckDialog for consistency
+        _NAMES = [
+            # Connector 1 (Ch 0-31)
+            'Fp1', 'Fp2', 'F9', 'F7', 'F3', 'Fz', 'F4', 'F8',
+            'F10', 'FC5', 'FC1', 'FC2', 'FC6', 'T9', 'T7', 'C3',
+            'C4', 'T8', 'T10', 'CP5', 'CP1', 'CP2', 'CP6', 'P9',
+            'P7', 'P3', 'Pz', 'P4', 'P8', 'P10', 'O1', 'O2',
+            # Connector 2 (Ch 32-63)
+            'AF7', 'AF3', 'AF4', 'AF8', 'F5', 'F1', 'F2', 'F6',
+            'FC3', 'FCz', 'FC4', 'C5', 'C1', 'C2', 'C6', 'CP3',
+            'CP4', 'P5', 'P1', 'P2', 'P6', 'PO5', 'PO3', 'PO4',
+            'PO6', 'FT7', 'FT8', 'TP7', 'TP8', 'PO7', 'PO8', 'POz'
+        ]
         
-        # 8 rows x 8 columns grid layout for 64 channels
-        rows = 8
-        cols = 8
-        for i in range(64):
-            row = i // cols
-            col = i % cols
-            # Map to normalized coordinates (-1 to 1 range)
-            # Y: 1.0 (front) to -1.0 (back)
-            # X: -1.0 (left) to 1.0 (right)
-            x = -0.9 + (col / (cols - 1)) * 1.8
-            y = 0.9 - (row / (rows - 1)) * 1.8
-            self.coords[f'Ch{i}'] = (x, y)
+        # Standard 10-20 positions (normalized -1 to 1, matching screenshot layout)
+        # Row-by-row from front (top) to back (bottom)
+        _POS = {
+            # Row 1: Frontal pole
+            'Fp1': (-0.18, 0.90),  'Fpz': (0.0, 0.95),   'Fp2': (0.18, 0.90),
+            # Row 2: AF line
+            'AF7': (-0.45, 0.78),  'AF3': (-0.20, 0.78),  'AF4': (0.20, 0.78),  'AF8': (0.45, 0.78),
+            # Row 3: Frontal
+            'F9': (-0.82, 0.58),   'F7': (-0.58, 0.60),   'F5': (-0.40, 0.60),
+            'F3': (-0.28, 0.60),   'F1': (-0.14, 0.60),   'Fz': (0.0, 0.60),
+            'F2': (0.14, 0.60),    'F4': (0.28, 0.60),    'F6': (0.40, 0.60),
+            'F8': (0.58, 0.60),    'F10': (0.82, 0.58),
+            # Row 4: Fronto-central
+            'FT7': (-0.72, 0.37),  'FC5': (-0.50, 0.37),  'FC3': (-0.32, 0.37),
+            'FC1': (-0.16, 0.37),  'FCz': (0.0, 0.37),    'FC2': (0.16, 0.37),
+            'FC4': (0.32, 0.37),   'FC6': (0.50, 0.37),   'FT8': (0.72, 0.37),
+            # Row 5: Central
+            'T9': (-0.90, 0.12),   'T7': (-0.72, 0.12),   'C5': (-0.50, 0.12),
+            'C3': (-0.32, 0.12),   'C1': (-0.16, 0.12),   'Cz': (0.0, 0.12),
+            'C2': (0.16, 0.12),    'C4': (0.32, 0.12),    'C6': (0.50, 0.12),
+            'T8': (0.72, 0.12),    'T10': (0.90, 0.12),
+            # Row 6: Centro-parietal
+            'TP7': (-0.72, -0.14), 'CP5': (-0.50, -0.14), 'CP3': (-0.32, -0.14),
+            'CP1': (-0.16, -0.14), 'CPz': (0.0, -0.14),   'CP2': (0.16, -0.14),
+            'CP4': (0.32, -0.14),  'CP6': (0.50, -0.14),  'TP8': (0.72, -0.14),
+            # Row 7: Parietal
+            'P9': (-0.82, -0.40),  'P7': (-0.58, -0.40),  'P5': (-0.40, -0.40),
+            'P3': (-0.28, -0.40),  'P1': (-0.14, -0.40),  'Pz': (0.0, -0.40),
+            'P2': (0.14, -0.40),   'P4': (0.28, -0.40),   'P6': (0.40, -0.40),
+            'P8': (0.58, -0.40),   'P10': (0.82, -0.40),
+            # Row 8: Parieto-occipital
+            'PO7': (-0.50, -0.62), 'PO5': (-0.35, -0.62), 'PO3': (-0.20, -0.62),
+            'POz': (0.0, -0.62),   'PO4': (0.20, -0.62),  'PO6': (0.35, -0.62),
+            'PO8': (0.50, -0.62),
+            # Row 9: Occipital
+            'O1': (-0.18, -0.82),  'Oz': (0.0, -0.82),    'O2': (0.18, -0.82),
+            # GND (top center)
+            'GND': (0.0, 0.82),
+            # M1/M2 mastoids
+            'M1': (-0.88, -0.25),  'M2': (0.88, -0.25),
+        }
+        
+        # Build coords mapping: channel index -> (name, x, y)
+        self.coords = {}         # 'ChN' -> (x, y) for backward compat with impedance data keyed by 'ChN'
+        self.channel_labels = {} # 'ChN' -> display_name
+        for idx, name in enumerate(_NAMES):
+            key = f'Ch{idx}'
+            if name in _POS:
+                self.channel_labels[key] = name
+                self.coords[key] = _POS[name]
+            else:
+                # Fallback: place unknowns in a safe spot
+                self.channel_labels[key] = name
+                self.coords[key] = (0.0, 0.0)
+        
+        # Also include GND position if reported
+        self.coords['GND'] = _POS['GND']
+        self.channel_labels['GND'] = 'GND'
 
     def set_impedances(self, imp_dict):
         self.impedances = imp_dict
@@ -1710,30 +1795,34 @@ class HeadMapWidget(QWidget):
         painter.drawPath(path)
         
         # Define Fonts
-        name_font = QFont("Segoe UI", 9, QFont.Bold)
-        val_font = QFont("Segoe UI", 8)
+        name_font = QFont("Segoe UI", 8, QFont.Bold)
+        val_font = QFont("Segoe UI", 7)
         
         # Iterate and Draw Channels
-        dot_radius = 12
+        dot_radius = 14
         
-        for name, (nx, ny) in self.coords.items():
+        for key, (nx, ny) in self.coords.items():
             screen_x = cx + nx * scale
             screen_y = cy - ny * scale # Screen Y is down
             
-            # Impedance Data
-            val = self.impedances.get(name)
+            # Get display name
+            display_name = self.channel_labels.get(key, key)
             
-            # Determine Color and State
+            # Impedance Data
+            val = self.impedances.get(key)
+            
+            # Determine Color and State (ANT Neuro datasheet thresholds)
             fill_color = self.colors['unknown']
             val_text = "--"
             is_filled = False
             
             if val is not None:
-                val_text = f"{val:.1f}"
+                val_text = f"{val:.0f}kΩ"
                 is_filled = True
-                if val < 10: fill_color = self.colors['good']       # < 10 kΩ
-                elif val < 20: fill_color = self.colors['acceptable'] # 10-20 kΩ
-                else: fill_color = self.colors['poor']               # > 20 kΩ
+                if val < 20:    fill_color = self.colors['preferred']  # < 20 kΩ preferred
+                elif val < 50:  fill_color = self.colors['good']      # < 50 kΩ good
+                elif val < 100: fill_color = self.colors['poor']      # 50-100 kΩ poor
+                else:           fill_color = self.colors['bad']       # > 100 kΩ bad
             
             # Draw Electrode Dot
             painter.setPen(QPen(QColor("#475569"), 2))
@@ -1745,16 +1834,15 @@ class HeadMapWidget(QWidget):
             center_pt = QPoint(int(screen_x), int(screen_y))
             painter.drawEllipse(center_pt, dot_radius, dot_radius)
             
-            # Draw Channel Name (Above)
-            painter.setPen(QPen(QColor("#1e293b")))
+            # Draw Channel Name (inside circle)
+            painter.setPen(QPen(QColor("#1e293b") if not is_filled else QColor("#ffffff")))
             painter.setFont(name_font)
-            name_rect = QRectF(screen_x - 20, screen_y - 30, 40, 15)
-            painter.drawText(name_rect, Qt.AlignCenter, name)
+            name_rect = QRectF(screen_x - 18, screen_y - 8, 36, 12)
+            painter.drawText(name_rect, Qt.AlignCenter, display_name)
             
-            # Draw Impedance Value (Under) - As requested
-            painter.setPen(QPen(QColor("#64748b")))
+            # Draw Impedance Value (below name, inside circle)
             painter.setFont(val_font)
-            val_rect = QRectF(screen_x - 25, screen_y + 14, 50, 15)
+            val_rect = QRectF(screen_x - 22, screen_y + 3, 44, 11)
             painter.drawText(val_rect, Qt.AlignCenter, val_text)
 
 
@@ -1801,9 +1889,10 @@ class ChannelQualityDialog(QDialog):
         side_layout.addWidget(legend_title)
         
         # Legend Items
-        self.add_legend_item(side_layout, "#22c55e", "Good", "< 10 kΩ")
-        self.add_legend_item(side_layout, "#eab308", "Acceptable", "10 - 20 kΩ")
-        self.add_legend_item(side_layout, "#ef4444", "Poor", "> 20 kΩ")
+        self.add_legend_item(side_layout, "#059669", "Preferred", "< 20 kΩ")
+        self.add_legend_item(side_layout, "#22c55e", "Good", "< 50 kΩ")
+        self.add_legend_item(side_layout, "#f97316", "Poor", "50 - 100 kΩ")
+        self.add_legend_item(side_layout, "#ef4444", "Bad", "> 100 kΩ")
         self.add_legend_item(side_layout, "#cbd5e1", "No Signal", "--")
         
         side_layout.addStretch()
@@ -1895,19 +1984,19 @@ class ChannelQualityDialog(QDialog):
                     for i in range(min(64, mc_data.shape[1])):
                         ch_std = np.std(mc_data[:, i])
                         # Map variance to estimated impedance: 
-                        # High variance (~50+ µV) = good contact (<10 kΩ)
-                        # Medium variance (~20-50 µV) = acceptable (10-20 kΩ)
-                        # Low variance (<20 µV) = poor contact (>20 kΩ)
+                        # High variance (~50+ µV) = good contact (<20 kΩ)
+                        # Medium variance (~20-50 µV) = acceptable (<50 kΩ)
+                        # Low variance (<20 µV) = poor contact (>50 kΩ)
                         if ch_std > 50:
-                            est_imp = 5.0  # Good
+                            est_imp = 10.0  # Preferred
                         elif ch_std > 30:
-                            est_imp = 10.0  # Good/acceptable border
+                            est_imp = 20.0  # Good
                         elif ch_std > 15:
-                            est_imp = 15.0  # Acceptable
+                            est_imp = 40.0  # Acceptable
                         elif ch_std > 5:
-                            est_imp = 25.0  # Poor
+                            est_imp = 60.0  # Poor
                         else:
-                            est_imp = 100.0  # Flat/no signal
+                            est_imp = 200.0  # Flat/no signal
                         data[f'Ch{i}'] = est_imp
                 else:
                     # Generate placeholder showing "checking" status
@@ -1922,17 +2011,19 @@ class ChannelQualityDialog(QDialog):
         self.head_map.set_impedances(data)
         
         # Update Stats
-        counts = {'good': 0, 'acceptable': 0, 'poor': 0}
+        counts = {'preferred': 0, 'good': 0, 'poor': 0, 'bad': 0}
         for val in data.values():
-            if val < 10: counts['good'] += 1
-            elif val < 20: counts['acceptable'] += 1
-            else: counts['poor'] += 1
+            if val < 20: counts['preferred'] += 1
+            elif val < 50: counts['good'] += 1
+            elif val < 100: counts['poor'] += 1
+            else: counts['bad'] += 1
             
         total = len(data)
         self.stats_label.setText(
+            f"🟢 Preferred:  {counts['preferred']}/{total}\n"
             f"🟢 Good:       {counts['good']}/{total}\n"
-            f"🟡 Acceptable: {counts['acceptable']}/{total}\n"
-            f"🔴 Poor:       {counts['poor']}/{total}"
+            f"🟠 Poor:       {counts['poor']}/{total}\n"
+            f"🔴 Bad:        {counts['bad']}/{total}"
         )
 
     def closeEvent(self, event):
@@ -2202,6 +2293,12 @@ class AntNeuroDeviceManager:
                     # Convert to µV (data comes in Volts from EDI2)
                     data_uv = data * 1e6
                     
+                    # EDI2 sends 88 channels (64 EEG + 24 bipolar aux)
+                    # Truncate to 64 EEG channels for processing and recording
+                    eeg_channels = 64
+                    if data_uv.shape[1] > eeg_channels:
+                        data_uv = data_uv[:, :eeg_channels]
+                    
                     # Extract primary channel values for the entire batch (for live plot)
                     primary_values = data_uv[:, primary_ch_idx]
                     
@@ -2216,7 +2313,7 @@ class AntNeuroDeviceManager:
                         state = getattr(self.feature_engine, 'current_state', 'idle')
                         if state != 'idle':
                             # Feed entire multi-channel batch to feature engine
-                            # Shape: (n_samples, n_channels) for full 64-channel processing
+                            # Shape: (n_samples, 64) for full 64-channel processing
                             self.feature_engine.add_data(data_uv)
                 
                 self.edi2_client.set_data_callback(on_data)
@@ -2420,18 +2517,22 @@ class AntNeuroDeviceManager:
                     data = np.array(buffer.getData())
                     samples = data.reshape(-1, self.channel_count)
                     
+                    # Truncate to 64 EEG channels (device may send 88: 64 EEG + 24 bipolar)
+                    eeg_channels = 64
+                    eeg_samples = samples[:, :eeg_channels] if samples.shape[1] > eeg_channels else samples
+                    
                     # Batch processing for efficiency
-                    primary_values = samples[:, primary_ch_idx]
+                    primary_values = eeg_samples[:, primary_ch_idx]
                     self.live_data_buffer.extend(primary_values)
-                    for sample in samples:
+                    for sample in eeg_samples:
                         self.multichannel_buffer.append(sample)
                     
-                    # Batch feed FULL multi-channel data to feature engine during calibration/task
+                    # Batch feed 64-channel EEG data to feature engine during calibration/task
                     if self.feature_engine is not None:
                         state = getattr(self.feature_engine, 'current_state', 'idle')
                         if state != 'idle':
-                            # Pass full multi-channel samples for 64-channel processing
-                            self.feature_engine.add_data(samples)
+                            # Pass 64 EEG channels for feature extraction
+                            self.feature_engine.add_data(eeg_samples)
                 time.sleep(0.001)  # Minimal sleep to prevent buffer overflow
             except Exception as e:
                 print(f"ANT Neuro streaming error: {e}")
@@ -3188,8 +3289,8 @@ class EnvironmentSelectionDialog(QDialog):
     def on_env_changed(self, env_name: str):
         """Update backend URLs when environment changes"""
         backend_urls = {
-            "English (en)": "https://stg-en.mindspell.be/api/cas/brainlink_data",
-            "Dutch (nl)": "https://stg-nl.mindspell.be/api/cas/brainlink_data",
+            "English (en)": "https://en.mindspeller.com/api/cas/brainlink_data",
+            "Dutch (nl)": "https://nl.mindspeller.com/api/cas/brainlink_data",
             "Local": "http://127.0.0.1:5000/api/cas/brainlink_data"
         }
         
@@ -3634,11 +3735,34 @@ class AntNeuroMetadataDialog(QDialog):
         
         Device should already be connected via Login dialog.
         """
+        # Get email from user_data (fetched during login)
+        user_data = getattr(self.workflow.main_window, 'user_data', {})
+        user_email = user_data.get('email', None)
+        
+        # Fallback: Try to get from QSettings if not in user_data
+        if not user_email or user_email == 'unknown@example.com':
+            from PySide6.QtCore import QSettings
+            settings = QSettings("MindLink", "FeatureAnalyzer")
+            saved_username = settings.value("username", "")
+            if saved_username and '@' in saved_username:
+                user_email = saved_username
+                print(f"[METADATA DIALOG] Using email from QSettings: {user_email}")
+            else:
+                user_email = 'unknown@example.com'
+        
+        print(f"\n{'='*60}")
+        print(f"[METADATA DIALOG] Email extraction debug:")
+        print(f"  user_data exists: {user_data is not None}")
+        print(f"  user_data keys: {list(user_data.keys()) if user_data else 'N/A'}")
+        print(f"  user_email: {user_email}")
+        print(f"{'='*60}\n")
+        
         # Collect all metadata
         metadata = {
             'subject': {
                 'id': self.subject_id_input.text().strip() or 'UNKNOWN',
                 'age': self.age_input.text().strip(),
+                'email': user_email,
                 'sex': self.sex_combo.currentText(),
                 'handedness': self.hand_combo.currentText(),
             },
@@ -3685,6 +3809,26 @@ class AntNeuroMetadataDialog(QDialog):
         # NOTE: Don't start streaming here - we go to Impedance Check first
         # Streaming will start after impedance check is complete
         
+        # Set metadata in feature engine if it exists
+        if hasattr(self.workflow.main_window, 'feature_engine'):
+            engine = self.workflow.main_window.feature_engine
+            print(f"\n[METADATA DIALOG] Feature engine found: {type(engine).__name__}")
+            if hasattr(engine, 'set_metadata'):
+                print(f"[METADATA DIALOG] Calling set_metadata with:")
+                print(f"  subject_id: {metadata['subject']['id']}")
+                print(f"  subject_age: {metadata['subject']['age']}")
+                print(f"  subject_email: {metadata['subject']['email']}")
+                engine.set_metadata(
+                    subject_id=metadata['subject']['id'],
+                    subject_age=metadata['subject']['age'],
+                    subject_email=metadata['subject']['email']
+                )
+                print(f"[METADATA DIALOG] set_metadata() completed")
+            else:
+                print(f"[METADATA DIALOG] WARNING: Feature engine has no set_metadata method!")
+        else:
+            print(f"[METADATA DIALOG] WARNING: No feature_engine found in main window!")
+        
         # Proceed to Impedance Check (for ANT Neuro devices)
         self._programmatic_close = True
         self.close()
@@ -3725,12 +3869,12 @@ class ImpedanceCheckDialog(QDialog):
         'PO6', 'FT7', 'FT8', 'TP7', 'TP8', 'PO7', 'PO8', 'POz'  # 57-64
     ]
     
-    # Color thresholds for impedance values (in kΩ)
-    EXCELLENT_THRESHOLD = 5    # < 5 kΩ is excellent (bright green)
-    GOOD_THRESHOLD = 10         # < 10 kΩ is good (green)
-    ACCEPTABLE_THRESHOLD = 18   # < 18 kΩ is acceptable (yellow)
-    POOR_THRESHOLD = 20         # < 20 kΩ is poor (orange)
-    CAP_NOT_WORN_THRESHOLD = 30 # > 30 kΩ means cap not worn (dark red)
+    # Color thresholds for impedance values (in kΩ) - per ANT Neuro datasheet
+    EXCELLENT_THRESHOLD = 10    # < 10 kΩ is excellent (bright green)
+    GOOD_THRESHOLD = 20         # < 20 kΩ is preferred (green) 
+    ACCEPTABLE_THRESHOLD = 50   # < 50 kΩ is acceptable/good enough (yellow-green)
+    POOR_THRESHOLD = 100        # < 100 kΩ is poor (orange)
+    CAP_NOT_WORN_THRESHOLD = 200 # > 200 kΩ means cap not worn (dark red)
     
     def __init__(self, workflow: WorkflowManager, parent=None):
         super().__init__(parent)
@@ -3758,6 +3902,7 @@ class ImpedanceCheckDialog(QDialog):
         self.ground_impedance = 0.0
         self._impedance_mode_active = False
         self._stop_flag = False
+        self._impedance_thread = None  # Track the thread for proper cleanup
         
         # UI Elements
         title_label = QLabel("Electrode Impedance Check")
@@ -3770,17 +3915,18 @@ class ImpedanceCheckDialog(QDialog):
         
         # Instructions (compact legend)
         instructions_label = QLabel(
-            "<span style='color: #059669;'>★&lt;5k</span> | "
-            "<span style='color: #10b981;'>✓&lt;10k</span> | "
-            "<span style='color: #f59e0b;'>⚠&lt;18k</span> | "
-            "<span style='color: #f97316;'>✗&gt;20k</span> | "
-            "<span style='color: #991b1b;'>⊘&gt;30k</span>"
+            "<span style='color: #059669;'>★&lt;10k</span> | "
+            "<span style='color: #10b981;'>✓&lt;20k</span> | "
+            "<span style='color: #22c55e;'>◉&lt;50k</span> | "
+            "<span style='color: #f97316;'>✗&gt;50k</span> | "
+            "<span style='color: #991b1b;'>⊘&gt;200k</span> | "
+            "<b>Live monitoring - adjust headset until values are good</b>"
         )
         instructions_label.setStyleSheet(
             "font-size: 11px; padding: 6px 10px; background: #f0f9ff; "
             "border-radius: 6px; border-left: 3px solid #3b82f6;"
         )
-        instructions_label.setWordWrap(False)
+        instructions_label.setWordWrap(True)
         
         # Main content area - Grid of electrode impedances
         content_card = QFrame()
@@ -3796,20 +3942,51 @@ class ImpedanceCheckDialog(QDialog):
         self.summary_label.setAlignment(Qt.AlignCenter)
         content_layout.addWidget(self.summary_label)
         
-        # Create electrode grid (8x8 for 64 channels)
+        # Create electrode grid in ANATOMICAL order (front-to-back, left-to-right)
+        # 8 rows x 8 cols = 64 cells matching the NA-265 cap layout
         grid_widget = QWidget()
         self.grid_layout = QGridLayout(grid_widget)
         self.grid_layout.setSpacing(2)
         self.grid_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Create 64 electrode labels with actual device channel names (compact)
-        self.electrode_labels = []
-        for i in range(64):
-            row = i // 8
-            col = i % 8
+        # Anatomical display order: maps grid position -> channel index
+        # Channels sorted front (Fp) to back (O), left to right within each layer
+        # Channel indices reference CHANNEL_NAMES:
+        #  0:Fp1  1:Fp2  2:F9   3:F7   4:F3   5:Fz   6:F4   7:F8
+        #  8:F10  9:FC5 10:FC1 11:FC2 12:FC6 13:T9  14:T7  15:C3
+        # 16:C4  17:T8  18:T10 19:CP5 20:CP1 21:CP2 22:CP6 23:P9
+        # 24:P7  25:P3  26:Pz  27:P4  28:P8  29:P10 30:O1  31:O2
+        # 32:AF7 33:AF3 34:AF4 35:AF8 36:F5  37:F1  38:F2  39:F6
+        # 40:FC3 41:FCz 42:FC4 43:C5  44:C1  45:C2  46:C6  47:CP3
+        # 48:CP4 49:P5  50:P1  51:P2  52:P6  53:PO5 54:PO3 55:PO4
+        # 56:PO6 57:FT7 58:FT8 59:TP7 60:TP8 61:PO7 62:PO8 63:POz
+        anatomical_order = [
+            # Row 0: Fp + AF (frontal pole / anterior frontal)
+             0,  1, 32, 33, 34, 35,  2,  3,
+            # Row 1: F (frontal)
+            36,  4, 37,  5, 38,  6, 39,  7,
+            # Row 2: F10 + FC (fronto-central)
+             8, 57,  9, 40, 10, 41, 11, 42,
+            # Row 3: FC end + C (central)
+            12, 58, 13, 14, 43, 15, 44, 45,
+            # Row 4: C continued + CP start (centro-parietal)
+            16, 46, 17, 18, 59, 19, 47, 20,
+            # Row 5: CP continued + P start (parietal)
+            21, 48, 22, 60, 23, 24, 49, 25,
+            # Row 6: P continued + PO start (parieto-occipital)
+            50, 26, 51, 27, 52, 28, 29, 61,
+            # Row 7: PO continued + O (occipital) — O1 and O2 at bottom
+            53, 54, 63, 55, 56, 62, 30, 31,
+        ]
+        
+        # Create 64 electrode labels indexed by channel index (for update function)
+        self.electrode_labels = [None] * 64
+        for grid_pos, ch_idx in enumerate(anatomical_order):
+            row = grid_pos // 8
+            col = grid_pos % 8
             
             # Get channel name from device (actual hardware mapping)
-            ch_name = self.channel_names[i] if i < len(self.channel_names) else f"Ch{i+1}"
+            ch_name = self.channel_names[ch_idx] if ch_idx < len(self.channel_names) else f"Ch{ch_idx+1}"
             
             label = QLabel(f"{ch_name}\n--")
             label.setAlignment(Qt.AlignCenter)
@@ -3818,7 +3995,7 @@ class ImpedanceCheckDialog(QDialog):
                 "background: #475569; color: #e2e8f0; border-radius: 3px; "
                 "font-size: 9px; font-weight: 500;"
             )
-            self.electrode_labels.append(label)
+            self.electrode_labels[ch_idx] = label
             self.grid_layout.addWidget(label, row, col)
         
         content_layout.addWidget(grid_widget)
@@ -3977,8 +4154,8 @@ class ImpedanceCheckDialog(QDialog):
         
         # Run impedance check in background thread
         import threading
-        thread = threading.Thread(target=self._impedance_check_thread, daemon=True)
-        thread.start()
+        self._impedance_thread = threading.Thread(target=self._impedance_check_thread, daemon=False)
+        self._impedance_thread.start()
     
     def _impedance_check_thread(self):
         """Background thread for impedance measurement via gRPC"""
@@ -4077,15 +4254,14 @@ class ImpedanceCheckDialog(QDialog):
                 self._update_status(f"Error setting impedance mode: {e}", error=True)
                 return
             
-            # Read impedance frames for ~5 seconds
-            self._update_status("Reading impedance values...")
+            # Read impedance frames continuously until user clicks Next or closes dialog
+            self._update_status("Reading impedance values - adjust headset as needed...")
             frame_count = 0
             impedance_frame_count = 0
-            max_frames = 50  # Read up to 50 frames
             
-            print("[IMPEDANCE] Starting frame read loop...")
+            print("[IMPEDANCE] Starting continuous frame read loop (will run until Next/Close)...")
             
-            while frame_count < max_frames and not self._stop_flag:
+            while not self._stop_flag:  # Run until user clicks Next or closes dialog
                 try:
                     frame_resp = stub.Amplifier_GetFrame(
                         edi.Amplifier_GetFrameRequest(
@@ -4143,16 +4319,30 @@ class ImpedanceCheckDialog(QDialog):
                     time.sleep(0.1)
                     
                 except Exception as e:
-                    if "UNAVAILABLE" in str(e) or "aborted" in str(e).lower():
+                    error_str = str(e)
+                    # Handle amplifier detach/reattach gracefully
+                    if "not found: amplifier with id" in error_str:
+                        # Amplifier is being detached/reattached - wait and retry
+                        if impedance_frame_count == 0:
+                            # Haven't gotten any data yet - might need to reconnect
+                            print("[IMPEDANCE] Amplifier temporarily unavailable (detach/reattach), waiting...")
+                        time.sleep(0.5)
+                        continue
+                    elif "UNAVAILABLE" in error_str or "aborted" in error_str.lower():
                         self._update_status("Connection lost during impedance check", error=True)
                         break
-                    print(f"[IMPEDANCE] Frame read error: {e}")
+                    else:
+                        print(f"[IMPEDANCE] Frame read error: {e}")
+                        time.sleep(0.1)
             
-            # Final update
+            # Final update (user clicked Next or closed dialog)
             print(f"[IMPEDANCE] Final update: {len(self.impedance_values)} channels")
             self._signals.impedance_updated.emit(dict(self.impedance_values), self.reference_impedance, self.ground_impedance)
-            self._update_status(f"Impedance check complete - {impedance_frame_count} impedance frames read")
-            print(f"[IMPEDANCE] Check complete: {len(self.impedance_values)} channels, {impedance_frame_count} impedance frames, REF={self.reference_impedance:.1f}kΩ, GND={self.ground_impedance:.1f}kΩ")
+            if self._stop_flag:
+                self._update_status(f"Impedance monitoring stopped - {impedance_frame_count} frames read, {frame_count} total")
+            else:
+                self._update_status(f"Impedance check complete - {impedance_frame_count} impedance frames read")
+            print(f"[IMPEDANCE] Complete: {len(self.impedance_values)} channels, {impedance_frame_count} impedance frames, {frame_count} total frames, REF={self.reference_impedance:.1f}kΩ, GND={self.ground_impedance:.1f}kΩ")
             
         except Exception as e:
             self._update_status(f"Error: {e}", error=True)
@@ -4160,6 +4350,45 @@ class ImpedanceCheckDialog(QDialog):
             traceback.print_exc()
         finally:
             self._impedance_mode_active = False
+            
+            # CRITICAL: Properly dispose the amplifier handle after impedance check
+            # This prevents "amplifier in use" errors when trying to stream later
+            print("[IMPEDANCE] Cleaning up amplifier handle...")
+            try:
+                edi2_client = getattr(ANT_NEURO, 'edi2_client', None)
+                if edi2_client and edi2_client.stub and edi2_client.amplifier_handle is not None:
+                    old_handle = edi2_client.amplifier_handle
+                    print(f"[IMPEDANCE] Disposing amplifier handle: {old_handle}")
+                    
+                    # First set to IDLE mode
+                    try:
+                        import EdigRPC_pb2 as edi
+                        edi2_client.stub.Amplifier_SetMode(
+                            edi.Amplifier_SetModeRequest(
+                                AmplifierHandle=old_handle,
+                                Mode=edi.AmplifierMode.AmplifierMode_Idle,
+                                StreamParams=edi.StreamParams()
+                            )
+                        )
+                        time.sleep(0.2)
+                    except Exception as e:
+                        print(f"[IMPEDANCE] Could not set IDLE mode (handle may be stale): {e}")
+                    
+                    # Then dispose the handle
+                    try:
+                        edi2_client.stub.Amplifier_Dispose(
+                            edi.Amplifier_DisposeRequest(AmplifierHandle=old_handle)
+                        )
+                        print(f"[IMPEDANCE] Handle {old_handle} disposed successfully")
+                    except Exception as e:
+                        print(f"[IMPEDANCE] Handle disposal error (may already be disposed): {e}")
+                    
+                    # Clear the handle so we force a reconnect
+                    edi2_client.amplifier_handle = None
+                    edi2_client.is_connected = False
+                    print("[IMPEDANCE] Amplifier handle cleared - will reconnect before streaming")
+            except Exception as e:
+                print(f"[IMPEDANCE] Cleanup error: {e}")
     
     def _update_status(self, message: str, error: bool = False):
         """Update status label from any thread - uses signal for thread safety"""
@@ -4206,21 +4435,21 @@ class ImpedanceCheckDialog(QDialog):
             if idx in impedance_values:
                 kohms = impedance_values[idx]
                 
-                # Determine color based on impedance (5-tier system)
+                # Determine color based on impedance (per ANT Neuro datasheet)
                 if kohms < self.EXCELLENT_THRESHOLD:
-                    bg_color = "#059669"  # Bright green - Excellent
+                    bg_color = "#059669"  # Bright green - Excellent (<10k)
                     excellent_count += 1
                 elif kohms < self.GOOD_THRESHOLD:
-                    bg_color = "#10b981"  # Green - Good
+                    bg_color = "#10b981"  # Green - Preferred (<20k)
                     good_count += 1
                 elif kohms < self.ACCEPTABLE_THRESHOLD:
-                    bg_color = "#f59e0b"  # Yellow - Acceptable
+                    bg_color = "#22c55e"  # Light green - Good enough (<50k)
                     acceptable_count += 1
-                elif kohms < self.CAP_NOT_WORN_THRESHOLD:
-                    bg_color = "#f97316"  # Orange - Poor
+                elif kohms < self.POOR_THRESHOLD:
+                    bg_color = "#f97316"  # Orange - Poor (<100k)
                     poor_count += 1
                 else:
-                    bg_color = "#991b1b"  # Dark red - Cap not worn
+                    bg_color = "#991b1b"  # Dark red - Cap not worn (>100k)
                     cap_not_worn_count += 1
                 
                 # Compact label text with channel name
@@ -4319,7 +4548,34 @@ class ImpedanceCheckDialog(QDialog):
         if ANT_NEURO.edi2_client:
             ANT_NEURO.edi2_client.is_streaming = False
         
-        # Now start EEG streaming (reusing the same amplifier handle)
+        # CRITICAL: Wait for impedance thread to complete cleanup
+        if self._impedance_thread and self._impedance_thread.is_alive():
+            print("[IMPEDANCE] Waiting for impedance thread to complete cleanup...")
+            self._impedance_thread.join(timeout=3.0)
+            if self._impedance_thread.is_alive():
+                print("[IMPEDANCE] Warning: Impedance thread still running after 3s")
+        
+        import time
+        time.sleep(0.5)  # Give gRPC server time to fully dispose the old handle
+        
+        # CRITICAL: Force reconnect to get a fresh amplifier handle
+        # The impedance check disposes the old handle, so we MUST reconnect
+        self.status_label.setText("Reconnecting for EEG streaming...")
+        print("[IMPEDANCE] Forcing reconnect to get fresh amplifier handle...")
+        device_serial = ANT_NEURO.device_serial
+        if device_serial and device_serial != 'DEMO-001':
+            try:
+                # Reconnect to amplifier to get new handle
+                if ANT_NEURO.edi2_client:
+                    ANT_NEURO.edi2_client.connect(device_serial)
+                    print(f"[IMPEDANCE] Reconnected with new handle: {ANT_NEURO.edi2_client.amplifier_handle}")
+                    time.sleep(0.3)
+            except Exception as e:
+                print(f"[IMPEDANCE] Reconnect error: {e}")
+                self.status_label.setText(f"Reconnect failed: {e}")
+                return
+        
+        # Now start EEG streaming with the fresh handle
         self.status_label.setText("Starting EEG streaming...")
         print("[IMPEDANCE] Starting EEG streaming after impedance check...")
         success = ANT_NEURO.start_streaming(sample_rate=500)
@@ -4335,19 +4591,30 @@ class ImpedanceCheckDialog(QDialog):
     
     def closeEvent(self, event):
         """Handle dialog close - ensure proper cleanup"""
+        print("[IMPEDANCE] Dialog closing...")
         self._stop_flag = True
         
-        # Only return to IDLE mode if NOT a programmatic close (i.e., user closed manually)
-        # When on_next() is called, it handles the mode transition itself before starting streaming
+        # Wait for impedance thread to terminate
+        if self._impedance_thread and self._impedance_thread.is_alive():
+            print("[IMPEDANCE] Waiting for impedance thread to stop...")
+            self._impedance_thread.join(timeout=2.0)
+            if self._impedance_thread.is_alive():
+                print("[IMPEDANCE] Warning: Thread still running after 2s timeout")
+        
+        # Only do manual cleanup if user closed (not programmatic close from on_next)
+        # When on_next() is called, it handles the cleanup itself
         if not self._programmatic_close:
-            # User closed the window manually - return to IDLE mode and cleanup
-            print("[IMPEDANCE] User closed dialog - returning to IDLE mode")
-            self._return_to_idle_mode()
+            print("[IMPEDANCE] User closed dialog - performing cleanup")
             
-            # Also reset streaming flags since we're exiting impedance without starting stream
+            # The impedance thread's finally block already disposed the handle
+            # Just reset the streaming flags
             ANT_NEURO.is_streaming = False
             if ANT_NEURO.edi2_client:
                 ANT_NEURO.edi2_client.is_streaming = False
+                ANT_NEURO.edi2_client.is_connected = False
+                ANT_NEURO.edi2_client.amplifier_handle = None
+            
+            print("[IMPEDANCE] Cleanup complete")
         
         event.accept()
     
@@ -5249,16 +5516,13 @@ class LoginDialog(QDialog):
         device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
         
         if device_type == "antneuro":
-            # ANT Neuro is already connected and streaming from _check_device
-            if ANT_NEURO.is_streaming:
-                self.workflow.main_window.log_message("✓ ANT Neuro device already streaming")
+            # ANT Neuro: DON'T start streaming here - we go to Metadata → Impedance Check first
+            # Streaming will start after impedance check completes (ImpedanceCheckDialog.on_next)
+            # This ensures metadata (including email) is set BEFORE recording starts
+            if ANT_NEURO.is_connected:
+                self.workflow.main_window.log_message("✓ ANT Neuro device connected (streaming deferred until after impedance check)")
             else:
-                # Try to start streaming if not already
-                if ANT_NEURO.is_connected:
-                    ANT_NEURO.start_streaming()
-                    self.workflow.main_window.log_message("✓ ANT Neuro streaming started")
-                else:
-                    self.workflow.main_window.log_message("✗ ANT Neuro device not connected!")
+                self.workflow.main_window.log_message("✗ ANT Neuro device not connected!")
         else:
             # MindLink device - use serial connection
             from cushy_serial import CushySerial
@@ -5574,7 +5838,7 @@ class MultiChannelViewDialog(QDialog):
         main_layout.setSpacing(4)
         
         # Header
-        header = QLabel("📊 64-Channel EEG Real-Time Monitor")
+        header = QLabel("64-Channel EEG Real-Time Monitor")
         header.setStyleSheet("font-size: 16px; font-weight: bold; color: #1e40af; padding: 4px;")
         header.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(header)
@@ -5973,10 +6237,12 @@ class LiveEEGDialog(QDialog):
                     print(f"[Plot] raw: {raw_data.min():.1f} to {raw_data.max():.1f}, centered: {display_data.min():.1f} to {display_data.max():.1f} µV, t={current_time:.1f}s, y_range=±{y_range:.0f}µV")
             else:
                 data = np.array(list(data_buffer)[-sample_rate:])
-                n_samples = len(data)
                 current_time = len(data_buffer) / sample_rate
-                time_axis = np.linspace(current_time - n_samples/sample_rate, current_time, n_samples)
-                self.curve.setData(time_axis, data[-500:])  # Plot last 500 for display
+                # Plot last 500 samples for display
+                plot_data = data[-500:]
+                n_plot = len(plot_data)
+                time_axis = np.linspace(current_time - n_plot/sample_rate, current_time, n_plot)
+                self.curve.setData(time_axis, plot_data)
                 self.plot_widget.setXRange(current_time - 1.0, current_time, padding=0)
             
             # Reset no-data counter when data is flowing
@@ -6034,10 +6300,16 @@ class LiveEEGDialog(QDialog):
     def _open_multichannel_view(self):
         """Open the 64-channel visualization popup"""
         try:
-            # Create and show the multi-channel dialog
-            self.multichannel_dialog = MultiChannelViewDialog(self.workflow.main_window, parent=self)
-            self.multichannel_dialog.show()
-            print("[LiveEEG] Opened 64-channel visualization popup")
+            # Use shared instance from main_window to avoid duplicate dialogs
+            if not hasattr(self.workflow.main_window, 'multichannel_dialog') or self.workflow.main_window.multichannel_dialog is None or not self.workflow.main_window.multichannel_dialog.isVisible():
+                self.workflow.main_window.multichannel_dialog = MultiChannelViewDialog(self.workflow.main_window, parent=None)
+                self.workflow.main_window.multichannel_dialog.show()
+                print("[LiveEEG] Opened 64-channel visualization popup")
+            else:
+                # Bring existing dialog to front
+                self.workflow.main_window.multichannel_dialog.raise_()
+                self.workflow.main_window.multichannel_dialog.activateWindow()
+                print("[LiveEEG] Brought existing 64-channel dialog to front")
         except Exception as e:
             print(f"[LiveEEG] Error opening multichannel view: {e}")
             import traceback
@@ -6830,10 +7102,25 @@ class TaskSelectionDialog(QDialog):
             for i in range(self.workflow.main_window.task_combo.count()):
                 task_id = self.workflow.main_window.task_combo.itemText(i)
                 self.available_task_ids.append(task_id)
+            print(f"[TASK SELECTION] Loaded {len(self.available_task_ids)} tasks from main window: {self.available_task_ids}")
         
         # Fall back to all tasks if filtering failed
         if not self.available_task_ids:
-            self.available_task_ids = list(BL.AVAILABLE_TASKS.keys())
+            # Check device type for multichannel filtering
+            device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
+            is_multichannel = (device_type == 'antneuro')
+            
+            # Filter tasks based on device capabilities
+            print(f"[TASK SELECTION] Using fallback - device_type='{device_type}', is_multichannel={is_multichannel}")
+            for task_id in BL.AVAILABLE_TASKS.keys():
+                task_def = BL.AVAILABLE_TASKS[task_id]
+                multichannel_only = task_def.get('multichannel_only', False)
+                # Skip multichannel-only tasks on single-channel devices
+                if multichannel_only and not is_multichannel:
+                    print(f"[TASK SELECTION] ❌ Skipping '{task_id}' - multichannel_only=True, device={device_type}")
+                    continue
+                print(f"[TASK SELECTION] ✓ Adding '{task_id}' (multichannel_only={multichannel_only})")
+                self.available_task_ids.append(task_id)
         
         # Main layout
         main_layout = QVBoxLayout()
@@ -6867,15 +7154,29 @@ class TaskSelectionDialog(QDialog):
         # Get completed tasks to disable them
         completed_tasks = self._get_completed_task_ids()
         
+        # Check device type for task categorization
+        device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
+        is_multichannel = (device_type == 'antneuro')
+        
         # Basic tasks that don't need 'Advanced' tag
         basic_tasks = [ 'visual_imagery', 'attention_focus', 'mental_math', 'emotion_face']
+        
+        # Check if user has completed initial protocol
+        user_data = getattr(self.workflow.main_window, 'user_data', {})
+        initial_protocol = user_data.get('initial_protocol', '')
+        has_initial_protocol = bool(initial_protocol)
         
         for task_id in self.available_task_ids:
             if task_id in BL.AVAILABLE_TASKS:
                 task_name = BL.AVAILABLE_TASKS[task_id].get('name', task_id)
+                task_def = BL.AVAILABLE_TASKS[task_id]
                 
-                # Add 'Advanced' tag for non-basic tasks
-                if task_id not in basic_tasks:
+                # Multichannel-only tasks are not advanced (don't require protocol completion)
+                is_multichannel_only = task_def.get('multichannel_only', False)
+                is_advanced = task_id not in basic_tasks and not is_multichannel_only
+                
+                # Add 'Advanced' tag for non-basic tasks (but not multichannel-only)
+                if is_advanced:
                     task_name = f"{task_name} (Advanced)"
                 
                 # Mark completed tasks with checkmark
@@ -6886,13 +7187,29 @@ class TaskSelectionDialog(QDialog):
                 
                 self.task_combo.addItem(display_name, task_id)  # Display name, store ID as data
                 
-                # Disable the item if task is already completed
+                model = self.task_combo.model()
+                item = model.item(self.task_combo.count() - 1)
+                
+                # Disable if task is already completed
                 if task_id in completed_tasks:
-                    model = self.task_combo.model()
-                    item = model.item(self.task_combo.count() - 1)
                     item.setEnabled(False)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled)  # Explicitly disable
                     item.setToolTip("This task has already been completed")
+                    # Gray out completed tasks
+                    item.setForeground(QColor(156, 163, 175))  # #9ca3af gray
+                # Disable advanced tasks if user hasn't completed initial protocol
+                elif is_advanced and not has_initial_protocol:
+                    item.setEnabled(False)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled)  # Explicitly disable
+                    item.setToolTip("🔒 Complete initial protocol first to unlock advanced tasks")
+                    # Style locked tasks with lock icon color
+                    item.setForeground(QColor(245, 158, 11))  # #f59e0b amber
+                    # Add lock icon prefix if not already there
+                    if not display_name.startswith("🔒"):
+                        item.setText(f"🔒 {display_name}")
         
+        # Prevent selecting disabled items
+        self.task_combo.currentIndexChanged.connect(self._on_task_changed)
         self.task_combo.currentIndexChanged.connect(self.update_task_preview)
         
         task_layout.addWidget(task_label)
@@ -7202,15 +7519,29 @@ class TaskSelectionDialog(QDialog):
         self.task_combo.clear()
         completed_tasks = self._get_completed_task_ids()
         
+        # Check device type for task categorization
+        device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
+        is_multichannel = (device_type == 'antneuro')
+        
         # Basic tasks that don't need 'Advanced' tag
         basic_tasks = [ 'visual_imagery', 'attention_focus', 'mental_math', 'emotion_face']
+        
+        # Check if user has completed initial protocol
+        user_data = getattr(self.workflow.main_window, 'user_data', {})
+        initial_protocol = user_data.get('initial_protocol', '')
+        has_initial_protocol = bool(initial_protocol)
         
         for task_id in self.available_task_ids:
             if task_id in BL.AVAILABLE_TASKS:
                 task_name = BL.AVAILABLE_TASKS[task_id].get('name', task_id)
+                task_def = BL.AVAILABLE_TASKS[task_id]
                 
-                # Add 'Advanced' tag for non-basic tasks
-                if task_id not in basic_tasks:
+                # Multichannel-only tasks are not advanced (don't require protocol completion)
+                is_multichannel_only = task_def.get('multichannel_only', False)
+                is_advanced = task_id not in basic_tasks and not is_multichannel_only
+                
+                # Add 'Advanced' tag for non-basic tasks (but not multichannel-only)
+                if is_advanced:
                     task_name = f"{task_name} (Advanced)"
                 
                 # Mark completed tasks with checkmark
@@ -7221,19 +7552,75 @@ class TaskSelectionDialog(QDialog):
                 
                 self.task_combo.addItem(display_name, task_id)
                 
-                # Disable the item if task is already completed
+                model = self.task_combo.model()
+                item = model.item(self.task_combo.count() - 1)
+                
+                # Disable if task is already completed
                 if task_id in completed_tasks:
-                    model = self.task_combo.model()
-                    item = model.item(self.task_combo.count() - 1)
                     item.setEnabled(False)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled)  # Explicitly disable
                     item.setToolTip("This task has already been completed")
+                    # Gray out completed tasks
+                    item.setForeground(QColor(156, 163, 175))  # #9ca3af gray
+                # Disable advanced tasks if user hasn't completed initial protocol
+                elif is_advanced and not has_initial_protocol:
+                    item.setEnabled(False)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled)  # Explicitly disable
+                    item.setToolTip("🔒 Complete initial protocol first to unlock advanced tasks")
+                    # Style locked tasks with lock icon color
+                    item.setForeground(QColor(245, 158, 11))  # #f59e0b amber
+                    # Add lock icon prefix if not already there
+                    if not display_name.startswith("🔒"):
+                        item.setText(f"🔒 {display_name}")
         
-        # Try to select first non-completed task
+        # Auto-select first available (non-completed, non-disabled) task
+        selected = False
         for i in range(self.task_combo.count()):
             task_id = self.task_combo.itemData(i)
-            if task_id not in completed_tasks:
+            model = self.task_combo.model()
+            item = model.item(i)
+            
+            # Check if item is enabled (not completed and not locked)
+            if item.isEnabled() and task_id not in completed_tasks:
                 self.task_combo.setCurrentIndex(i)
+                selected = True
+                print(f"[TASK SELECTION] Auto-selected next task: {task_id}")
                 break
+        
+        if not selected:
+            print("[TASK SELECTION] No more available tasks to select")
+    
+    def _on_task_changed(self, index):
+        """Prevent selecting disabled items in the combo box"""
+        if index >= 0:
+            model = self.task_combo.model()
+            item = model.item(index)
+            
+            # If user tried to select a disabled item, find next enabled item
+            if item and not item.isEnabled():
+                print(f"[TASK SELECTION] Attempted to select disabled item at index {index}, finding next enabled task")
+                
+                # Search forward for next enabled item
+                for i in range(index + 1, self.task_combo.count()):
+                    next_item = model.item(i)
+                    if next_item and next_item.isEnabled():
+                        self.task_combo.blockSignals(True)
+                        self.task_combo.setCurrentIndex(i)
+                        self.task_combo.blockSignals(False)
+                        print(f"[TASK SELECTION] Auto-selected next enabled task at index {i}")
+                        return
+                
+                # If no enabled item found forward, search backward
+                for i in range(index - 1, -1, -1):
+                    prev_item = model.item(i)
+                    if prev_item and prev_item.isEnabled():
+                        self.task_combo.blockSignals(True)
+                        self.task_combo.setCurrentIndex(i)
+                        self.task_combo.blockSignals(False)
+                        print(f"[TASK SELECTION] Auto-selected previous enabled task at index {i}")
+                        return
+                
+                print("[TASK SELECTION] No enabled tasks available")
     
     def update_completed_tasks_display(self):
         """Update the completed tasks counter"""
@@ -7582,15 +7969,83 @@ class MultiTaskAnalysisDialog(QDialog):
             # This is the OfflineMultichannelEngine - need to extract features first
             print(f"\n{'='*70}")
             print(f"[OFFLINE ANALYSIS] Extracting features from raw EEG data...")
-            print(f"[OFFLINE ANALYSIS] Phase markers: {len(engine.phase_markers)}")
+            print(f"[OFFLINE ANALYSIS] Phase markers (before filtering): {len(engine.phase_markers)}")
             print(f"[OFFLINE ANALYSIS] Raw samples: {len(engine.raw_data)}")
             print(f"{'='*70}\n")
+            
+            # === CRITICAL: Filter phase markers to only recording phases ===
+            # This aligns with standalone analyzer logic (BrainLink_Offline_Analyzer.py lines 296-363)
+            all_markers = engine.phase_markers
+            has_record_flags = any('record' in m for m in all_markers)
+            
+            if has_record_flags:
+                # New format: use explicit 'record' flag
+                recording_markers = [m for m in all_markers if m.get('record', False)]
+                print(f"[OFFLINE ANALYSIS] Using explicit 'record' flags from markers")
+            else:
+                # Old format: use fallback heuristics based on phase type
+                recording_phase_types = {'task', 'thinking', 'viewing', 'video', 'wait', 'eyes_closed', 'eyes_open', 'baseline'}
+                
+                recording_markers = []
+                for marker in all_markers:
+                    task_id = marker.get('task')
+                    phase_type = marker.get('phase_type')
+                    phase_name = marker.get('phase', '')  # Fallback for old format
+                    
+                    # If no phase_type but has 'phase', use that
+                    if not phase_type and phase_name:
+                        # Default recording phases should be included
+                        if phase_name in recording_phase_types:
+                            recording_markers.append(marker)
+                        continue
+                    
+                    # Check if this phase should be recorded
+                    should_record = False
+                    
+                    # Try to get task definition for intelligent filtering
+                    if task_id and task_id in BL.AVAILABLE_TASKS:
+                        task_def = BL.AVAILABLE_TASKS[task_id]
+                        phase_structure = task_def.get('phase_structure', [])
+                        
+                        # Find matching phase in structure
+                        for phase in phase_structure:
+                            if phase.get('type') == phase_type and phase.get('record', False):
+                                should_record = True
+                                break
+                        
+                        # For continuous_recording tasks, keep all phases
+                        if task_def.get('continuous_recording', False):
+                            should_record = True
+                    else:
+                        # Unknown task, keep marker if phase type suggests recording
+                        if phase_type in recording_phase_types:
+                            should_record = True
+                    
+                    if should_record:
+                        recording_markers.append(marker)
+            
+            # Update engine's phase markers to only recording phases
+            engine.phase_markers = recording_markers
+            print(f"[OFFLINE ANALYSIS] Filtered to {len(recording_markers)} recording phases (removed {len(all_markers) - len(recording_markers)} non-recording phases)")
+            
+            # Show details of filtered phases
+            if recording_markers:
+                print(f"[OFFLINE ANALYSIS] Recording phases:")
+                for rm in recording_markers:
+                    phase_desc = rm.get('phase', 'unknown')
+                    if rm.get('phase_type'):
+                        phase_desc += f" ({rm['phase_type']})"
+                    if rm.get('task'):
+                        phase_desc += f" - {rm['task']}"
+                    duration = rm['end'] - rm['start']
+                    print(f"  • {phase_desc}: {duration:.1f}s")
             
             self.results_text.setPlainText(
                 "OFFLINE ANALYSIS MODE\n\n"
                 "Extracting features from raw EEG data...\n"
                 "Processing all 64 channels...\n"
                 "Computing 1,400+ features per window...\n\n"
+                f"Recording phases to analyze: {len(recording_markers)}\n\n"
                 "This may take 1-2 minutes depending on recording length."
             )
             QtWidgets.QApplication.processEvents()
@@ -7603,7 +8058,7 @@ class MultiTaskAnalysisDialog(QDialog):
                     QtCore.Qt.ConnectionType.QueuedConnection,
                     QtCore.Q_ARG(str, f"OFFLINE ANALYSIS MODE\n\n"
                                       f"Feature extraction: {pct}%\n\n"
-                                      f"Processing 64 channels × 1,400+ features per window...")
+                                      f"Processing {len(recording_markers)} phases × 64 channels × 1,400+ features per window...")
                 )
             
             engine.analyze_offline(progress_callback=progress_callback)
@@ -7713,11 +8168,14 @@ class MultiTaskAnalysisDialog(QDialog):
                 # Run the analysis in background thread
                 results = engine.analyze_all_tasks_data()
                 
+                # Store results in engine for main thread to access
+                engine.multi_task_results = results
+                
                 print(f"\n>>> [WORKER THREAD] analyze_all_tasks_data() RETURNED <<<\n")
                 print(f"Results type: {type(results)}")
                 if isinstance(results, dict):
                     print(f"Results keys: {list(results.keys())}")
-                    print(f"engine.multi_task_results is now: {hasattr(engine, 'multi_task_results')}")
+                    print(f"engine.multi_task_results stored: {hasattr(engine, 'multi_task_results')}")
                 
                 # Clear the permutation progress callback
                 engine.clear_permutation_progress_callback()
@@ -7836,13 +8294,20 @@ class MultiTaskAnalysisDialog(QDialog):
                         'sample_rate': getattr(engine, 'fs', 250),
                         'baseline_ec_windows': baseline_ec_windows,
                         'baseline_eo_windows': baseline_eo_windows,
-                        'tasks_executed': len(per_task)
+                        'tasks_executed': len(per_task),
+                        'subject_metadata': {}  # Will be populated below
                     },
                     'artifact_summary': getattr(engine, 'artifact_summary', {}),
                     'analysis_results': getattr(engine, 'analysis_results', {}),
                     'multi_task_results': multi_task_results,
                     'baseline_stats': getattr(engine, 'baseline_stats', {})
                 }
+                
+                # Add subject metadata if available (from ANT Neuro metadata dialog)
+                if hasattr(self.workflow.main_window, 'antneuro_metadata'):
+                    metadata = self.workflow.main_window.antneuro_metadata
+                    if metadata and 'subject' in metadata:
+                        results_data['session_info']['subject_metadata'] = metadata['subject']
                 
                 # Get configuration
                 config = getattr(engine, 'config', None)
@@ -7853,7 +8318,8 @@ class MultiTaskAnalysisDialog(QDialog):
                 report_lines = Enhanced64ChannelReportGenerator.generate_text_report(
                     results=results_data,
                     fast_mode=fast_mode,
-                    n_permutations=n_perm
+                    n_permutations=n_perm,
+                    config=config
                 )
                 
                 # Display in results area
@@ -8054,7 +8520,8 @@ class MultiTaskAnalysisDialog(QDialog):
                 report_lines = Enhanced64ChannelReportGenerator.generate_text_report(
                     results=results,
                     fast_mode=fast_mode,
-                    n_permutations=n_perm
+                    n_permutations=n_perm,
+                    config=config
                 )
                 
                 self.generated_report_text = "\n".join(report_lines)
@@ -8595,6 +9062,7 @@ class SequentialBrainLinkAnalyzerWindow(EnhancedBrainLinkAnalyzerWindow):
         
         # Track if using enhanced 64-channel engine
         self.using_enhanced_engine = False
+        self.using_offline_engine = False
         
         # Ensure protocol groups use the correct Lifestyle tasks (now implemented)
         self._protocol_groups = {
@@ -8641,11 +9109,13 @@ class SequentialBrainLinkAnalyzerWindow(EnhancedBrainLinkAnalyzerWindow):
             )
             
             # Enable FAST MODE for 64-channel analysis to avoid 20+ minute permutation testing
-            # Fast mode uses chi-square approximation instead of 1000+ permutations per task
+            # Fast mode uses chi-square approximation + parametric tests
+            # Aligns with standalone analyzer settings (BrainLink_Offline_Analyzer.py)
             if hasattr(self.feature_engine, 'config'):
                 self.feature_engine.config.fast_mode = True
-                self.feature_engine.config.n_perm = 50  # Minimal permutations as backup
-                print(f"[MAIN WINDOW] FAST MODE ENABLED: Parametric tests + chi-square approximation")
+                self.feature_engine.config.n_perm = 200  # Match standalone default (sufficient for p-value resolution)
+                self.feature_engine.config.use_permutation_for_sumP = False  # Use chi-square approximation in fast mode
+                print(f"[MAIN WINDOW] FAST MODE ENABLED: Parametric tests + chi-square approximation (n_perm={self.feature_engine.config.n_perm})")
             self.feature_engine.set_log_function(self.log_message)
             self.using_enhanced_engine = True
             self.using_offline_engine = True
@@ -8738,12 +9208,51 @@ class SequentialBrainLinkAnalyzerWindow(EnhancedBrainLinkAnalyzerWindow):
             
             # Clean up ANT Neuro EDI2 connection (stops gRPC server)
             try:
+                print("[CLEANUP] Stopping ANT Neuro connections...")
+                
+                # Stop streaming first
+                if ANT_NEURO and ANT_NEURO.is_streaming:
+                    print("[CLEANUP] Stopping streaming...")
+                    ANT_NEURO.stop_streaming()
+                
+                # Disconnect and cleanup EDI2 client
+                if ANT_NEURO and hasattr(ANT_NEURO, 'edi2_client') and ANT_NEURO.edi2_client:
+                    print("[CLEANUP] Disposing EDI2 amplifier handle...")
+                    try:
+                        # Dispose amplifier handle
+                        if ANT_NEURO.edi2_client.stub and ANT_NEURO.edi2_client.amplifier_handle is not None:
+                            import sys
+                            import os
+                            antneuro_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'antNeuro')
+                            if antneuro_dir not in sys.path:
+                                sys.path.insert(0, antneuro_dir)
+                            import EdigRPC_pb2 as edi
+                            
+                            ANT_NEURO.edi2_client.stub.Amplifier_Dispose(
+                                edi.Amplifier_DisposeRequest(
+                                    AmplifierHandle=ANT_NEURO.edi2_client.amplifier_handle
+                                )
+                            )
+                            print(f"[CLEANUP] Amplifier handle {ANT_NEURO.edi2_client.amplifier_handle} disposed")
+                    except Exception as e:
+                        print(f"[CLEANUP] Handle disposal error: {e}")
+                    
+                    # Disconnect gRPC and stop server
+                    print("[CLEANUP] Disconnecting gRPC...")
+                    ANT_NEURO.edi2_client._disconnect_grpc()
+                    print("[CLEANUP] Stopping EDI2 gRPC server...")
+                    ANT_NEURO.edi2_client._stop_server()
+                
+                # Full disconnect
                 if ANT_NEURO and ANT_NEURO.is_connected:
-                    print("[CLEANUP] Disconnecting ANT Neuro EDI2...")
+                    print("[CLEANUP] Final ANT Neuro disconnect...")
                     ANT_NEURO.disconnect()
-                    print("[CLEANUP] ANT Neuro EDI2 disconnected")
+                
+                print("[CLEANUP] ANT Neuro cleanup complete")
             except Exception as e:
                 print(f"[CLEANUP] ANT Neuro cleanup error: {e}")
+                import traceback
+                traceback.print_exc()
             
             # Clean up any timers
             try:

@@ -141,6 +141,11 @@ Output: Standalone `.exe` (Windows) or `.app` (macOS) files
 
 ## Documentation
 
+### Analysis & Reporting
+- **[Enhanced Report Generation Guide](docs/Enhanced_Report_Generation_Guide.md)** - Comprehensive 64-channel analysis reporting with statistical metrics, data quality validation, expectation-alignment analysis, and spatial insights
+- **[Offline Analyzer Guide](docs/Offline_Analyzer_Guide.md)** - Standalone command-line tool for batch processing CSV files with production-ready reporting
+- **[Statistical Methodology Review](docs/Statistical_Methodology_Review.md)** - Peer review-compliant statistical methods including sample size, artifact handling, confidence intervals, and cross-task correction
+
 ### Technical Documentation
 - **[EEG Feature Extraction Formulas](docs/EEG_Feature_Extraction_Formulas.md)** - Mathematical formulas used
 - **[BrainLink Implementation Report](docs/BrainLink_Python_Implementation_Report.md)** - Technical details

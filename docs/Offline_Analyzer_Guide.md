@@ -214,6 +214,8 @@ If no markers file is provided, the analyzer will:
 
 ## Report Contents
 
+> **Note**: As of February 2026, the offline analyzer uses the **Enhanced 64-Channel Report Generator** which provides significantly more detailed analysis than documented here. For comprehensive information about report structure, statistical metrics, data quality validation, expectation-alignment analysis, and 64-channel spatial insights, see the [Enhanced Report Generation Guide](Enhanced_Report_Generation_Guide.md).
+
 ### 1. Session Information
 - Session ID
 - User email
