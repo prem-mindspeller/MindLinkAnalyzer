@@ -491,6 +491,12 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
         # Diagnostics counters for EC windows
         self.baseline_kept = 0
         self.baseline_rejected = 0
+        # Per-reason rejection counters (for data-quality reporting)
+        self.baseline_rejected_not_worn = 0
+        self.baseline_rejected_artifact = 0
+        self.baseline_rejected_flatline = 0
+        # Running list of accepted-window MAD-scales (for quality summary)
+        self._ec_accepted_scales: list = []
         # Gamma EMG guard statistics
         self.gamma_windows_total = 0
         self.gamma_windows_kept = 0
@@ -1182,27 +1188,84 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
                 self.baseline_rejected = 0
             if not hasattr(self, 'baseline_kept'):
                 self.baseline_kept = 0
+            if not hasattr(self, 'baseline_rejected_not_worn'):
+                self.baseline_rejected_not_worn = 0
+            if not hasattr(self, 'baseline_rejected_artifact'):
+                self.baseline_rejected_artifact = 0
+            if not hasattr(self, 'baseline_rejected_flatline'):
+                self.baseline_rejected_flatline = 0
+            if not hasattr(self, '_ec_accepted_scales'):
+                self._ec_accepted_scales = []
             
-            # Use a much more lenient blink detection for eyes-closed baseline
-            # Only reject windows with extreme artifacts (>10 sigma from median)
+            # Window quality checks for eyes-closed baseline
             med = float(np.median(x))
             mad = float(np.median(np.abs(x - med))) + 1e-12
-            scale = 1.4826 * mad
-            extreme_threshold = 10.0 * scale  # Very lenient threshold
-            
-            # Only reject if there are extreme outliers (>20 sigma) AND many of them
+            scale = 1.4826 * mad  # Robust std estimate (µV)
+            peak_to_peak = float(np.max(x) - np.min(x))
+
+            # --- Rejection criteria ---
+
+            # 1. Headset not worn: use spectral analysis combined with an amplitude
+            #    hard-cap.  Spectral checks alone can be fooled by EMI/environmental
+            #    noise that incidentally has some 1/f shape.
+            #    Hard cap: real scalp EEG MAD-scale for a worn headset peaks at ~260 µV;
+            #    anything above 280 µV is not-worn regardless of spectral shape.
+            try:
+                _freqs, _psd = BL.compute_psd(x, self.fs)
+                _total = np.sum(_psd) + 1e-12
+                _lf_ratio = np.sum(_psd[((_freqs >= 0.5) & (_freqs <= 8))]) / _total
+                _hf_ratio = np.sum(_psd[_freqs >= 30]) / _total
+                _valid = (_freqs >= 1) & (_freqs <= 40) & (_psd > 0)
+                if np.sum(_valid) > 10:
+                    _slope, _ = np.polyfit(np.log10(_freqs[_valid]), np.log10(_psd[_valid]), 1)
+                else:
+                    _slope = -1.0
+                # Not worn if: low-freq power < 20% OR spectral slope too flat
+                # OR high-freq dominates. Amplitude alone is NOT used here — EEG
+                # amplitude varies widely between users (150-500+ µV) and is unreliable
+                # as a standalone discriminator.
+                is_not_worn = (
+                    (_lf_ratio < 0.20)
+                    or (_slope > -0.1)
+                    or (_hf_ratio > 0.50)
+                )
+            except Exception:
+                # Spectral check unavailable — fall back to amplitude only
+                is_not_worn = scale > 400.0
+
+            # 2. Extreme blink / motion artifact: few samples far above the local
+            #    noise floor (only meaningful when scale is still in the EEG range).
             extreme_outliers = np.abs(x - med) > (20.0 * scale)
-            is_extreme_artifact = np.sum(extreme_outliers) > (len(x) * 0.05)  # >5% extreme outliers
-            
-            if is_extreme_artifact and scale > 10.0:  # Also require significant variance
-                # Remove last appended feature if it was added to calibration store
+            is_extreme_artifact = (
+                not is_not_worn
+                and np.sum(extreme_outliers) > (len(x) * 0.05)
+                and scale > 10.0
+            )
+
+            # 3. Flatline / disconnected lead: essentially no signal variance
+            is_flatline = scale < 0.5
+
+            if is_not_worn or is_extreme_artifact or is_flatline:
+                # Remove the feature window that was just appended to the store
                 if len(self.calibration_data['eyes_closed']['features']) > 0:
                     self.calibration_data['eyes_closed']['features'].pop()
                     self.calibration_data['eyes_closed']['timestamps'].pop()
                 self.baseline_rejected += 1
-                print(f"❌ Rejected EC window: extreme artifacts detected (scale={scale:.1f}, outliers={np.sum(extreme_outliers)})")
+                if is_not_worn:
+                    self.baseline_rejected_not_worn += 1
+                elif is_extreme_artifact:
+                    self.baseline_rejected_artifact += 1
+                else:
+                    self.baseline_rejected_flatline += 1
+                reason = (
+                    "headset not worn (spectral check)"  if is_not_worn else
+                    "extreme artifact"                   if is_extreme_artifact else
+                    "flatline / disconnected"
+                )
+                print(f"❌ Rejected EC window: {reason} (scale={scale:.1f}, p2p={peak_to_peak:.1f})")
             else:
                 self.baseline_kept += 1
+                self._ec_accepted_scales.append(scale)
                 # More frequent logging to show progress
                 if self.baseline_kept % 5 == 0:  # Log every 5 kept windows instead of 10
                     print(f"✅ EC Progress: {self.baseline_kept} windows kept, {self.baseline_rejected} rejected (median={med:.1f}, scale={scale:.1f})")
@@ -4273,13 +4336,65 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
         except Exception:
             lines.append(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # Baseline info
+        # Baseline info + data-quality / not-worn warning
         try:
             ec_features = self.feature_engine.calibration_data.get('eyes_closed', {}).get('features', [])
             eo_features = self.feature_engine.calibration_data.get('eyes_open', {}).get('features', [])
             tasks = self.feature_engine.calibration_data.get('tasks', {})
             lines.append(f"Baseline EC windows: {len(ec_features)} | EO windows: {len(eo_features)}")
             lines.append(f"Tasks executed: {len(tasks)}")
+
+            # --- Data-quality warning ---
+            ec_kept  = getattr(self.feature_engine, 'baseline_kept', 0)
+            ec_rej   = getattr(self.feature_engine, 'baseline_rejected', 0)
+            ec_rej_nw  = getattr(self.feature_engine, 'baseline_rejected_not_worn', 0)
+            ec_rej_art = getattr(self.feature_engine, 'baseline_rejected_artifact', 0)
+            ec_rej_fl  = getattr(self.feature_engine, 'baseline_rejected_flatline', 0)
+            accepted_scales = getattr(self.feature_engine, '_ec_accepted_scales', [])
+            total_ec_seen = ec_kept + ec_rej
+
+            lines.append(f"EC QC: kept={ec_kept}, rejected={ec_rej} "
+                         f"(not_worn={ec_rej_nw}, artifact={ec_rej_art}, flatline={ec_rej_fl})")
+
+            # Compute median scale of accepted windows (proxy for noise floor)
+            if accepted_scales:
+                import numpy as _np
+                median_accepted_scale = float(_np.median(accepted_scales))
+                lines.append(f"EC accepted-window median MAD-scale: {median_accepted_scale:.1f} µV")
+            else:
+                median_accepted_scale = None
+
+            # Determine overall data-quality verdict
+            not_worn_rate = ec_rej_nw / total_ec_seen if total_ec_seen > 0 else 0.0
+            lines.append("")
+            lines.append("Data Quality Assessment")
+            lines.append("-" * 40)
+
+            if not_worn_rate >= 0.90:
+                lines.append("⚠️  WARNING: HEADSET LIKELY NOT WORN")
+                lines.append(f"   {ec_rej_nw}/{total_ec_seen} EC windows ({not_worn_rate*100:.0f}%) rejected as 'not worn'")
+                lines.append("   Signal spread was consistently above the not-worn threshold.")
+                lines.append("   All analysis results in this report are INVALID.")
+                lines.append("   Please repeat the session with the headset properly worn.")
+            elif not_worn_rate >= 0.50:
+                lines.append("⚠️  CAUTION: HIGH NOT-WORN REJECTION RATE")
+                lines.append(f"   {ec_rej_nw}/{total_ec_seen} EC windows ({not_worn_rate*100:.0f}%) rejected as 'not worn'.")
+                lines.append("   Headset may have been partially worn or frequently displaced.")
+                lines.append("   Analysis results should be interpreted with caution.")
+            elif ec_kept == 0 and total_ec_seen > 0:
+                lines.append("⚠️  WARNING: NO VALID EC BASELINE WINDOWS")
+                lines.append("   All eyes-closed windows were rejected during quality control.")
+                lines.append("   Analysis results are unreliable.")
+            elif median_accepted_scale is not None and median_accepted_scale > 500:
+                lines.append("⚠️  WARNING: HEADSET LIKELY NOT WORN")
+                lines.append(f"   Median noise floor of accepted EC windows: {median_accepted_scale:.1f} µV")
+                lines.append("   Amplitude this extreme (>500 µV) strongly indicates the headset was not worn.")
+                lines.append("   All analysis results in this report are INVALID.")
+                lines.append("   Please repeat the session with the headset properly worn.")
+            else:
+                lines.append("✅  Data quality: OK")
+                if median_accepted_scale is not None:
+                    lines.append(f"   Median EC noise floor: {median_accepted_scale:.1f} µV")
         except Exception:
             pass
         
@@ -4653,6 +4768,10 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
             try:
                 self.feature_engine.baseline_kept = 0
                 self.feature_engine.baseline_rejected = 0
+                self.feature_engine.baseline_rejected_not_worn = 0
+                self.feature_engine.baseline_rejected_artifact = 0
+                self.feature_engine.baseline_rejected_flatline = 0
+                self.feature_engine._ec_accepted_scales = []
             except Exception:
                 pass
         # No visual cue for eyes-closed baseline; just delegate to base

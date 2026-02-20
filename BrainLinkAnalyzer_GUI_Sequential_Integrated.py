@@ -146,7 +146,32 @@ def assess_eeg_signal_quality(data_window, fs=512):
     # Very low variance = definitely not worn (flatline)
     if arr_std < 2.0:
         return 10, "not_worn", details
-    
+
+    # ===================================================================
+    # DEMO SIGNAL DETECTION
+    # BrainLink sends a pre-recorded looping demo/test signal when the
+    # forehead electrode loses skin contact.  This signal mimics real EEG
+    # but repeats with very high periodicity — real brain activity never
+    # does this.  Autocorrelation will expose the repetition.
+    # ===================================================================
+    try:
+        _arr_norm = arr - np.mean(arr)
+        _arr_std  = np.std(_arr_norm) + 1e-12
+        _arr_norm = _arr_norm / _arr_std
+        # FFT-based circular autocorrelation (fast even for 512 samples)
+        _n   = len(_arr_norm)
+        _fft = np.fft.rfft(_arr_norm, n=2 * _n)
+        _acf = np.fft.irfft(_fft * np.conj(_fft))[:_n]
+        _acf = _acf / (_acf[0] + 1e-12)          # normalize to 1 at lag=0
+        # Lags 50-350 samples = 0.10 – 0.68 s at 512 Hz (repeat rates 1.5-10 Hz)
+        _max_acf = float(np.max(_acf[50:350]))
+        details['max_autocorr'] = _max_acf
+        if _max_acf > 0.85:
+            details['not_worn_reason'] = 'demo_signal'
+            return 5, "not_worn", details
+    except Exception:
+        pass  # autocorrelation failure is non-fatal
+
     # ===================================================================
     # CRITICAL: Frequency-based "not worn" detection FIRST
     # Must run spectral analysis before amplitude checks because
@@ -215,16 +240,18 @@ def assess_eeg_signal_quality(data_window, fs=512):
         # NOT WORN DETECTION LOGIC
         # ===================================================================
         
-        # Condition 1: Low-frequency power too weak (< 30% in delta+theta)
-        # Real EEG has strong delta/theta even during alertness
-        if low_freq_dominance < 0.30:
+        # Condition 1: Low-frequency power too weak (< 20% in delta+theta)
+        # Real EEG has strong delta/theta even during alertness; threshold lowered
+        # from 0.30 to 0.20 to avoid false not_worn on active/alert users
+        if low_freq_dominance < 0.20:
             details['not_worn_reason'] = 'low_freq_too_weak'
             return 20, "not_worn", details
         
-        # Condition 2: Spectral slope too flat (> -0.3)
+        # Condition 2: Spectral slope too flat (> -0.1)
         # Real EEG typically has slope between -1 and -2 (1/f characteristic)
-        # Environmental noise is flatter (slope closer to 0)
-        if slope > -0.3:
+        # Environmental noise is flatter (slope closer to 0); threshold relaxed
+        # from -0.3 to -0.1 to handle alert/active users with less 1/f signature
+        if slope > -0.1:
             details['not_worn_reason'] = 'flat_spectrum'
             return 25, "not_worn", details
         
@@ -232,7 +259,15 @@ def assess_eeg_signal_quality(data_window, fs=512):
         if high_freq_ratio > 0.50:
             details['not_worn_reason'] = 'high_freq_dominant'
             return 30, "not_worn", details
-        
+
+        # Condition 4: Extreme amplitude — only fires when spectral checks are ambiguous.
+        # If we reach here, Conditions 1-3 all passed (good spectral shape), so we trust
+        # the spectral analysis. Only reject on truly extreme amplitude (>600 µV std)
+        # that indicates a loose electrode or severe EMI regardless of spectral shape.
+        if arr_std > 600:
+            details['not_worn_reason'] = 'extreme_amplitude'
+            return 10, "not_worn", details
+
         # Check line noise (50/60 Hz)
         idx_50hz = np.argmin(np.abs(freqs - 50))
         idx_60hz = np.argmin(np.abs(freqs - 60))
@@ -253,17 +288,23 @@ def assess_eeg_signal_quality(data_window, fs=512):
     # ===================================================================
     
     # Extremely high variance = severe artifacts (but headset is worn)
-    if arr_std > 500:
+    # Threshold raised: spectral checks already confirmed worn; >800 µV std is truly extreme
+    if arr_std > 800:
         return 15, "severe_artifacts", details
     
-    # Baseline stability check
+    # Baseline stability check (segment-mean drift)
+    # Threshold raised from 50→150 µV: tight contact can still produce drift from normal
+    # head movement / sweat; spectral metrics already confirm the headset is worn
     quarter_size = len(arr) // 4
     quarters_means = [np.mean(arr[i*quarter_size:(i+1)*quarter_size]) for i in range(4)]
     baseline_drift = np.std(quarters_means)
     details['baseline_drift'] = float(baseline_drift)
     
-    if baseline_drift > 50:
-        return 35, "poor_contact", details
+    # Do NOT hard-return here — let drift feed into the quality-score penalty below
+    # (only flag truly extreme drift separately)
+    if baseline_drift > 150:
+        # Severe drift but headset IS worn; add to details and continue scoring
+        details['severe_drift'] = True
     
     # Motion artifacts via kurtosis
     from scipy.stats import kurtosis
@@ -290,9 +331,13 @@ def assess_eeg_signal_quality(data_window, fs=512):
     if high_freq_ratio > 0.30:
         quality_score -= 15
     
-    # Penalize baseline drift
-    if baseline_drift > 20:
-        quality_score -= 10
+    # Penalize baseline drift (tiered: mild >30, moderate >80, severe >150)
+    if baseline_drift > 150:
+        quality_score -= 20
+    elif baseline_drift > 80:
+        quality_score -= 12
+    elif baseline_drift > 30:
+        quality_score -= 5
     
     # Penalize high kurtosis (artifacts)
     if abs(kurt) > 5:
@@ -550,6 +595,7 @@ class MindLinkStatusBar(QFrame):
         try:
             import time
             import numpy as np
+            _STALE_S = 2.0
             
             # Check EEG connection status (simple check like LiveEEGDialog)
             if BL.live_data_buffer and len(BL.live_data_buffer) > 0:
@@ -563,8 +609,41 @@ class MindLinkStatusBar(QFrame):
             if len(BL.live_data_buffer) >= 512:
                 recent_data = np.array(list(BL.live_data_buffer)[-512:])
                 
-                quality_score, status, details = assess_eeg_signal_quality(recent_data, fs=512)
+                # -------------------------------------------------------
+                # HARDWARE FAST-PATH: BrainLink chip reports electrode
+                # contact directly.  signal=200 means no contact → device
+                # is in demo-signal mode.  Show immediately, skip spectral
+                # analysis and the 2s stale-buffer timeout.
+                # -------------------------------------------------------
+                _hw_signal = getattr(BL, 'headset_signal_quality', None)
+                now = time.time()
+                if _hw_signal is not None and _hw_signal >= 200:
+                    self._sq_displayed_noisy = True
+                    self._sq_noisy_reason = 'demo_signal'
+                    self._sq_worn_since = None
+                    if not getattr(self, '_sq_not_worn_since', None):
+                        self._sq_not_worn_since = now
+                    self.signal_quality.setText("Signal: ⚠ Demo Signal")
+                    self.signal_quality.setStyleSheet("color: #ef4444; font-weight: 700;")
+                    return
                 
+                # Staleness check: frozen buffer means headset disconnected
+                current_tail = tuple(recent_data[-4:])
+                if current_tail != getattr(self, '_sq_last_tail', None):
+                    self._sq_last_tail = current_tail
+                    self._sq_last_change_time = now
+                elif getattr(self, '_sq_last_change_time', None) and (now - self._sq_last_change_time) > _STALE_S:
+                    self.eeg_status.setText("EEG: ✗ No Signal")
+                    self.eeg_status.setStyleSheet("color: #fbbf24; font-weight: 700;")
+                    self.signal_quality.setText("Signal: ✗ No Signal")
+                    self.signal_quality.setStyleSheet("color: #94a3b8; font-weight: 700;")
+                    return
+                
+                result = assess_eeg_signal_quality(recent_data, fs=512)
+                if result is None:
+                    return
+                quality_score, status, details = result
+
                 # Debug output - print every 5 seconds (timer is 500ms)
                 if not hasattr(self, '_debug_counter'):
                     self._debug_counter = 0
@@ -576,11 +655,28 @@ class MindLinkStatusBar(QFrame):
                     print(f"  low_freq_dom={details.get('low_freq_dominance', 0):.2%}, high_freq={details.get('high_freq_ratio', 0):.2%}")
                     if 'not_worn_reason' in details:
                         print(f"  NOT WORN reason: {details['not_worn_reason']}")
-                
-                # Simplified logic: Only show "Noisy" if headset is not worn
+
+                # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
                 if status == "not_worn":
-                    self.signal_quality.setText("Signal: ⚠ Noisy")
-                    self.signal_quality.setStyleSheet("color: #f59e0b; font-weight: 700;")
+                    self._sq_worn_since = None
+                    if not getattr(self, '_sq_not_worn_since', None):
+                        self._sq_not_worn_since = now
+                    if (now - self._sq_not_worn_since) >= 3.0:
+                        self._sq_displayed_noisy = True
+                        self._sq_noisy_reason = details.get('not_worn_reason', 'not_worn')
+                else:
+                    self._sq_not_worn_since = None
+                    if not getattr(self, '_sq_worn_since', None):
+                        self._sq_worn_since = now
+                    if (now - self._sq_worn_since) >= 5.0:
+                        self._sq_displayed_noisy = False
+                if getattr(self, '_sq_displayed_noisy', False):
+                    if getattr(self, '_sq_noisy_reason', '') == 'demo_signal':
+                        self.signal_quality.setText("Signal: ⚠ Demo Signal")
+                        self.signal_quality.setStyleSheet("color: #ef4444; font-weight: 700;")
+                    else:
+                        self.signal_quality.setText("Signal: ⚠ Noisy")
+                        self.signal_quality.setStyleSheet("color: #f59e0b; font-weight: 700;")
                 else:
                     self.signal_quality.setText("Signal: ✓ Good")
                     self.signal_quality.setStyleSheet("color: #10b981; font-weight: 700;")
@@ -1783,6 +1879,8 @@ class PartnerIDDialog(QDialog):
         # Set window icon
         set_window_icon(self)
         
+        self.settings = QSettings("MindLink", "FeatureAnalyzer")
+        
         # UI Elements
         title_label = QLabel("Enter Partner ID")
         title_label.setObjectName("DialogTitle")
@@ -1807,6 +1905,8 @@ class PartnerIDDialog(QDialog):
         partner_input_layout.setSpacing(4)
         
         self.partner_edit = QLineEdit()
+        saved_partner_id = self.settings.value("partner_id", "")
+        self.partner_edit.setText(saved_partner_id)
         self.partner_edit.setPlaceholderText("Enter your partner ID")
         self.partner_edit.setEchoMode(QLineEdit.Password)
         self.partner_edit.setClearButtonEnabled(True)
@@ -1994,14 +2094,67 @@ class PartnerIDDialog(QDialog):
             # If partners list is empty, show a warning but allow to proceed
             self.workflow.main_window.log_message("Warning: Could not validate partner ID (partners list not available)")
         
-        # Store partner ID in main window
+        # Store partner ID in main window and persist for next session
         self.workflow.main_window.partner_id = partner_id
+        self.settings.setValue("partner_id", partner_id)
         self.workflow.main_window.log_message(f"✓ Partner ID saved and validated: {partner_id}")
+        
+        # Check whether this user has an advanced-session booking with this partner
+        self._fetch_partner_bookings(partner_id)
         
         # Proceed to Live EEG
         self._programmatic_close = True
         self.close()
         QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.LIVE_EEG))
+
+    def _fetch_partner_bookings(self, partner_id):
+        """Fetch partner bookings for the current user and store has_advanced_booking."""
+        import requests
+        mw = self.workflow.main_window
+        jwt_token = getattr(mw, 'jwt_token', None)
+        login_url  = getattr(mw, 'login_url', '')
+        if not jwt_token or not login_url:
+            mw.log_message("Warning: Cannot fetch bookings – no JWT token or login URL")
+            mw.has_advanced_booking = False
+            return
+        api_base = login_url.replace("/token/login", "")
+        bookings_url = f"{api_base}/partners/bookings?partner_id={partner_id}"
+        print(f"\n>>> FETCHING PARTNER BOOKINGS: {bookings_url}")
+        try:
+            resp = requests.get(
+                bookings_url,
+                headers={"X-Authorization": f"Bearer {jwt_token}"},
+                timeout=10,
+                verify=False if "127.0.0.1" in login_url else True
+            )
+            print(f"Bookings response status: {resp.status_code}")
+            if resp.status_code == 200:
+                data = resp.json()
+                print(f"Bookings response JSON: {data}")
+                # Accept a variety of response shapes:
+                #   {"has_booking": true}
+                #   {"bookings": [ ... ]}
+                #   {"data": {"has_booking": true}}
+                has_booking = False
+                if isinstance(data, dict):
+                    if 'has_booking' in data:
+                        has_booking = bool(data['has_booking'])
+                    elif 'bookings' in data:
+                        has_booking = len(data['bookings']) > 0
+                    elif 'data' in data and isinstance(data['data'], dict):
+                        has_booking = bool(data['data'].get('has_booking', False))
+                mw.has_advanced_booking = has_booking
+                status = "✓ Advanced booking found" if has_booking else "ℹ No advanced booking for this user/partner"
+                mw.log_message(status)
+                print(status)
+            else:
+                print(f"Bookings fetch failed: {resp.status_code} – {resp.text}")
+                mw.log_message(f"Warning: Could not fetch bookings (status {resp.status_code})")
+                mw.has_advanced_booking = False
+        except Exception as e:
+            print(f"EXCEPTION in _fetch_partner_bookings: {e}")
+            mw.log_message(f"Error fetching bookings: {e}")
+            mw.has_advanced_booking = False
 
 
 # ============================================================================
@@ -2967,15 +3120,36 @@ class LiveEEGDialog(QDialog):
                 self.next_button.setEnabled(True)
             
             # Professional signal quality assessment (same simplified logic as header)
-            quality_score, status, details = assess_eeg_signal_quality(data, fs=512)
-            
-            # Simplified logic: Only show "Noisy" if headset is not worn
+            import time as _t
+            _now = _t.time()
+            _result = assess_eeg_signal_quality(data, fs=512)
+            if _result is None:
+                return
+            quality_score, status, details = _result
+
+            # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
             if status == "not_worn":
-                self.info_label.setText("⚠ Signal quality: Noisy | Headset not detected - Please wear the headset properly")
-                self.info_label.setStyleSheet("color: #f59e0b; font-size: 13px; padding: 8px; font-weight: 600;")
+                self._sq_worn_since = None
+                if not getattr(self, '_sq_not_worn_since', None):
+                    self._sq_not_worn_since = _now
+                if (_now - self._sq_not_worn_since) >= 3.0:
+                    self._sq_displayed_noisy = True
+                    self._sq_noisy_reason = details.get('not_worn_reason', 'not_worn')
             else:
-                # If user is wearing it, show Good regardless of other quality metrics
-                self.info_label.setText(f"✓ Signal quality: Good | Data flowing normally")
+                self._sq_not_worn_since = None
+                if not getattr(self, '_sq_worn_since', None):
+                    self._sq_worn_since = _now
+                if (_now - self._sq_worn_since) >= 5.0:
+                    self._sq_displayed_noisy = False
+            if getattr(self, '_sq_displayed_noisy', False):
+                if getattr(self, '_sq_noisy_reason', '') == 'demo_signal':
+                    self.info_label.setText("⚠ Demo Signal detected | Adjust electrode contact - press headset firmly against forehead")
+                    self.info_label.setStyleSheet("color: #ef4444; font-size: 13px; padding: 8px; font-weight: 600;")
+                else:
+                    self.info_label.setText("⚠ Signal quality: Noisy | Headset not detected - Please wear the headset properly")
+                    self.info_label.setStyleSheet("color: #f59e0b; font-size: 13px; padding: 8px; font-weight: 600;")
+            else:
+                self.info_label.setText("✓ Signal quality: Good | Data flowing normally")
                 self.info_label.setStyleSheet("color: #10b981; font-size: 13px; padding: 8px; font-weight: 600;")
         else:
             # No data detected - increment counter
@@ -3224,50 +3398,59 @@ class CalibrationDialog(QDialog):
         self.countdown_timer = QTimer()
         self.countdown_timer.timeout.connect(self.update_countdown)
         
-        # Quality tracking for sustained poor signal detection
-        self.quality_history = []  # List of (timestamp, quality_score) tuples
-        self.poor_quality_threshold = 45
-        self.is_noisy = False
-        
         self._programmatic_close = False
-    
+        # Staleness tracking for signal quality (detect disconnected/frozen buffer)
+        self._sig_last_tail = None
+        self._sig_last_change_time = None
+        # Bidirectional hysteresis state
+        self._sig_not_worn_since = None   # when not_worn streak started
+        self._sig_worn_since = None       # when worn streak started
+        self._sig_displayed_noisy = False  # currently shown state
+        self._sig_noisy_reason = 'not_worn'  # reason for last noisy state
+
     def update_signal_quality(self):
-        """Update signal quality indicator using professional multi-metric assessment"""
+        """Update signal quality indicator - exact same logic as LiveEEGDialog.update_plot()."""
+        import time as _time
         try:
             if len(BL.live_data_buffer) >= 512:
-                import time
-                # Use proper window size for signal analysis
-                data = np.array(list(BL.live_data_buffer)[-512:])
-                
-                # Professional signal quality assessment
-                quality_score, status, details = assess_eeg_signal_quality(data, fs=512)
-                
-                # Track quality history (timestamp, score)
-                current_time = time.time()
-                self.quality_history.append((current_time, quality_score))
-                
-                # Remove entries older than 5 seconds
-                self.quality_history = [(t, q) for t, q in self.quality_history if current_time - t <= 5.0]
-                
-                # Count how many times quality dropped to or below threshold in last 5 seconds
-                poor_count = sum(1 for t, q in self.quality_history if q <= self.poor_quality_threshold)
-                
-                # Update noisy state: need 5+ poor readings in 5 seconds to trigger
-                if poor_count >= 5:
-                    self.is_noisy = True
-                elif poor_count == 0:  # All recent readings good - reset
-                    self.is_noisy = False
-                # Otherwise maintain current state (hysteresis)
-                
-                # Display only two states: Good or Noisy
-                if self.is_noisy:
-                    self.signal_quality_label.setText("⚠ Signal: Noisy")
-                    self.signal_quality_label.setStyleSheet(
-                        "font-size: 12px; color: #d97706; padding: 6px; "
-                        "background: #fef3c7; border-radius: 4px; font-weight: 600;"
-                    )
+                data = np.array(BL.live_data_buffer[-512:])
+
+                result = assess_eeg_signal_quality(data, fs=512)
+                if result is None:
+                    return
+                quality_score, status, details = result
+
+                # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
+                now = _time.time()
+                if status == "not_worn":
+                    self._sig_worn_since = None
+                    if not self._sig_not_worn_since:
+                        self._sig_not_worn_since = now
+                    if (now - self._sig_not_worn_since) >= 3.0:
+                        self._sig_displayed_noisy = True
+                        self._sig_noisy_reason = details.get('not_worn_reason', 'not_worn')
                 else:
-                    self.signal_quality_label.setText(f"✓ Signal: Good ({quality_score}%)")
+                    self._sig_not_worn_since = None
+                    if not self._sig_worn_since:
+                        self._sig_worn_since = now
+                    if (now - self._sig_worn_since) >= 5.0:
+                        self._sig_displayed_noisy = False
+
+                if self._sig_displayed_noisy:
+                    if self._sig_noisy_reason == 'demo_signal':
+                        self.signal_quality_label.setText("⚠ Demo Signal")
+                        self.signal_quality_label.setStyleSheet(
+                            "font-size: 12px; color: #dc2626; padding: 6px; "
+                            "background: #fee2e2; border-radius: 4px; font-weight: 600;"
+                        )
+                    else:
+                        self.signal_quality_label.setText("⚠ Signal: Noisy")
+                        self.signal_quality_label.setStyleSheet(
+                            "font-size: 12px; color: #d97706; padding: 6px; "
+                            "background: #fef3c7; border-radius: 4px; font-weight: 600;"
+                        )
+                else:
+                    self.signal_quality_label.setText("✓ Signal: Good")
                     self.signal_quality_label.setStyleSheet(
                         "font-size: 12px; color: #059669; padding: 6px; "
                         "background: #d1fae5; border-radius: 4px; font-weight: 600;"
@@ -3279,12 +3462,9 @@ class CalibrationDialog(QDialog):
                     "background: #f3f4f6; border-radius: 4px;"
                 )
         except Exception as e:
-            # Fallback on error
-            self.signal_quality_label.setText("⚠ Signal: Error")
-            self.signal_quality_label.setStyleSheet(
-                "font-size: 12px; color: #dc2626; padding: 6px; "
-                "background: #fef2f2; border-radius: 4px;"
-            )
+            print(f"[CalibrationDialog] Signal quality error: {e}")
+            import traceback
+            traceback.print_exc()
     
     def show_eyes_closed_prep(self):
         """Show preparation dialog for eyes closed calibration"""
@@ -3331,33 +3511,59 @@ class CalibrationDialog(QDialog):
         )
         signal_label.setAlignment(Qt.AlignCenter)
         
-        # Local quality history for prep dialog
-        prep_quality_history = []
-        
-        # Update signal quality dynamically
+        # Update signal quality dynamically - mirrors header (not_worn = Noisy, else Good)
+        _sq_state = {'last_tail': None, 'last_change': None,
+                     'not_worn_since': None, 'worn_since': None, 'displayed_noisy': False, 'noisy_reason': 'not_worn'}
+        _STALE_S = 2.0
         def update_prep_signal():
-            import time
+            import time as _time
             if len(BL.live_data_buffer) >= 512:
                 data = np.array(list(BL.live_data_buffer)[-512:])
-                quality_score, status, details = assess_eeg_signal_quality(data, fs=512)
-                
-                # Track quality locally
-                current_time = time.time()
-                prep_quality_history.append((current_time, quality_score))
-                # Remove entries older than 5 seconds
-                while prep_quality_history and current_time - prep_quality_history[0][0] > 5.0:
-                    prep_quality_history.pop(0)
-                
-                poor_count = sum(1 for t, q in prep_quality_history if q <= self.poor_quality_threshold)
-                
-                if poor_count >= 5:
-                    signal_label.setText("⚠ Signal: Noisy")
+                current_tail = tuple(data[-4:])
+                now = _time.time()
+                if current_tail != _sq_state['last_tail']:
+                    _sq_state['last_tail'] = current_tail
+                    _sq_state['last_change'] = now
+                elif _sq_state['last_change'] and (now - _sq_state['last_change']) > _STALE_S:
+                    signal_label.setText("✗ Signal: No Signal")
                     signal_label.setStyleSheet(
-                        "font-size: 13px; color: #d97706; padding: 8px; "
-                        "background: #fef3c7; border-radius: 6px; font-weight: 600;"
+                        "font-size: 13px; color: #6b7280; padding: 8px; "
+                        "background: #f3f4f6; border-radius: 6px; font-weight: 600;"
                     )
+                    return
+                _sq_res = assess_eeg_signal_quality(data, fs=512)
+                if _sq_res is None:
+                    return
+                quality_score, status, details = _sq_res
+                # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
+                if status == "not_worn":
+                    _sq_state['worn_since'] = None
+                    if not _sq_state['not_worn_since']:
+                        _sq_state['not_worn_since'] = now
+                    if (now - _sq_state['not_worn_since']) >= 3.0:
+                        _sq_state['displayed_noisy'] = True
+                        _sq_state['noisy_reason'] = details.get('not_worn_reason', 'not_worn')
                 else:
-                    signal_label.setText(f"✓ Signal: Good ({quality_score}%)")
+                    _sq_state['not_worn_since'] = None
+                    if not _sq_state['worn_since']:
+                        _sq_state['worn_since'] = now
+                    if (now - _sq_state['worn_since']) >= 5.0:
+                        _sq_state['displayed_noisy'] = False
+                if _sq_state['displayed_noisy']:
+                    if _sq_state.get('noisy_reason') == 'demo_signal':
+                        signal_label.setText("⚠ Demo Signal")
+                        signal_label.setStyleSheet(
+                            "font-size: 13px; color: #dc2626; padding: 8px; "
+                            "background: #fee2e2; border-radius: 6px; font-weight: 600;"
+                        )
+                    else:
+                        signal_label.setText("⚠ Signal: Noisy")
+                        signal_label.setStyleSheet(
+                            "font-size: 13px; color: #d97706; padding: 8px; "
+                            "background: #fef3c7; border-radius: 6px; font-weight: 600;"
+                        )
+                else:
+                    signal_label.setText("✓ Signal: Good")
                     signal_label.setStyleSheet(
                         "font-size: 13px; color: #059669; padding: 8px; "
                         "background: #d1fae5; border-radius: 6px; font-weight: 600;"
@@ -3498,33 +3704,59 @@ class CalibrationDialog(QDialog):
         )
         signal_label.setAlignment(Qt.AlignCenter)
         
-        # Local quality history for prep dialog
-        prep_quality_history = []
-        
-        # Update signal quality dynamically
+        # Update signal quality dynamically - mirrors header (not_worn = Noisy, else Good)
+        _sq_state = {'last_tail': None, 'last_change': None,
+                     'not_worn_since': None, 'worn_since': None, 'displayed_noisy': False, 'noisy_reason': 'not_worn'}
+        _STALE_S = 2.0
         def update_prep_signal():
-            import time
+            import time as _time
             if len(BL.live_data_buffer) >= 512:
                 data = np.array(list(BL.live_data_buffer)[-512:])
-                quality_score, status, details = assess_eeg_signal_quality(data, fs=512)
-                
-                # Track quality locally
-                current_time = time.time()
-                prep_quality_history.append((current_time, quality_score))
-                # Remove entries older than 5 seconds
-                while prep_quality_history and current_time - prep_quality_history[0][0] > 5.0:
-                    prep_quality_history.pop(0)
-                
-                poor_count = sum(1 for t, q in prep_quality_history if q <= self.poor_quality_threshold)
-                
-                if poor_count >= 5:
-                    signal_label.setText("⚠ Signal: Noisy")
+                current_tail = tuple(data[-4:])
+                now = _time.time()
+                if current_tail != _sq_state['last_tail']:
+                    _sq_state['last_tail'] = current_tail
+                    _sq_state['last_change'] = now
+                elif _sq_state['last_change'] and (now - _sq_state['last_change']) > _STALE_S:
+                    signal_label.setText("✗ Signal: No Signal")
                     signal_label.setStyleSheet(
-                        "font-size: 13px; color: #d97706; padding: 8px; "
-                        "background: #fef3c7; border-radius: 6px; font-weight: 600;"
+                        "font-size: 13px; color: #6b7280; padding: 8px; "
+                        "background: #f3f4f6; border-radius: 6px; font-weight: 600;"
                     )
+                    return
+                _sq_res = assess_eeg_signal_quality(data, fs=512)
+                if _sq_res is None:
+                    return
+                quality_score, status, details = _sq_res
+                # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
+                if status == "not_worn":
+                    _sq_state['worn_since'] = None
+                    if not _sq_state['not_worn_since']:
+                        _sq_state['not_worn_since'] = now
+                    if (now - _sq_state['not_worn_since']) >= 3.0:
+                        _sq_state['displayed_noisy'] = True
+                        _sq_state['noisy_reason'] = details.get('not_worn_reason', 'not_worn')
                 else:
-                    signal_label.setText(f"✓ Signal: Good ({quality_score}%)")
+                    _sq_state['not_worn_since'] = None
+                    if not _sq_state['worn_since']:
+                        _sq_state['worn_since'] = now
+                    if (now - _sq_state['worn_since']) >= 5.0:
+                        _sq_state['displayed_noisy'] = False
+                if _sq_state['displayed_noisy']:
+                    if _sq_state.get('noisy_reason') == 'demo_signal':
+                        signal_label.setText("⚠ Demo Signal")
+                        signal_label.setStyleSheet(
+                            "font-size: 13px; color: #dc2626; padding: 8px; "
+                            "background: #fee2e2; border-radius: 6px; font-weight: 600;"
+                        )
+                    else:
+                        signal_label.setText("⚠ Signal: Noisy")
+                        signal_label.setStyleSheet(
+                            "font-size: 13px; color: #d97706; padding: 8px; "
+                            "background: #fef3c7; border-radius: 6px; font-weight: 600;"
+                        )
+                else:
+                    signal_label.setText("✓ Signal: Good")
                     signal_label.setStyleSheet(
                         "font-size: 13px; color: #059669; padding: 8px; "
                         "background: #d1fae5; border-radius: 6px; font-weight: 600;"
@@ -3788,16 +4020,15 @@ class TaskSelectionDialog(QDialog):
         # Populate with task names as display text and task IDs as data
         # Get completed tasks to disable them
         completed_tasks = self._get_completed_task_ids()
-        
-        # Basic tasks that don't need 'Advanced' tag
-        basic_tasks = [ 'visual_imagery', 'attention_focus', 'mental_math', 'emotion_face']
+        has_booking = getattr(self.workflow.main_window, 'has_advanced_booking', False)
         
         for task_id in self.available_task_ids:
             if task_id in BL.AVAILABLE_TASKS:
                 task_name = BL.AVAILABLE_TASKS[task_id].get('name', task_id)
+                is_advanced = self._is_advanced_task(task_id)
                 
                 # Add 'Advanced' tag for non-basic tasks
-                if task_id not in basic_tasks:
+                if is_advanced:
                     task_name = f"{task_name} (Advanced)"
                 
                 # Mark completed tasks with checkmark
@@ -3808,14 +4039,23 @@ class TaskSelectionDialog(QDialog):
                 
                 self.task_combo.addItem(display_name, task_id)  # Display name, store ID as data
                 
-                # Disable the item if task is already completed
+                model = self.task_combo.model()
+                item = model.item(self.task_combo.count() - 1)
+                
+                # Disable if already completed
                 if task_id in completed_tasks:
-                    model = self.task_combo.model()
-                    item = model.item(self.task_combo.count() - 1)
                     item.setEnabled(False)
                     item.setToolTip("This task has already been completed")
+                # Disable advanced tasks when no booking exists
+                elif is_advanced and not has_booking:
+                    item.setEnabled(False)
+                    item.setToolTip(
+                        "Advanced task – requires a valid booking with the partner.\n"
+                        "Please ask your partner to create a session booking for you."
+                    )
         
-        self.task_combo.currentIndexChanged.connect(self.update_task_preview)
+        self.task_combo.currentIndexChanged.connect(self._on_task_changed)
+        self.task_combo.currentIndexChanged.connect(lambda _: self.update_task_preview())
         
         task_layout.addWidget(task_label)
         task_layout.addWidget(self.task_combo)
@@ -3897,6 +4137,11 @@ class TaskSelectionDialog(QDialog):
         self.update_task_preview()
         self._programmatic_close = False
     
+    def _is_advanced_task(self, task_id: str) -> bool:
+        """Return True for tasks that require an advanced booking."""
+        basic_tasks = {'visual_imagery', 'attention_focus', 'mental_math', 'emotion_face'}
+        return task_id not in basic_tasks
+
     def _get_completed_task_ids(self):
         """Get list of task IDs that have already been completed"""
         tasks_data = self.workflow.main_window.feature_engine.calibration_data.get('tasks', {})
@@ -3951,6 +4196,32 @@ class TaskSelectionDialog(QDialog):
             else:
                 event.ignore()
     
+    def _on_task_changed(self, index):
+        """Skip over disabled (completed) items when the selection changes."""
+        if index < 0:
+            return
+        model = self.task_combo.model()
+        item = model.item(index)
+        if item and not item.isEnabled():
+            # Search forward for the next enabled item
+            for i in range(index + 1, self.task_combo.count()):
+                next_item = model.item(i)
+                if next_item and next_item.isEnabled():
+                    self.task_combo.blockSignals(True)
+                    self.task_combo.setCurrentIndex(i)
+                    self.task_combo.blockSignals(False)
+                    self.update_task_preview()
+                    return
+            # Fallback: search backward
+            for i in range(index - 1, -1, -1):
+                prev_item = model.item(i)
+                if prev_item and prev_item.isEnabled():
+                    self.task_combo.blockSignals(True)
+                    self.task_combo.setCurrentIndex(i)
+                    self.task_combo.blockSignals(False)
+                    self.update_task_preview()
+                    return
+
     def update_task_preview(self):
         """Update task description preview"""
         # Get task ID from combo box data (not the display text)
@@ -3967,6 +4238,10 @@ class TaskSelectionDialog(QDialog):
             desc = task_info.get('description', '')
             duration = task_info.get('duration', 60)
             instructions = task_info.get('instructions', '')
+
+            is_advanced = self._is_advanced_task(task_id)
+            has_booking = getattr(self.workflow.main_window, 'has_advanced_booking', False)
+            is_locked = is_advanced and not has_booking
             
             preview_text = f"<b>{task_name}</b>"
             
@@ -3981,13 +4256,23 @@ class TaskSelectionDialog(QDialog):
             
             if is_completed:
                 preview_text += "<br><br><span style='color: #f59e0b; font-weight: 600;'>⚠️ This task has already been completed. Please select a different task.</span>"
+            elif is_locked:
+                preview_text += (
+                    "<br><br><span style='color: #dc2626; font-weight: 600;'>"
+                    "🔒 Advanced task – requires a valid booking with the partner.<br>"
+                    "Please ask your partner to create an advanced session booking for you."
+                    "</span>"
+                )
             
             self.task_description.setText(preview_text)
             
-            # Disable start button if task is completed
-            self.start_task_button.setEnabled(not is_completed)
+            # Disable start button if task is completed or locked
+            can_start = not is_completed and not is_locked
+            self.start_task_button.setEnabled(can_start)
             if is_completed:
                 self.start_task_button.setText("Task Already Completed")
+            elif is_locked:
+                self.start_task_button.setText("🔒 Booking Required")
             else:
                 self.start_task_button.setText("Start This Task")
         else:
@@ -4011,6 +4296,17 @@ class TaskSelectionDialog(QDialog):
                 self, 
                 "Task Already Completed", 
                 f"The task '{BL.AVAILABLE_TASKS[task_id].get('name', task_id)}' has already been completed.\n\nPlease select a different task."
+            )
+            return
+        
+        # Block advanced tasks without a booking
+        if self._is_advanced_task(task_id) and not getattr(self.workflow.main_window, 'has_advanced_booking', False):
+            QMessageBox.warning(
+                self,
+                "Booking Required",
+                f"'{BL.AVAILABLE_TASKS[task_id].get('name', task_id)}' is an advanced task.\n\n"
+                "A valid session booking with the partner is required to run advanced tasks.\n"
+                "Please ask your partner to create a booking for you."
             )
             return
         
@@ -4064,25 +4360,19 @@ class TaskSelectionDialog(QDialog):
     
     def _refresh_task_combo(self):
         """Refresh the task combo box to update disabled states after task completion"""
-        # Remember current selection
-        current_task_id = self.task_combo.currentData()
-        
         # Clear and repopulate combo box
         self.task_combo.clear()
         completed_tasks = self._get_completed_task_ids()
-        
-        # Basic tasks that don't need 'Advanced' tag
-        basic_tasks = [ 'visual_imagery', 'attention_focus', 'mental_math', 'emotion_face']
+        has_booking = getattr(self.workflow.main_window, 'has_advanced_booking', False)
         
         for task_id in self.available_task_ids:
             if task_id in BL.AVAILABLE_TASKS:
                 task_name = BL.AVAILABLE_TASKS[task_id].get('name', task_id)
+                is_advanced = self._is_advanced_task(task_id)
                 
-                # Add 'Advanced' tag for non-basic tasks
-                if task_id not in basic_tasks:
+                if is_advanced:
                     task_name = f"{task_name} (Advanced)"
                 
-                # Mark completed tasks with checkmark
                 if task_id in completed_tasks:
                     display_name = f"✓ {task_name} (Completed)"
                 else:
@@ -4090,19 +4380,28 @@ class TaskSelectionDialog(QDialog):
                 
                 self.task_combo.addItem(display_name, task_id)
                 
-                # Disable the item if task is already completed
+                model = self.task_combo.model()
+                item = model.item(self.task_combo.count() - 1)
+                
                 if task_id in completed_tasks:
-                    model = self.task_combo.model()
-                    item = model.item(self.task_combo.count() - 1)
                     item.setEnabled(False)
                     item.setToolTip("This task has already been completed")
+                elif is_advanced and not has_booking:
+                    item.setEnabled(False)
+                    item.setToolTip(
+                        "Advanced task – requires a valid booking with the partner.\n"
+                        "Please ask your partner to create a session booking for you."
+                    )
         
-        # Try to select first non-completed task
+        # Try to select first available (non-disabled) task
         for i in range(self.task_combo.count()):
-            task_id = self.task_combo.itemData(i)
-            if task_id not in completed_tasks:
+            item = self.task_combo.model().item(i)
+            if item and item.isEnabled():
                 self.task_combo.setCurrentIndex(i)
                 break
+        
+        # Always refresh the description after rebuilding the combo
+        self.update_task_preview()  # direct call — no signal arg
     
     def update_completed_tasks_display(self):
         """Update the completed tasks counter"""
@@ -5123,6 +5422,8 @@ class SequentialBrainLinkAnalyzerWindow(EnhancedBrainLinkAnalyzerWindow):
         # Initialize partner_id and partners_list
         self.partner_id = None
         self.partners_list = []
+        # Whether the current user has a valid advanced-session booking with the partner
+        self.has_advanced_booking = False
         
         # Ensure protocol groups use the correct Lifestyle tasks (now implemented)
         self._protocol_groups = {

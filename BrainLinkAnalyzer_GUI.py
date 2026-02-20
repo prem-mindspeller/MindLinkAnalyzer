@@ -178,6 +178,12 @@ ALLOWED_HWIDS = []
 stop_thread_flag = False
 live_data_buffer = []
 
+# Hardware-level electrode contact quality reported by the BrainLink chip.
+# 0 = perfect contact (electrode on skin).
+# 200 = no contact — device streams a pre-recorded demo/test signal in this state.
+# Updated once per second by onEEG(); used to gate onRaw() at the source.
+headset_signal_quality = 200  # start at 200 (not worn) until confirmed by hardware
+
 # Signal processing constants from mother code (corrected to match BrainCompanion_updated.py)
 FS = 512
 WINDOW_SIZE = 512 
@@ -618,7 +624,18 @@ def detect_brainlink():
 # Data collection callbacks from mother code
 def onRaw(raw):
     global live_data_buffer
-    
+
+    # ===================================================================
+    # HARDWARE-LEVEL DEMO SIGNAL GATE
+    # The BrainLink chip sets signal=200 when the forehead electrode loses
+    # skin contact.  In that state the device streams a pre-recorded demo
+    # signal that mimics real EEG perfectly.  Block it HERE, before any
+    # sample enters live_data_buffer, so all downstream analysis is clean.
+    # headset_signal_quality is updated by onEEG() (~once per second).
+    # ===================================================================
+    if headset_signal_quality >= 200:
+        return
+
     # CRITICAL VALIDATION: Detect if we're getting dummy data patterns
     # Check for suspicious patterns that indicate dummy data generation
     if hasattr(onRaw, '_last_values'):
@@ -734,7 +751,12 @@ def onRaw(raw):
             print(f"===================================\n")
 
 def onEEG(data):
-    print("EEG -> attention:", data.attention, "meditation:", data.meditation)
+    global headset_signal_quality
+    # data.signal: 0 = good electrode contact, 200 = no contact (demo signal mode).
+    # The chip reports this every ~second alongside attention/meditation.
+    headset_signal_quality = int(getattr(data, 'signal', 200))
+    print("EEG -> attention:", data.attention, "meditation:", data.meditation,
+          "signal (contact):", headset_signal_quality)
 
 def onExtendEEG(data):
     try:
