@@ -1224,10 +1224,12 @@ class EnhancedFeatureAnalysisEngine(BL.FeatureAnalysisEngine):
                 # OR high-freq dominates. Amplitude alone is NOT used here — EEG
                 # amplitude varies widely between users (150-500+ µV) and is unreliable
                 # as a standalone discriminator.
+                # High-freq threshold is adaptive: allow more high-freq if slope indicates real EEG
+                _hf_threshold = 0.70 if _slope < -0.5 else 0.50
                 is_not_worn = (
                     (_lf_ratio < 0.20)
                     or (_slope > -0.1)
-                    or (_hf_ratio > 0.50)
+                    or (_hf_ratio > _hf_threshold)
                 )
             except Exception:
                 # Spectral check unavailable — fall back to amplitude only

@@ -1,7 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
+import os
+import sys
+
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
+
+ROOT_DIR = os.path.abspath(os.getcwd())
 
 
 pyside_datas, pyside_binaries, pyside_hiddenimports = collect_all('PySide6')
@@ -28,10 +33,10 @@ numpy_datas, numpy_binaries, numpy_hiddenimports = collect_all('numpy')
 pandas_datas, pandas_binaries, pandas_hiddenimports = collect_all('pandas')
 
 datas = [
-    ('assets', 'assets'),
-    ('BrainLinkParser', 'BrainLinkParser'),
-    ('TroubleshootingGuide.md', '.'),
-    ('MindLink_User_Manual.txt', '.'),
+    (os.path.join(ROOT_DIR, 'assets'), 'assets'),
+    (os.path.join(ROOT_DIR, 'BrainLinkParser'), 'BrainLinkParser'),
+    (os.path.join(ROOT_DIR, 'docs', 'TroubleshootingGuide.md'), '.'),
+    (os.path.join(ROOT_DIR, 'config', 'MindLink_User_Manual.txt'), '.'),
 ]
 datas += pyside_datas
 datas += shiboken_datas
@@ -103,14 +108,14 @@ excludes = [
 
 
 a = Analysis(
-    ['BrainLinkAnalyzer_GUI_Sequential_Integrated.py'],
-    pathex=[],
+    [os.path.join(ROOT_DIR, 'BrainLinkAnalyzer_GUI_Sequential_Integrated.py')],
+    pathex=[ROOT_DIR],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=['runtime_hook_pyside6.py'],
+    runtime_hooks=[],
     excludes=excludes,
     noarchive=False,
     optimize=0,
@@ -118,7 +123,7 @@ a = Analysis(
 pyz = PYZ(a.pure)
 
 splash = Splash(
-    'assets\\splash.png',
+    os.path.join(ROOT_DIR, 'assets', 'splash.png'),
     binaries=a.binaries,
     datas=a.datas,
     text_pos=None,  # Disable text overlay - image already has "Starting..." text
@@ -149,7 +154,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets\\favicon.ico'],
+    icon=[os.path.join(ROOT_DIR, 'assets', 'favicon.ico')],
 )
 
 coll = COLLECT(

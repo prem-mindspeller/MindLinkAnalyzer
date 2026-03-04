@@ -255,8 +255,12 @@ def assess_eeg_signal_quality(data_window, fs=512):
             details['not_worn_reason'] = 'flat_spectrum'
             return 25, "not_worn", details
         
-        # Condition 3: High-frequency noise dominates (> 50%)
-        if high_freq_ratio > 0.50:
+        # Condition 3: High-frequency noise dominates
+        # Adaptive threshold: if spectral slope indicates real EEG (< -0.5), 
+        # allow up to 70% high-freq (muscle artifacts/high beta/gamma activity are normal)
+        # If slope is marginal (-0.5 to -0.1), use stricter 50% threshold
+        high_freq_threshold = 0.70 if slope < -0.5 else 0.50
+        if high_freq_ratio > high_freq_threshold:
             details['not_worn_reason'] = 'high_freq_dominant'
             return 30, "not_worn", details
 
@@ -596,8 +600,29 @@ class MindLinkStatusBar(QFrame):
             import time
             import numpy as np
             _STALE_S = 2.0
+            now = time.time()
             
-            # Check EEG connection status (simple check like LiveEEGDialog)
+            # -------------------------------------------------------
+            # CRITICAL: Check hardware signal quality FIRST
+            # If signal=200, the onRaw() gate blocks samples, making
+            # buffer empty. Must check this BEFORE buffer length to
+            # show "Not Worn" instead of "No Signal".
+            # -------------------------------------------------------
+            _hw_signal = getattr(BL, 'headset_signal_quality', None)
+            if _hw_signal is not None and _hw_signal >= 200:
+                # Headset is transmitting but electrode has no contact
+                self.eeg_status.setText("EEG: ⚠ Not Worn")
+                self.eeg_status.setStyleSheet("color: #f59e0b; font-weight: 700;")
+                self._sq_displayed_noisy = True
+                self._sq_noisy_reason = 'demo_signal'
+                self._sq_worn_since = None
+                if not getattr(self, '_sq_not_worn_since', None):
+                    self._sq_not_worn_since = now
+                self.signal_quality.setText("Signal: ⚠ Headset Not Worn")
+                self.signal_quality.setStyleSheet("color: #ef4444; font-weight: 700;")
+                return
+            
+            # Check EEG connection status (buffer has data = device connected)
             if BL.live_data_buffer and len(BL.live_data_buffer) > 0:
                 self.eeg_status.setText("EEG: ✓ Connected")
                 self.eeg_status.setStyleSheet("color: #10b981; font-weight: 700;")
@@ -608,24 +633,6 @@ class MindLinkStatusBar(QFrame):
             # Professional multi-metric signal quality assessment (same as LiveEEGDialog)
             if len(BL.live_data_buffer) >= 512:
                 recent_data = np.array(list(BL.live_data_buffer)[-512:])
-                
-                # -------------------------------------------------------
-                # HARDWARE FAST-PATH: BrainLink chip reports electrode
-                # contact directly.  signal=200 means no contact → device
-                # is in demo-signal mode.  Show immediately, skip spectral
-                # analysis and the 2s stale-buffer timeout.
-                # -------------------------------------------------------
-                _hw_signal = getattr(BL, 'headset_signal_quality', None)
-                now = time.time()
-                if _hw_signal is not None and _hw_signal >= 200:
-                    self._sq_displayed_noisy = True
-                    self._sq_noisy_reason = 'demo_signal'
-                    self._sq_worn_since = None
-                    if not getattr(self, '_sq_not_worn_since', None):
-                        self._sq_not_worn_since = now
-                    self.signal_quality.setText("Signal: ⚠ Demo Signal")
-                    self.signal_quality.setStyleSheet("color: #ef4444; font-weight: 700;")
-                    return
                 
                 # Staleness check: frozen buffer means headset disconnected
                 current_tail = tuple(recent_data[-4:])
@@ -1823,8 +1830,8 @@ class EnvironmentSelectionDialog(QDialog):
     def on_env_changed(self, env_name: str):
         """Update backend URLs when environment changes"""
         backend_urls = {
-            "English (en)": "https://stg-en.mindspell.be/api/cas/brainlink_data",
-            "Dutch (nl)": "https://stg-nl.mindspell.be/api/cas/brainlink_data",
+            "English (en)": "https://en.mindspeller.com/api/cas/brainlink_data",
+            "Dutch (nl)": "https://nl.mindspeller.com/api/cas/brainlink_data",
             "Local": "http://127.0.0.1:5000/api/cas/brainlink_data"
         }
         
@@ -3105,6 +3112,32 @@ class LiveEEGDialog(QDialog):
             buf_size = len(BL.live_data_buffer)
             print(f"[Plot Debug] Buffer size: {buf_size} samples ({buf_size/512:.1f}s of data)")
         
+        # -------------------------------------------------------
+        # CRITICAL: Check hardware signal quality FIRST
+        # If signal=200, the onRaw() gate blocks samples, making
+        # buffer empty. Must check this BEFORE buffer length to
+        # show "Not Worn" instead of "Device Disconnected".
+        # -------------------------------------------------------
+        _hw_signal = getattr(BL, 'headset_signal_quality', None)
+        if _hw_signal is not None and _hw_signal >= 200:
+            import time as _t
+            _now = _t.time()
+            # Headset is transmitting but electrode has no contact
+            self._sq_displayed_noisy = True
+            self._sq_noisy_reason = 'demo_signal'
+            self._sq_worn_since = None
+            if not getattr(self, '_sq_not_worn_since', None):
+                self._sq_not_worn_since = _now
+            self.info_label.setText("⚠ Headset Not Worn | Electrode contact lost - press headset firmly against forehead")
+            self.info_label.setStyleSheet("color: #ef4444; font-size: 13px; padding: 8px; font-weight: 600;")
+            # Reset transmission error since device IS transmitting
+            self.no_data_count = 0
+            if self.transmission_stopped:
+                self.transmission_stopped = False
+                self.transmission_error_label.setVisible(False)
+                self.next_button.setEnabled(True)
+            return
+        
         # Use the REAL data buffer from the base GUI
         if len(BL.live_data_buffer) >= 512:
             import time
@@ -3412,6 +3445,27 @@ class CalibrationDialog(QDialog):
         """Update signal quality indicator - exact same logic as LiveEEGDialog.update_plot()."""
         import time as _time
         try:
+            # -------------------------------------------------------
+            # CRITICAL: Check hardware signal quality FIRST
+            # If signal=200, the onRaw() gate blocks samples, making
+            # buffer empty. Must check this BEFORE buffer length.
+            # -------------------------------------------------------
+            _hw_signal = getattr(BL, 'headset_signal_quality', None)
+            now = _time.time()
+            if _hw_signal is not None and _hw_signal >= 200:
+                # Headset is transmitting but electrode has no contact
+                self._sig_displayed_noisy = True
+                self._sig_noisy_reason = 'demo_signal'
+                self._sig_worn_since = None
+                if not self._sig_not_worn_since:
+                    self._sig_not_worn_since = now
+                self.signal_quality_label.setText("⚠ Demo Signal")
+                self.signal_quality_label.setStyleSheet(
+                    "font-size: 12px; color: #dc2626; padding: 6px; "
+                    "background: #fee2e2; border-radius: 4px; font-weight: 600;"
+                )
+                return
+            
             if len(BL.live_data_buffer) >= 512:
                 data = np.array(BL.live_data_buffer[-512:])
 
@@ -3517,10 +3571,25 @@ class CalibrationDialog(QDialog):
         _STALE_S = 2.0
         def update_prep_signal():
             import time as _time
+            # -------------------------------------------------------
+            # CRITICAL: Check hardware signal quality FIRST
+            # -------------------------------------------------------
+            _hw_signal = getattr(BL, 'headset_signal_quality', None)
+            now = _time.time()
+            if _hw_signal is not None and _hw_signal >= 200:
+                # Headset is transmitting but electrode has no contact
+                _sq_state['displayed_noisy'] = True
+                _sq_state['noisy_reason'] = 'demo_signal'
+                signal_label.setText("⚠ Demo Signal")
+                signal_label.setStyleSheet(
+                    "font-size: 13px; color: #dc2626; padding: 8px; "
+                    "background: #fee2e2; border-radius: 6px; font-weight: 600;"
+                )
+                return
+            
             if len(BL.live_data_buffer) >= 512:
                 data = np.array(list(BL.live_data_buffer)[-512:])
                 current_tail = tuple(data[-4:])
-                now = _time.time()
                 if current_tail != _sq_state['last_tail']:
                     _sq_state['last_tail'] = current_tail
                     _sq_state['last_change'] = now
@@ -3710,10 +3779,25 @@ class CalibrationDialog(QDialog):
         _STALE_S = 2.0
         def update_prep_signal():
             import time as _time
+            # -------------------------------------------------------
+            # CRITICAL: Check hardware signal quality FIRST
+            # -------------------------------------------------------
+            _hw_signal = getattr(BL, 'headset_signal_quality', None)
+            now = _time.time()
+            if _hw_signal is not None and _hw_signal >= 200:
+                # Headset is transmitting but electrode has no contact
+                _sq_state['displayed_noisy'] = True
+                _sq_state['noisy_reason'] = 'demo_signal'
+                signal_label.setText("⚠ Demo Signal")
+                signal_label.setStyleSheet(
+                    "font-size: 13px; color: #dc2626; padding: 8px; "
+                    "background: #fee2e2; border-radius: 6px; font-weight: 600;"
+                )
+                return
+            
             if len(BL.live_data_buffer) >= 512:
                 data = np.array(list(BL.live_data_buffer)[-512:])
                 current_tail = tuple(data[-4:])
-                now = _time.time()
                 if current_tail != _sq_state['last_tail']:
                     _sq_state['last_tail'] = current_tail
                     _sq_state['last_change'] = now
@@ -4072,6 +4156,7 @@ class TaskSelectionDialog(QDialog):
         
         self.task_description = QLabel()
         self.task_description.setWordWrap(True)
+        self.task_description.setTextFormat(Qt.RichText)
         self.task_description.setStyleSheet("font-size: 13px; color: #475569;")
         
         self.start_task_button = QPushButton("Start This Task")
@@ -4222,10 +4307,40 @@ class TaskSelectionDialog(QDialog):
                     self.update_task_preview()
                     return
 
+    def _get_selected_task_id(self):
+        """Resolve the selected task_id from the combo box (robust to display text)."""
+        task_id = self.task_combo.currentData()
+        if task_id in BL.AVAILABLE_TASKS:
+            return task_id
+        
+        display = (self.task_combo.currentText() or "").strip()
+        if not display:
+            return None
+        
+        # Strip UI adornments
+        display = display.replace("✓ ", "")
+        display = display.replace(" (Completed)", "")
+        display = display.replace(" (Advanced)", "")
+        
+        if display in BL.AVAILABLE_TASKS:
+            return display
+        
+        for key, info in BL.AVAILABLE_TASKS.items():
+            if info.get('name') == display:
+                return key
+        
+        return None
+    
     def update_task_preview(self):
         """Update task description preview"""
         # Get task ID from combo box data (not the display text)
-        task_id = self.task_combo.currentData()
+        task_id = self._get_selected_task_id()
+        
+        # Safety check: if task_id is None (combo rebuilding or empty), do nothing
+        if not task_id:
+            self.task_description.setText("Please select a task to view details")
+            self.start_task_button.setEnabled(False)
+            return
         
         # Check if task is already completed
         completed_tasks = self._get_completed_task_ids()
@@ -4235,9 +4350,9 @@ class TaskSelectionDialog(QDialog):
         if task_id and task_id in BL.AVAILABLE_TASKS:
             task_info = BL.AVAILABLE_TASKS[task_id]
             task_name = task_info.get('name', task_id)
-            desc = task_info.get('description', '')
-            duration = task_info.get('duration', 60)
-            instructions = task_info.get('instructions', '')
+            desc = task_info.get('description') or "No description available."
+            duration = task_info.get('duration')
+            instructions = task_info.get('instructions') or ""
 
             is_advanced = self._is_advanced_task(task_id)
             has_booking = getattr(self.workflow.main_window, 'has_advanced_booking', False)
@@ -4250,9 +4365,14 @@ class TaskSelectionDialog(QDialog):
             
             preview_text += "<br><br>"
             preview_text += f"Description: {desc}<br>"
-            preview_text += f"Duration: ~{duration} seconds<br><br>"
+            if duration:
+                preview_text += f"Duration: ~{duration} seconds<br><br>"
+            else:
+                preview_text += "Duration: Not specified<br><br>"
             if instructions:
                 preview_text += f"Instructions: {instructions}"
+            else:
+                preview_text += "Instructions: Follow the on-screen prompts to complete this task."
             
             if is_completed:
                 preview_text += "<br><br><span style='color: #f59e0b; font-weight: 600;'>⚠️ This task has already been completed. Please select a different task.</span>"
@@ -4282,7 +4402,7 @@ class TaskSelectionDialog(QDialog):
     def start_selected_task(self):
         """Launch the REAL task using main window's start_task method"""
         # Get task ID from combo box data (not the display text)
-        task_id = self.task_combo.currentData()
+        task_id = self._get_selected_task_id()
         
         # Verify task_id exists
         if not task_id or task_id not in BL.AVAILABLE_TASKS:
@@ -4360,6 +4480,9 @@ class TaskSelectionDialog(QDialog):
     
     def _refresh_task_combo(self):
         """Refresh the task combo box to update disabled states after task completion"""
+        # Block signals during rebuild to prevent premature update_task_preview calls
+        self.task_combo.blockSignals(True)
+        
         # Clear and repopulate combo box
         self.task_combo.clear()
         completed_tasks = self._get_completed_task_ids()
@@ -4399,6 +4522,9 @@ class TaskSelectionDialog(QDialog):
             if item and item.isEnabled():
                 self.task_combo.setCurrentIndex(i)
                 break
+        
+        # Unblock signals and refresh description
+        self.task_combo.blockSignals(False)
         
         # Always refresh the description after rebuilding the combo
         self.update_task_preview()  # direct call — no signal arg
