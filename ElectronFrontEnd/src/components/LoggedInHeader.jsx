@@ -24,8 +24,8 @@ const LoggedInHeader = () => {
 
     const signalText = !isConnected ? 'No Device'
         : poorSignal >= 200 ? 'Not Worn'
-            : poorSignal < 25 ? 'Good'
-                : 'Poor';
+            : poorSignal < 25 ? 'Signal: Good ✅'
+                : 'Signal: Poor ⚠';
 
     const signalClass = isConnected && poorSignal < 25 ? 'good' : 'warning';
     const deviceClass = isConnected ? 'good' : 'warning';

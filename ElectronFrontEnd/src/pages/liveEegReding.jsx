@@ -5,7 +5,8 @@ import LoggedInHeader from '../components/LoggedInHeader';
 import eegConnectService, { CONNECTION_STATUS } from '../service/EegConnectService';
 import '../styles/liveEegReading.css';
 
-const DISPLAY_SAMPLES = 512; // ~2 s at 256 Hz
+const DISPLAY_SAMPLES = 512;  // visible window (~1 s at 512 Hz) — scrolls smoothly
+const FS = 512; // samples per second
 
 const LiveEegReading = () => {
     const navigate = useNavigate();
@@ -14,7 +15,6 @@ const LiveEegReading = () => {
 
     const [status, setStatus] = useState(eegConnectService.getStatus());
     const [poorSignal, setPoorSignal] = useState(eegConnectService.getPoorSignal());
-    const [ports, setPorts] = useState([]);
     const [scanMessage, setScanMessage] = useState('');
     const [connectError, setConnectError] = useState('');
 
@@ -28,40 +28,118 @@ const LiveEegReading = () => {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         const W = canvas.width, H = canvas.height;
+
+        // Layout margins
+        const ML = 58;  // left  — room for Y-axis labels + "Amplitude (µV)"
+        const MR = 16;  // right
+        const MT = 36;  // top   — room for chart title
+        const MB = 44;  // bottom — room for X-axis ticks + "Time (samples)"
+        const PW = W - ML - MR;  // plot width
+        const PH = H - MT - MB;  // plot height
+
         const samples = eegConnectService.getRawBuffer().slice(-DISPLAY_SAMPLES);
 
-        ctx.fillStyle = '#001010';
+        // ── Background ──────────────────────────────────────────────────────
+        ctx.fillStyle = '#1a1a2e';
         ctx.fillRect(0, 0, W, H);
 
-        ctx.strokeStyle = '#0a2a2a';
-        ctx.lineWidth = 1;
-        for (let i = 1; i < 10; i++) {
-            ctx.beginPath(); ctx.moveTo((i / 10) * W, 0); ctx.lineTo((i / 10) * W, H); ctx.stroke();
-        }
-        for (let i = 1; i < 5; i++) {
-            ctx.beginPath(); ctx.moveTo(0, (i / 5) * H); ctx.lineTo(W, (i / 5) * H); ctx.stroke();
-        }
-        ctx.strokeStyle = '#0f3f3f';
-        ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+        // Inner plot background (slightly lighter)
+        ctx.fillStyle = '#0f0f1e';
+        ctx.fillRect(ML, MT, PW, PH);
 
+        // ── Y scale: auto-fit to data, rounded to nearest 100 ───────────────
+        let yMax = 400, yMin = -400;
+        if (samples.length > 1) {
+            const dataMax = Math.max(...samples);
+            const dataMin = Math.min(...samples);
+            const pad = Math.max((dataMax - dataMin) * 0.15, 50);
+            yMax = Math.ceil((dataMax + pad) / 100) * 100;
+            yMin = Math.floor((dataMin - pad) / 100) * 100;
+        }
+        const yRange = yMax - yMin;
+
+        // ── Grid & Y-axis ticks ──────────────────────────────────────────────
+        const yStep = yRange <= 400 ? 100 : yRange <= 800 ? 200 : 400;
+        const firstTick = Math.ceil(yMin / yStep) * yStep;
+        ctx.lineWidth = 1;
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let v = firstTick; v <= yMax; v += yStep) {
+            const yp = MT + PH - ((v - yMin) / yRange) * PH;
+            // Grid line
+            ctx.strokeStyle = v === 0 ? '#2a3a5a' : '#1e2a3a';
+            ctx.beginPath(); ctx.moveTo(ML, yp); ctx.lineTo(ML + PW, yp); ctx.stroke();
+            // Tick label
+            ctx.fillStyle = '#8899bb';
+            ctx.fillText(v, ML - 6, yp);
+        }
+
+        // ── X-axis ticks & "Time (samples)" label ────────────────────────────
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const xTickStep = 100;
+        for (let s = 0; s <= DISPLAY_SAMPLES; s += xTickStep) {
+            const xp = ML + (s / DISPLAY_SAMPLES) * PW;
+            ctx.strokeStyle = '#1e2a3a';
+            ctx.beginPath(); ctx.moveTo(xp, MT); ctx.lineTo(xp, MT + PH); ctx.stroke();
+            ctx.fillStyle = '#8899bb';
+            ctx.fillText(s, xp, MT + PH + 6);
+        }
+        ctx.fillStyle = '#aabbcc';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Time (samples)', ML + PW / 2, MT + PH + 24);
+
+        // ── Y-axis label (rotated) ───────────────────────────────────────────
+        ctx.save();
+        ctx.translate(13, MT + PH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#aabbcc';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Amplitude (µV)', 0, 0);
+        ctx.restore();
+
+        // ── Axes borders ─────────────────────────────────────────────────────
+        ctx.strokeStyle = '#334466';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(ML, MT, PW, PH);
+
+        // ── Chart title ───────────────────────────────────────────────────────
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#cce0ff';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('Raw EEG Signal (filtered 1–45 Hz)', ML + PW / 2, MT / 2);
+
+        // ── "No data" placeholder ─────────────────────────────────────────────
         if (samples.length < 2) {
-            ctx.fillStyle = '#00ff88';
+            ctx.fillStyle = '#5588aa';
             ctx.font = '14px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText('Waiting for EEG data\u2026', W / 2, H / 2);
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Waiting for EEG data…', ML + PW / 2, MT + PH / 2);
             return;
         }
 
-        const SCALE = 600;
-        ctx.strokeStyle = '#00ff88';
-        ctx.lineWidth = 1.5;
+        // ── Waveform ────────────────────────────────────────────────────────
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(ML, MT, PW, PH);  // clip to plot area
+        ctx.clip();
+
+        ctx.strokeStyle = '#4d9de0';
+        ctx.lineWidth = 1.8;
+        ctx.lineJoin = 'round';
         ctx.beginPath();
         samples.forEach((val, i) => {
-            const x = (i / (DISPLAY_SAMPLES - 1)) * W;
-            const y = H / 2 - (val / SCALE) * (H / 2) * 0.85;
+            const x = ML + (i / (DISPLAY_SAMPLES - 1)) * PW;
+            const y = MT + PH - ((val - yMin) / yRange) * PH;
             i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         });
         ctx.stroke();
+        ctx.restore();
     }, []);
 
     useEffect(() => {
@@ -108,16 +186,6 @@ const LiveEegReading = () => {
     };
 
     const handleDisconnect = () => eegConnectService.disconnect();
-
-    const signalText = !isConnected ? '\u2014'
-        : poorSignal >= 200 ? 'Not Worn'
-            : poorSignal < 25 ? 'Good \u2705'
-                : 'Poor \u26a0\ufe0f';
-
-    const warningText = !isConnected ? null
-        : poorSignal >= 200 ? 'Headset not worn \u2014 place the headset firmly against your forehead.'
-            : poorSignal >= 25 ? 'Signal quality is poor \u2014 hold still and press the headset against your forehead.'
-                : null;
 
     return (
         <div className="app-container">
@@ -168,24 +236,23 @@ const LiveEegReading = () => {
                             </div>
 
                             <div className="eeg-chart-container">
-                                <div className="chart-header">
-                                    Raw EEG Signal &nbsp;|&nbsp; Signal quality: <strong>{signalText}</strong>
-                                </div>
-                                <div className="chart-area" style={{ padding: 0, height: '300px' }}>
+                                <div className="chart-area" style={{ padding: 0, height: '360px' }}>
                                     <canvas
                                         ref={canvasRef}
-                                        width={860}
-                                        height={280}
+                                        width={900}
+                                        height={360}
                                         style={{ width: '100%', height: '100%' }}
                                     />
                                 </div>
                             </div>
 
-                            {warningText && (
-                                <div className="warning-box">
-                                    <span className="warning-message">⚠ &nbsp;{warningText}</span>
-                                </div>
-                            )}
+                            <div className={`signal-quality-line ${isGoodSignal ? 'sig-good' : 'sig-warn'}`}>
+                                {isGoodSignal
+                                    ? '✓ Signal quality: Good\u2002|\u2002Data flowing normally'
+                                    : poorSignal >= 200
+                                        ? '⚠ Headset not worn — place it firmly against your forehead'
+                                        : '⚠ Signal quality: Poor — hold still and press the headset against your forehead'}
+                            </div>
 
                             <button className="device-disconnect-btn" onClick={handleDisconnect}>
                                 🔌 &nbsp;Disconnect Device

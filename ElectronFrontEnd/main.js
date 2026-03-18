@@ -26,6 +26,60 @@ const CODE_RAW_EEG = 0x81  // 2-byte int16 big-endian raw ADC
 const CODE_EEG_POWER = 0x83  // 24-byte band powers (8 × uint24 big-endian)
 const CODE_EXTENDED = 0x85  // BrainLink proprietary: byte[0]=battery%, byte[1-2]=fw version
 
+// Band order as defined by NeuroSky TGAM / BrainLink 0x83 packet
+const BAND_NAMES = ['delta', 'theta', 'lowAlpha', 'highAlpha', 'lowBeta', 'highBeta', 'lowGamma', 'midGamma']
+
+// ─── Digital EEG Filters ──────────────────────────────────────────────────────
+// Direct-Form I biquad: y[n] = b0·x[n] + b1·x[n−1] + b2·x[n−2] − a1·y[n−1] − a2·y[n−2]
+function createBiquad(b0, b1, b2, a1, a2) {
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0
+    return function (x) {
+        const y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        x2 = x1; x1 = x; y2 = y1; y1 = y
+        return y
+    }
+}
+
+/**
+ * Cascaded 2nd-order Butterworth band-pass (1–45 Hz) + IIR notch (50 Hz).
+ * Designed for fs=512 Hz (NeuroSky TGAM / BrainLink raw EEG rate).
+ */
+function createEEGFilter(fs = 512) {
+    const S2 = Math.SQRT2
+
+    // High-pass at 1 Hz — removes DC offset and slow drift
+    const kH = Math.tan(Math.PI * 1 / fs)
+    const nH = 1 / (1 + S2 * kH + kH * kH)
+    const hpf = createBiquad(
+        nH, -2 * nH, nH,
+        2 * (kH * kH - 1) * nH,
+        (1 - S2 * kH + kH * kH) * nH
+    )
+
+    // Low-pass at 45 Hz — removes EMG and high-frequency noise
+    const kL = Math.tan(Math.PI * 45 / fs)
+    const nL = 1 / (1 + S2 * kL + kL * kL)
+    const lpf = createBiquad(
+        kL * kL * nL, 2 * kL * kL * nL, kL * kL * nL,
+        2 * (kL * kL - 1) * nL,
+        (1 - S2 * kL + kL * kL) * nL
+    )
+
+    // IIR notch at 50 Hz (Q=35, narrow band) — removes power-line interference
+    const w0 = 2 * Math.PI * 50 / fs
+    const cosW0 = Math.cos(w0)
+    const alpha = Math.sin(w0) / (2 * 35)
+    const a0n = 1 + alpha
+    const notch = createBiquad(
+        1 / a0n, -2 * cosW0 / a0n, 1 / a0n,
+        -2 * cosW0 / a0n,
+        (1 - alpha) / a0n
+    )
+
+    // Return the cascaded filter as a single function
+    return (x) => notch(lpf(hpf(x)))
+}
+
 /** Returns a stateful byte-stream parser; calls onPacket(payloadBytes[]) for each valid packet. */
 function createTGAMParser(onPacket) {
     let state = 'SYNC1', payloadLen = 0, payload = []
@@ -72,11 +126,11 @@ function parsePayload(payload) {
                 if (raw > 32767) raw -= 65536
                 result.raw = raw
             } else if (code === CODE_EEG_POWER && len === 24) {
-                result.eegPower = []
+                // Build a named object so consumers don't need to know array indices
+                result.bandPower = {}
                 for (let b = 0; b < 8; b++) {
-                    result.eegPower.push(
+                    result.bandPower[BAND_NAMES[b]] =
                         (payload[i + b * 3] << 16) | (payload[i + b * 3 + 1] << 8) | payload[i + b * 3 + 2]
-                    )
                 }
             } else if (code === CODE_EXTENDED && len >= 1) {
                 result.battery = payload[i]
@@ -162,18 +216,32 @@ ipcMain.handle('eeg:connect', async (event, portPath) => {
         let silenceTimer = null
         activePort = new SerialPort({ path: portPath, baudRate: 115200, autoOpen: false })
 
+        // Fresh filter state for each new connection (prevents transient bleed-over)
+        const eegFilter = createEEGFilter()
+
+        // Batch raw samples: collect and flush every 16 ms (~60 fps) instead of one IPC per sample.
+        // Electron IPC can't sustain 512 individual sends/second without dropping.
+        let rawBatch = []
+        let batchTimer = setInterval(() => {
+            if (rawBatch.length > 0 && mainWin && !mainWin.isDestroyed()) {
+                mainWin.webContents.send('eeg:raw-data-batch', rawBatch)
+                rawBatch = []
+            }
+        }, 16)
+
         const parseByte = createTGAMParser((payloadBytes) => {
             const data = parsePayload(payloadBytes)
             if (data.raw !== undefined) {
-                mainWin.webContents.send('eeg:raw-data', data.raw)
+                // Apply bandpass (1–45 Hz) + notch (50 Hz) then batch
+                rawBatch.push(Math.round(eegFilter(data.raw)))
             }
             if (data.poorSignal !== undefined || data.attention !== undefined) {
                 mainWin.webContents.send('eeg:eeg-data', {
                     poorSignal: data.poorSignal ?? 200,
                     attention: data.attention ?? 0,
                     meditation: data.meditation ?? 0,
-                    eegPower: data.eegPower ?? null,
-                    battery: data.battery ?? null   // include battery whenever it arrives in the same packet
+                    bandPower: data.bandPower ?? null,
+                    battery: data.battery ?? null
                 })
             }
             if (data.battery !== undefined) {
@@ -194,6 +262,7 @@ ipcMain.handle('eeg:connect', async (event, portPath) => {
             silenceTimer = setInterval(() => {
                 if (Date.now() - lastDataMs > 3000) {
                     clearInterval(silenceTimer)
+                    clearInterval(batchTimer)
                     mainWin.webContents.send('eeg:connection-status', 'disconnected')
                     if (activePort && activePort.isOpen) activePort.close(() => { })
                     activePort = null
@@ -203,11 +272,13 @@ ipcMain.handle('eeg:connect', async (event, portPath) => {
         })
         activePort.on('close', () => {
             clearInterval(silenceTimer)
+            clearInterval(batchTimer)
             mainWin.webContents.send('eeg:connection-status', 'disconnected')
             activePort = null
         })
         activePort.on('error', (err) => {
             clearInterval(silenceTimer)
+            clearInterval(batchTimer)
             console.error('[EEG] serial error:', err.message)
             mainWin.webContents.send('eeg:connection-status', 'disconnected')
             activePort = null

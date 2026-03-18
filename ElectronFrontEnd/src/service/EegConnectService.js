@@ -1,5 +1,5 @@
 ﻿import loginService from './loginService';
-const { ipcRenderer } = require('electron');
+import serialService from './serialService';
 
 const API_ENDPOINTS = {
     en: 'https://stg-en.mindspell.be',
@@ -22,22 +22,32 @@ class EegConnectServiceClass {
         this._status = CONNECTION_STATUS.DISCONNECTED;
         this._battery = null;
         this._poorSignal = 200;
+        this._attention = 0;
+        this._meditation = 0;
+        this._bandPowers = null;   // { delta, theta, lowAlpha, highAlpha, lowBeta, highBeta, lowGamma, midGamma }
         this._rawBuffer = [];
         this._listeners = {};
 
-        ipcRenderer.on('eeg:connection-status', (_, status) => {
+        // ── Wire up IPC push events through serialService ──────────────────
+        serialService.onStatus((status) => {
             this._status = status;
             this._notify('status', status);
         });
 
-        ipcRenderer.on('eeg:raw-data', (_, raw) => {
-            this._rawBuffer.push(raw);
-            if (this._rawBuffer.length > 2560) this._rawBuffer = this._rawBuffer.slice(-2560);
-            this._notify('raw', raw);
+        serialService.onRawBatch((batch) => {
+            for (const raw of batch) this._rawBuffer.push(raw);
+            if (this._rawBuffer.length > 6144) this._rawBuffer = this._rawBuffer.slice(-6144);
+            this._notify('raw', batch[batch.length - 1]);
         });
 
-        ipcRenderer.on('eeg:eeg-data', (_, data) => {
-            this._poorSignal = data.poorSignal;
+        serialService.onEegData((data) => {
+            this._poorSignal = data.poorSignal ?? this._poorSignal;
+            this._attention = data.attention ?? this._attention;
+            this._meditation = data.meditation ?? this._meditation;
+            if (data.bandPower != null) {
+                this._bandPowers = data.bandPower;
+                this._notify('bandPower', data.bandPower);
+            }
             if (data.battery != null) {
                 this._battery = data.battery;
                 this._notify('battery', data.battery);
@@ -45,7 +55,7 @@ class EegConnectServiceClass {
             this._notify('eegData', data);
         });
 
-        ipcRenderer.on('eeg:extend-data', (_, data) => {
+        serialService.onExtendData((data) => {
             if (data.battery != null) {
                 this._battery = data.battery;
                 this._notify('battery', data.battery);
@@ -66,6 +76,9 @@ class EegConnectServiceClass {
     getStatus() { return this._status; }
     getBattery() { return this._battery; }
     getPoorSignal() { return this._poorSignal; }
+    getAttention() { return this._attention; }
+    getMeditation() { return this._meditation; }
+    getBandPowers() { return this._bandPowers ? { ...this._bandPowers } : null; }
     getRawBuffer() { return [...this._rawBuffer]; }
     isConnected() { return this._status === CONNECTION_STATUS.CONNECTED; }
     isWorn() { return this._poorSignal < 200; }
@@ -91,7 +104,7 @@ class EegConnectServiceClass {
 
     // ── List all available serial ports ───────────────────────────────────
     async listPorts() {
-        const result = await ipcRenderer.invoke('eeg:list-ports');
+        const result = await serialService.listPorts();
         return result.ports || [];
     }
 
@@ -127,15 +140,18 @@ class EegConnectServiceClass {
 
     // ── Connect to a specific port path ───────────────────────────────────
     async connect(portPath) {
-        return ipcRenderer.invoke('eeg:connect', portPath);
+        return serialService.connect(portPath);
     }
 
     // ── Disconnect ────────────────────────────────────────────────────────
     async disconnect() {
-        await ipcRenderer.invoke('eeg:disconnect');
+        await serialService.disconnect();
         this._status = CONNECTION_STATUS.DISCONNECTED;
         this._battery = null;
         this._poorSignal = 200;
+        this._attention = 0;
+        this._meditation = 0;
+        this._bandPowers = null;
         this._rawBuffer = [];
         this._notify('status', CONNECTION_STATUS.DISCONNECTED);
     }
