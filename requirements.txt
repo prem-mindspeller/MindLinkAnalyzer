@@ -1,0 +1,21 @@
+# Core scientific stack
+numpy
+pandas
+scipy
+
+# GUI
+PySide6
+pyqtgraph
+
+# Serial communication
+pyserial
+cushy-serial
+
+# HTTP / networking
+requests
+
+# Audio (for beeps/alerts)
+pygame
+
+# Matplotlib (used in TestBed)
+matplotlib

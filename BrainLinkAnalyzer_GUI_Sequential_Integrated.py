@@ -541,7 +541,7 @@ class MindLinkStatusBar(QFrame):
             layout.addWidget(battery_widget)
         except Exception as e:
             # Fallback if battery widget fails
-            battery_label = QLabel("🔋 Battery --%")
+            battery_label = QLabel("Battery --%")
             # Ensure fallback battery label is bold and high-contrast
             battery_label.setStyleSheet("color: #000000; font-weight: 800;")
             layout.addWidget(battery_label)
@@ -565,7 +565,7 @@ class MindLinkStatusBar(QFrame):
         layout.addStretch()
         
         # Help button
-        self.help_button = QPushButton("❓ Help")
+        self.help_button = QPushButton("Help")
         self.help_button.setStyleSheet("""
             QPushButton {
                 background-color: #3b82f6;
@@ -611,23 +611,23 @@ class MindLinkStatusBar(QFrame):
             _hw_signal = getattr(BL, 'headset_signal_quality', None)
             if _hw_signal is not None and _hw_signal >= 200:
                 # Headset is transmitting but electrode has no contact
-                self.eeg_status.setText("EEG: ⚠ Not Worn")
+                self.eeg_status.setText("EEG: Not Worn")
                 self.eeg_status.setStyleSheet("color: #f59e0b; font-weight: 700;")
                 self._sq_displayed_noisy = True
                 self._sq_noisy_reason = 'demo_signal'
                 self._sq_worn_since = None
                 if not getattr(self, '_sq_not_worn_since', None):
                     self._sq_not_worn_since = now
-                self.signal_quality.setText("Signal: ⚠ Headset Not Worn")
+                self.signal_quality.setText("Signal: Headset Not Worn")
                 self.signal_quality.setStyleSheet("color: #ef4444; font-weight: 700;")
                 return
             
             # Check EEG connection status (buffer has data = device connected)
             if BL.live_data_buffer and len(BL.live_data_buffer) > 0:
-                self.eeg_status.setText("EEG: ✓ Connected")
+                self.eeg_status.setText("EEG: Connected")
                 self.eeg_status.setStyleSheet("color: #10b981; font-weight: 700;")
             else:
-                self.eeg_status.setText("EEG: ✗ No Signal")
+                self.eeg_status.setText("EEG: No Signal")
                 self.eeg_status.setStyleSheet("color: #fbbf24; font-weight: 700;")
             
             # Professional multi-metric signal quality assessment (same as LiveEEGDialog)
@@ -640,9 +640,9 @@ class MindLinkStatusBar(QFrame):
                     self._sq_last_tail = current_tail
                     self._sq_last_change_time = now
                 elif getattr(self, '_sq_last_change_time', None) and (now - self._sq_last_change_time) > _STALE_S:
-                    self.eeg_status.setText("EEG: ✗ No Signal")
+                    self.eeg_status.setText("EEG: No Signal")
                     self.eeg_status.setStyleSheet("color: #fbbf24; font-weight: 700;")
-                    self.signal_quality.setText("Signal: ✗ No Signal")
+                    self.signal_quality.setText("Signal: No Signal")
                     self.signal_quality.setStyleSheet("color: #94a3b8; font-weight: 700;")
                     return
                 
@@ -679,13 +679,13 @@ class MindLinkStatusBar(QFrame):
                         self._sq_displayed_noisy = False
                 if getattr(self, '_sq_displayed_noisy', False):
                     if getattr(self, '_sq_noisy_reason', '') == 'demo_signal':
-                        self.signal_quality.setText("Signal: ⚠ Demo Signal")
+                        self.signal_quality.setText("Signal: Demo Signal")
                         self.signal_quality.setStyleSheet("color: #ef4444; font-weight: 700;")
                     else:
-                        self.signal_quality.setText("Signal: ⚠ Noisy")
+                        self.signal_quality.setText("Signal: Noisy")
                         self.signal_quality.setStyleSheet("color: #f59e0b; font-weight: 700;")
                 else:
-                    self.signal_quality.setText("Signal: ✓ Good")
+                    self.signal_quality.setText("Signal: Good")
                     self.signal_quality.setStyleSheet("color: #10b981; font-weight: 700;")
             else:
                 self.signal_quality.setText("Signal: Waiting...")
@@ -731,7 +731,7 @@ def add_help_button_to_dialog(dialog: QDialog) -> QPushButton:
     main_layout = dialog.layout()
     if main_layout:
         # Create help button with styling
-        help_button = QPushButton("❓ Help")
+        help_button = QPushButton("Help")
         help_button.setStyleSheet("""
             QPushButton {
                 background-color: #3b82f6;
@@ -889,7 +889,7 @@ class HelpDialog(QDialog):
         header_layout.setContentsMargins(12, 0, 12, 0)
         header_layout.setSpacing(0)
         
-        title = QLabel("📖 User Manual")
+        title = QLabel("User Manual")
         title.setStyleSheet("""
             font-size: 13px; 
             font-weight: 600; 
@@ -930,11 +930,11 @@ class HelpDialog(QDialog):
         
         # Tab 1: Getting Started (with images)
         getting_started_tab = self.create_getting_started_tab()
-        self.tab_widget.addTab(getting_started_tab, "🚀 Getting Started")
+        self.tab_widget.addTab(getting_started_tab, "Getting Started")
         
         # Tab 2: User Manual (existing content)
         manual_tab = self.create_manual_tab()
-        self.tab_widget.addTab(manual_tab, "📖 User Manual")
+        self.tab_widget.addTab(manual_tab, "User Manual")
         
         layout.addWidget(self.tab_widget)
         
@@ -953,7 +953,7 @@ class HelpDialog(QDialog):
         footer_layout.setContentsMargins(16, 8, 16, 8)
         footer_layout.addStretch()
         
-        close_button = QPushButton("✕ Close")
+        close_button = QPushButton("Close")
         close_button.setStyleSheet("""
             QPushButton {
                 background-color: #0ea5e9;
@@ -1163,7 +1163,7 @@ class HelpDialog(QDialog):
         toc_layout.setContentsMargins(12, 12, 12, 12)
         toc_layout.setSpacing(8)
         
-        toc_title = QLabel("📑 Contents")
+        toc_title = QLabel("Contents")
         toc_title.setStyleSheet("""
             font-size: 14px; 
             font-weight: 700; 
@@ -1435,16 +1435,10 @@ class WorkflowManager:
         self.current_step = step
         
         # Launch the appropriate dialog for this step
-        if step == WorkflowStep.OS_SELECTION:
-            self._show_os_selection()
-        elif step == WorkflowStep.ENVIRONMENT_SELECTION:
+        if step == WorkflowStep.ENVIRONMENT_SELECTION:
             self._show_environment_selection()
-        elif step == WorkflowStep.PARTNER_ID:
-            self._show_partner_id()
         elif step == WorkflowStep.LOGIN:
             self._show_login()
-        elif step == WorkflowStep.PATHWAY_SELECTION:
-            self._show_pathway_selection()
         elif step == WorkflowStep.LIVE_EEG:
             self._show_live_eeg()
         elif step == WorkflowStep.CALIBRATION:
@@ -1465,13 +1459,6 @@ class WorkflowManager:
         return len(self.step_history) > 0
     
     # Step-specific dialog launchers
-    def _show_os_selection(self):
-        dialog = OSSelectionDialog(self)
-        self.current_dialog = dialog
-        dialog.show()  # Use show() instead of exec() to keep event loop running
-        dialog.raise_()
-        dialog.activateWindow()
-    
     def _show_environment_selection(self):
         dialog = EnvironmentSelectionDialog(self)
         self.current_dialog = dialog
@@ -1479,22 +1466,8 @@ class WorkflowManager:
         dialog.raise_()
         dialog.activateWindow()
     
-    def _show_partner_id(self):
-        dialog = PartnerIDDialog(self)
-        self.current_dialog = dialog
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
-    
     def _show_login(self):
         dialog = LoginDialog(self)
-        self.current_dialog = dialog
-        dialog.show()  # Use show() instead of exec()
-        dialog.raise_()
-        dialog.activateWindow()
-    
-    def _show_pathway_selection(self):
-        dialog = PathwaySelectionDialog(self)
         self.current_dialog = dialog
         dialog.show()  # Use show() instead of exec()
         dialog.raise_()
@@ -1531,122 +1504,9 @@ class WorkflowManager:
 # STEP 1: OS SELECTION (Same as before)
 # ============================================================================
 
-class OSSelectionDialog(QDialog):
-    """Step 1: Select operating system"""
-    
-    def __init__(self, workflow: WorkflowManager, parent=None):
-        super().__init__(parent)
-        self.workflow = workflow
-        self.setWindowTitle("MindLink - Operating System")
-        self.setModal(True)
-        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
-        self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-        self.setMinimumWidth(400)
-        self._programmatic_close = False  # Flag to distinguish user vs programmatic close
-        
-        # Set window icon
-        set_window_icon(self)
-        
-        # Detect default OS
-        if sys.platform.startswith("win"):
-            default_os = "Windows"
-        elif sys.platform.startswith("darwin"):
-            default_os = "macOS"
-        else:
-            default_os = "Windows"
-        
-        # UI Elements
-        title_label = QLabel("Welcome to MindLink Analyzer")
-        title_label.setObjectName("DialogTitle")
-        
-        subtitle_label = QLabel("Step 1 of 9: Choose your Operating System")
-        subtitle_label.setObjectName("DialogSubtitle")
-        
-        card = QFrame()
-        card.setObjectName("DialogCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(10)
-        
-        prompt_label = QLabel("Select your OS:")
-        prompt_label.setObjectName("DialogSectionTitle")
-        
-        self.radio_windows = QRadioButton("Windows")
-        self.radio_macos = QRadioButton("macOS")
-        
-        if default_os == "Windows":
-            self.radio_windows.setChecked(True)
-        else:
-            self.radio_macos.setChecked(True)
-        
-        card_layout.addWidget(prompt_label)
-        card_layout.addWidget(self.radio_windows)
-        card_layout.addWidget(self.radio_macos)
-        card_layout.addStretch()
-        
-        # Navigation buttons
-        nav_layout = QHBoxLayout()
-        nav_layout.addStretch()
-        
-        self.next_button = QPushButton("Next →")
-        self.next_button.clicked.connect(self.on_next)
-        nav_layout.addWidget(self.next_button)
-        
-        # Layout assembly
-        layout = QVBoxLayout()
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(18)
-        layout.addWidget(title_label)
-        layout.addWidget(subtitle_label)
-        layout.addWidget(card)
-        layout.addLayout(nav_layout)
-        
-        self.setLayout(layout)
-        apply_modern_dialog_theme(self)
-        
-        # Add help button
-        add_help_button_to_dialog(self)
-    
-    def closeEvent(self, event):
-        """Handle dialog close - only trigger confirmation if user clicked X"""
-        if hasattr(self, '_programmatic_close') and self._programmatic_close:
-            # This is a programmatic close (from navigation), allow it
-            event.accept()
-        else:
-            # This is user clicking X button - confirm and quit
-            # Temporarily clear WindowStaysOnTopHint so message box appears on top
-            was_on_top = bool(self.windowFlags() & Qt.WindowStaysOnTopHint)
-            if was_on_top:
-                self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
-                self.show()
-            
-            reply = QMessageBox.question(
-                self,
-                'Confirm Exit',
-                'Are you sure you want to exit MindLink Analyzer?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            
-            # Restore WindowStaysOnTopHint if it was set
-            if was_on_top:
-                self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-                self.show()
-            
-            if reply == QMessageBox.Yes:
-                event.accept()
-                cleanup_and_quit()
-            else:
-                event.ignore()
-    
-    def on_next(self):
-        """Save OS selection and proceed"""
-        selected_os = "Windows" if self.radio_windows.isChecked() else "macOS"
-        self.workflow.main_window.user_os = selected_os
-        # Mark as programmatic close
-        self._programmatic_close = True
-        self.close()
-        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.ENVIRONMENT_SELECTION))
+class OSSelectionDialog:
+    """Removed - OS defaults to Windows"""
+    pass
 
 
 # ============================================================================
@@ -1659,7 +1519,7 @@ class EnvironmentSelectionDialog(QDialog):
     def __init__(self, workflow: WorkflowManager, parent=None):
         super().__init__(parent)
         self.workflow = workflow
-        self.setWindowTitle("MindLink - Region Selection")
+        self.setWindowTitle("MindLink - preparation section")
         self.setModal(True)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.setMinimumWidth(450)
@@ -1668,34 +1528,15 @@ class EnvironmentSelectionDialog(QDialog):
         set_window_icon(self)
         
         # UI Elements
-        title_label = QLabel("Select Region")
+        title_label = QLabel("IMPORTANT!!")
         title_label.setObjectName("DialogTitle")
-        
-        subtitle_label = QLabel("Step 2 of 9: Choose your region")
-        subtitle_label.setObjectName("DialogSubtitle")
-        
-        # Environment selection card
-        env_card = QFrame()
-        env_card.setObjectName("DialogCard")
-        env_layout = QVBoxLayout(env_card)
-        env_layout.setContentsMargins(16, 16, 16, 16)
-        env_layout.setSpacing(10)
-        
-        env_label = QLabel("Region:")
-        env_label.setObjectName("DialogSectionTitle")
-        
-        self.env_combo = QComboBox()
-        self.env_combo.addItems(["English (en)", "Dutch (nl)", "Local"])
-        self.env_combo.currentTextChanged.connect(self.on_env_changed)
-        
-        # Warning message
-        warning_label = QLabel("⚠️ Please make sure the region selected is the region where the user has created their Mindspeller account")
-        warning_label.setStyleSheet("font-size: 12px; color: #f59e0b; padding: 8px; background: #fffbeb; border-radius: 6px; border-left: 3px solid #f59e0b;")
-        warning_label.setWordWrap(True)
-        
-        env_layout.addWidget(env_label)
-        env_layout.addWidget(self.env_combo)
-        env_layout.addWidget(warning_label)
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; font-weight: 700;")        
+        # Set English (en) defaults immediately
+        BL.BACKEND_URL = "https://en.mindspeller.com/api/cas/brainlink_data"
+        self.workflow.main_window.login_url = "https://en.mindspeller.com/api/cas/token/login"
+        self.workflow.main_window.current_region = "be"
+        self.workflow.main_window.selected_environment = "English (en)"
         
         # Amplifier preparation instructions
         prep_card = QFrame()
@@ -1708,10 +1549,10 @@ class EnvironmentSelectionDialog(QDialog):
         prep_label.setObjectName("DialogSectionTitle")
         
         info_label = QLabel(
-            "ℹ️ Please ensure the headset is:\n\n"
-            "  • Paired with your device via Bluetooth\n"
-            "  • Turned ON and placed on your head correctly\n\n"
-            "The device connection will be verified when you sign in on the next step."
+            "Please ensure the headset is:\n\n"
+            "  • Turned ON and worn on your head correctly\n\n"
+            "The device connection will be confirmed when you sign in on the next step.\n\n"
+            "Consult the setup help section(section 1 and 3) on how to put on the headset and confirm it is working."
         )
         info_label.setStyleSheet("font-size: 13px; color: #3b82f6; padding: 12px; background: #eff6ff; border-radius: 6px; border-left: 3px solid #3b82f6; line-height: 1.6;")
         info_label.setWordWrap(True)
@@ -1720,7 +1561,7 @@ class EnvironmentSelectionDialog(QDialog):
         prep_layout.addWidget(info_label)
         
         # Help button for setup reference
-        help_ref_button = QPushButton("❓ Setup Help")
+        help_ref_button = QPushButton("Setup Help")
         help_ref_button.setStyleSheet("""
             QPushButton {
                 background-color: #3b82f6;
@@ -1756,20 +1597,6 @@ class EnvironmentSelectionDialog(QDialog):
         
         # Navigation buttons
         nav_layout = QHBoxLayout()
-        
-        self.back_button = QPushButton("← Back")
-        self.back_button.clicked.connect(self.on_back)
-        self.back_button.setStyleSheet("""
-            QPushButton {
-                background-color: #e2e8f0;
-                color: #475569;
-            }
-            QPushButton:hover {
-                background-color: #cbd5e1;
-            }
-        """)
-        
-        nav_layout.addWidget(self.back_button)
         nav_layout.addStretch()
         
         self.next_button = QPushButton("Next →")
@@ -1782,8 +1609,7 @@ class EnvironmentSelectionDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(18)
         layout.addWidget(title_label)
-        layout.addWidget(subtitle_label)
-        layout.addWidget(env_card)
+ 
         layout.addWidget(prep_card)
         layout.addLayout(nav_layout)
         
@@ -1792,9 +1618,6 @@ class EnvironmentSelectionDialog(QDialog):
         
         # Add help button
         add_help_button_to_dialog(self)
-        
-        # Initialize environment
-        self.on_env_changed("English (en)")
         self._programmatic_close = False
     
     def closeEvent(self, event):
@@ -1826,40 +1649,6 @@ class EnvironmentSelectionDialog(QDialog):
                 cleanup_and_quit()
             else:
                 event.ignore()
-    
-    def on_env_changed(self, env_name: str):
-        """Update backend URLs when environment changes"""
-        backend_urls = {
-            "English (en)": "https://en.mindspeller.com/api/cas/brainlink_data",
-            "Dutch (nl)": "https://nl.mindspeller.com/api/cas/brainlink_data",
-            "Local": "http://127.0.0.1:5000/api/cas/brainlink_data"
-        }
-        
-        login_urls = {
-            "English (en)": "https://en.mindspeller.com/api/cas/token/login",
-            "Dutch (nl)": "https://nl.mindspeller.com/api/cas/token/login",
-            "Local": "http://127.0.0.1:5000/api/cas/token/login"
-        }
-        
-        # Region mapping for API calls that require region parameter
-        region_mapping = {
-            "English (en)": "be",  # Belgium English
-            "Dutch (nl)": "be",     # Belgium Dutch (same region as English)
-            "Local": "be"           # Local development defaults to Belgium
-        }
-        
-        # Set GLOBAL variables used by the base GUI
-        BL.BACKEND_URL = backend_urls[env_name]
-        # Store login URL and region in main window for later use in login dialog
-        self.workflow.main_window.login_url = login_urls[env_name]
-        self.workflow.main_window.current_region = region_mapping[env_name]
-        self.workflow.main_window.selected_environment = env_name
-    
-    def on_back(self):
-        """Navigate back to OS selection"""
-        self._programmatic_close = True
-        self.close()
-        QTimer.singleShot(100, lambda: self.workflow.go_back())
     
     def on_next(self):
         """Proceed to login"""
@@ -1872,296 +1661,9 @@ class EnvironmentSelectionDialog(QDialog):
 # STEP 2.5: PARTNER ID INPUT
 # ============================================================================
 
-class PartnerIDDialog(QDialog):
-    """Step 2.5: Partner ID input"""
-    
-    def __init__(self, workflow: WorkflowManager, parent=None):
-        super().__init__(parent)
-        self.workflow = workflow
-        self.setWindowTitle("MindLink - Partner ID")
-        self.setModal(True)
-        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
-        self.setMinimumWidth(400)
-        
-        # Set window icon
-        set_window_icon(self)
-        
-        self.settings = QSettings("MindLink", "FeatureAnalyzer")
-        
-        # UI Elements
-        title_label = QLabel("Enter Partner ID")
-        title_label.setObjectName("DialogTitle")
-        
-        subtitle_label = QLabel("Step 4 of 9: Provide your partner identification")
-        subtitle_label.setObjectName("DialogSubtitle")
-        
-        # Partner ID card
-        partner_card = QFrame()
-        partner_card.setObjectName("DialogCard")
-        partner_layout = QVBoxLayout(partner_card)
-        partner_layout.setContentsMargins(16, 16, 16, 16)
-        partner_layout.setSpacing(12)
-        
-        partner_label = QLabel("Partner ID:")
-        partner_label.setObjectName("DialogSectionLabel")
-        
-        # Partner ID input with eye toggle (same pattern as password)
-        partner_input_container = QWidget()
-        partner_input_layout = QHBoxLayout(partner_input_container)
-        partner_input_layout.setContentsMargins(0, 0, 0, 0)
-        partner_input_layout.setSpacing(4)
-        
-        self.partner_edit = QLineEdit()
-        saved_partner_id = self.settings.value("partner_id", "")
-        self.partner_edit.setText(saved_partner_id)
-        self.partner_edit.setPlaceholderText("Enter your partner ID")
-        self.partner_edit.setEchoMode(QLineEdit.Password)
-        self.partner_edit.setClearButtonEnabled(True)
-        self.partner_edit.returnPressed.connect(self.on_next)
-        
-        # Eye icon toggle button
-        self.partner_toggle_btn = QPushButton("👁")
-        self.partner_toggle_btn.setFixedSize(32, 32)
-        self.partner_toggle_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f1f5f9;
-                color: #64748b;
-                border: 1px solid #cbd5e1;
-                border-radius: 6px;
-                font-size: 16px;
-                padding: 0px;
-            }
-            QPushButton:hover {
-                background-color: #e2e8f0;
-                border-color: #94a3b8;
-            }
-            QPushButton:pressed {
-                background-color: #cbd5e1;
-            }
-        """)
-        self.partner_toggle_btn.setCursor(Qt.PointingHandCursor)
-        self.partner_toggle_btn.clicked.connect(self.toggle_partner_visibility)
-        
-        partner_input_layout.addWidget(self.partner_edit)
-        partner_input_layout.addWidget(self.partner_toggle_btn)
-        
-        partner_layout.addWidget(partner_label)
-        partner_layout.addWidget(partner_input_container)
-        
-        # Info text
-        info_label = QLabel("ℹ️ This partner ID will be used for data association when seeding reports to the database.")
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("font-size: 12px; color: #3b82f6; padding: 12px; background: #eff6ff; border-radius: 6px; border-left: 3px solid #3b82f6;")
-        
-        # Disclaimer for advanced tasks booking requirement
-        disclaimer_label = QLabel(
-            "⚠️ Important: If the partner conducts advanced tasks, reports can only be "
-            "generated if the user has a valid booking with the partner for an advanced session."
-        )
-        disclaimer_label.setWordWrap(True)
-        disclaimer_label.setStyleSheet(
-            "font-size: 12px; color: #f59e0b; padding: 12px; background: #fffbeb; "
-            "border-radius: 6px; border-left: 3px solid #f59e0b;"
-        )
-        
-        # Navigation buttons
-        nav_layout = QHBoxLayout()
-        
-        self.back_button = QPushButton("← Back")
-        self.back_button.clicked.connect(self.on_back)
-        self.back_button.setStyleSheet("""
-            QPushButton {
-                background-color: #e2e8f0;
-                color: #475569;
-            }
-            QPushButton:hover {
-                background-color: #cbd5e1;
-            }
-        """)
-        
-        nav_layout.addWidget(self.back_button)
-        nav_layout.addStretch()
-        
-        self.next_button = QPushButton("Next →")
-        self.next_button.clicked.connect(self.on_next)
-        nav_layout.addWidget(self.next_button)
-        
-        # Layout assembly
-        layout = QVBoxLayout()
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(18)
-        layout.addWidget(title_label)
-        layout.addWidget(subtitle_label)
-        layout.addWidget(partner_card)
-        layout.addWidget(info_label)
-        layout.addWidget(disclaimer_label)
-        layout.addLayout(nav_layout)
-        
-        self.setLayout(layout)
-        apply_modern_dialog_theme(self)
-        
-        # Add help button
-        add_help_button_to_dialog(self)
-        self._programmatic_close = False
-    
-    def closeEvent(self, event):
-        """Handle dialog close - only trigger confirmation if user clicked X"""
-        if self._programmatic_close:
-            event.accept()
-        else:
-            # Temporarily clear WindowStaysOnTopHint so message box appears on top
-            was_on_top = bool(self.windowFlags() & Qt.WindowStaysOnTopHint)
-            if was_on_top:
-                self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
-                self.show()
-            
-            reply = QMessageBox.question(
-                self,
-                'Confirm Exit',
-                'Are you sure you want to exit MindLink Analyzer?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            
-            # Restore WindowStaysOnTopHint if it was set
-            if was_on_top:
-                self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-                self.show()
-            
-            if reply == QMessageBox.Yes:
-                event.accept()
-                cleanup_and_quit()
-            else:
-                event.ignore()
-    
-    def toggle_partner_visibility(self):
-        """Toggle partner ID visibility with eye icon"""
-        if self.partner_edit.echoMode() == QLineEdit.Password:
-            self.partner_edit.setEchoMode(QLineEdit.Normal)
-            self.partner_toggle_btn.setText("👁‍🗨")  # Crossed eye
-        else:
-            self.partner_edit.setEchoMode(QLineEdit.Password)
-            self.partner_toggle_btn.setText("👁")  # Open eye
-    
-    def on_back(self):
-        """Navigate back to environment selection"""
-        self._programmatic_close = True
-        self.close()
-        QTimer.singleShot(100, lambda: self.workflow.go_back())
-    
-    def on_next(self):
-        """Save partner ID and proceed to login"""
-        partner_id = self.partner_edit.text().strip()
-        
-        if not partner_id:
-            QMessageBox.warning(
-                self,
-                "Partner ID Required",
-                "Please enter a partner ID to continue."
-            )
-            return
-        
-        # Validate partner ID against the fetched partners list
-        partners_list = getattr(self.workflow.main_window, 'partners_list', [])
-        
-        if partners_list:
-            # Extract partner IDs from the partners list
-            # Partners list structure: [{"id": 1, "partner_id": "PARTNER_000001", "name": "Partner Name", ...}, ...]
-            valid_partner_ids = []
-            partner_details = {}  # Store full details for logging
-            for partner in partners_list:
-                if isinstance(partner, dict):
-                    # Get the partner_id field (e.g., "PARTNER_000001")
-                    partner_id_value = partner.get('partner_id')
-                    if partner_id_value is not None:
-                        valid_partner_ids.append(partner_id_value)
-                        partner_details[partner_id_value] = partner
-            
-            print(f"\n>>> PARTNER VALIDATION <<<")
-            print(f"Valid Partner IDs: {valid_partner_ids}")
-            print(f"User entered: {partner_id}")
-            print(f"Match found: {partner_id in valid_partner_ids}")
-            
-            # Check if entered partner_id is in the valid list
-            if partner_id not in valid_partner_ids:
-                QMessageBox.warning(
-                    self,
-                    "Invalid Partner ID",
-                    f"The partner ID '{partner_id}' is not recognized.\n\n"
-                    "Please check your partner ID and try again.\n\n"
-                    "If you believe this is an error, please contact Mindspeller for assistance."
-                )
-                return
-            
-            # Log successful validation
-            if partner_id in partner_details:
-                partner_info = partner_details[partner_id]
-                self.workflow.main_window.log_message(f"✓ Partner validated: {partner_info.get('name', 'Unknown')} ({partner_id})")
-        else:
-            # If partners list is empty, show a warning but allow to proceed
-            self.workflow.main_window.log_message("Warning: Could not validate partner ID (partners list not available)")
-        
-        # Store partner ID in main window and persist for next session
-        self.workflow.main_window.partner_id = partner_id
-        self.settings.setValue("partner_id", partner_id)
-        self.workflow.main_window.log_message(f"✓ Partner ID saved and validated: {partner_id}")
-        
-        # Check whether this user has an advanced-session booking with this partner
-        self._fetch_partner_bookings(partner_id)
-        
-        # Proceed to Live EEG
-        self._programmatic_close = True
-        self.close()
-        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.LIVE_EEG))
-
-    def _fetch_partner_bookings(self, partner_id):
-        """Fetch partner bookings for the current user and store has_advanced_booking."""
-        import requests
-        mw = self.workflow.main_window
-        jwt_token = getattr(mw, 'jwt_token', None)
-        login_url  = getattr(mw, 'login_url', '')
-        if not jwt_token or not login_url:
-            mw.log_message("Warning: Cannot fetch bookings – no JWT token or login URL")
-            mw.has_advanced_booking = False
-            return
-        api_base = login_url.replace("/token/login", "")
-        bookings_url = f"{api_base}/partners/bookings?partner_id={partner_id}"
-        print(f"\n>>> FETCHING PARTNER BOOKINGS: {bookings_url}")
-        try:
-            resp = requests.get(
-                bookings_url,
-                headers={"X-Authorization": f"Bearer {jwt_token}"},
-                timeout=10,
-                verify=False if "127.0.0.1" in login_url else True
-            )
-            print(f"Bookings response status: {resp.status_code}")
-            if resp.status_code == 200:
-                data = resp.json()
-                print(f"Bookings response JSON: {data}")
-                # Accept a variety of response shapes:
-                #   {"has_booking": true}
-                #   {"bookings": [ ... ]}
-                #   {"data": {"has_booking": true}}
-                has_booking = False
-                if isinstance(data, dict):
-                    if 'has_booking' in data:
-                        has_booking = bool(data['has_booking'])
-                    elif 'bookings' in data:
-                        has_booking = len(data['bookings']) > 0
-                    elif 'data' in data and isinstance(data['data'], dict):
-                        has_booking = bool(data['data'].get('has_booking', False))
-                mw.has_advanced_booking = has_booking
-                status = "✓ Advanced booking found" if has_booking else "ℹ No advanced booking for this user/partner"
-                mw.log_message(status)
-                print(status)
-            else:
-                print(f"Bookings fetch failed: {resp.status_code} – {resp.text}")
-                mw.log_message(f"Warning: Could not fetch bookings (status {resp.status_code})")
-                mw.has_advanced_booking = False
-        except Exception as e:
-            print(f"EXCEPTION in _fetch_partner_bookings: {e}")
-            mw.log_message(f"Error fetching bookings: {e}")
-            mw.has_advanced_booking = False
+class PartnerIDDialog:
+    """Removed - partner ID defaults to PARTNER_000001"""
+    pass
 
 
 # ============================================================================
@@ -2194,6 +1696,8 @@ class LoginDialog(QDialog):
         # UI Elements
         title_label = QLabel("Sign In to Connect")
         title_label.setObjectName("DialogTitle")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; font-weight: 700;")
         
         subtitle_label = QLabel("Step 3 of 9: Enter your credentials")
         subtitle_label.setObjectName("DialogSubtitle")
@@ -2242,8 +1746,17 @@ class LoginDialog(QDialog):
         password_layout.setSpacing(4)
         password_layout.addWidget(self.password_edit)
         
-        # Eye icon toggle button
-        self.password_toggle_btn = QPushButton("👁")
+        # Eye icon toggle button (FontAwesome via qtawesome)
+        try:
+            import qtawesome as qta
+            _eye_icon = qta.icon('fa5s.eye', color='#64748b')
+        except Exception:
+            _eye_icon = None
+        self.password_toggle_btn = QPushButton()
+        if _eye_icon:
+            self.password_toggle_btn.setIcon(_eye_icon)
+        else:
+            self.password_toggle_btn.setText("Show")
         self.password_toggle_btn.setFixedSize(32, 32)
         self.password_toggle_btn.setStyleSheet("""
             QPushButton {
@@ -2291,7 +1804,7 @@ class LoginDialog(QDialog):
         nav_layout.addWidget(self.back_button)
         nav_layout.addStretch()
         
-        self.login_button = QPushButton("Sign In to Connect")
+        self.login_button = QPushButton("Sign In")
         self.login_button.clicked.connect(self.on_login)
         nav_layout.addWidget(self.login_button)
         
@@ -2345,13 +1858,25 @@ class LoginDialog(QDialog):
                 event.ignore()
     
     def toggle_password_visibility(self):
-        """Toggle password visibility with eye icon"""
-        if self.password_edit.echoMode() == QLineEdit.Password:
-            self.password_edit.setEchoMode(QLineEdit.Normal)
-            self.password_toggle_btn.setText("👁‍🗨")  # Crossed eye
-        else:
-            self.password_edit.setEchoMode(QLineEdit.Password)
-            self.password_toggle_btn.setText("👁")  # Open eye
+        """Toggle password visibility with FontAwesome eye icon"""
+        try:
+            import qtawesome as qta
+            if self.password_edit.echoMode() == QLineEdit.Password:
+                self.password_edit.setEchoMode(QLineEdit.Normal)
+                self.password_toggle_btn.setIcon(qta.icon('fa5s.eye-slash', color='#64748b'))
+                self.password_toggle_btn.setText('')
+            else:
+                self.password_edit.setEchoMode(QLineEdit.Password)
+                self.password_toggle_btn.setIcon(qta.icon('fa5s.eye', color='#64748b'))
+                self.password_toggle_btn.setText('')
+        except Exception:
+            # Fallback to text if qtawesome fails
+            if self.password_edit.echoMode() == QLineEdit.Password:
+                self.password_edit.setEchoMode(QLineEdit.Normal)
+                self.password_toggle_btn.setText('Hide')
+            else:
+                self.password_edit.setEchoMode(QLineEdit.Password)
+                self.password_toggle_btn.setText('Show')
     
     def on_login(self):
         """Attempt device connection and REAL authentication"""
@@ -2381,7 +1906,7 @@ class LoginDialog(QDialog):
             
             if port:
                 BL.SERIAL_PORT = port
-                self.workflow.main_window.log_message(f"✓ EEG headset detected on port: {port}")
+                self.workflow.main_window.log_message(f"EEG headset detected on port: {port}")
                 
                 # Device detected, proceed with authentication
                 self.status_label.setText("Device connected. Authenticating...")
@@ -2397,18 +1922,17 @@ class LoginDialog(QDialog):
                 if not login_url:
                     login_urls = {
                         "English (en)": "https://en.mindspeller.com/api/cas/token/login",
-                        "Dutch (nl)": "https://nl.mindspeller.com/api/cas/token/login",
-                        "Local": "http://127.0.0.1:5000/api/cas/token/login"
+                        # "Dutch (nl)": "https://nl.mindspeller.com/api/cas/token/login",
+                        # "Local": "http://127.0.0.1:5000/api/cas/token/login"
                     }
                     
                     # Determine which backend URL is set
                     current_backend = BL.BACKEND_URL
-                    if "en" in current_backend or "en.mindspeller" in current_backend:
-                        login_url = login_urls["English (en)"]
-                    elif "nl" in current_backend or "nl.mindspeller" in current_backend:
-                        login_url = login_urls["Dutch (nl)"]
-                    else:
-                        login_url = login_urls["Local"]
+                    login_url = login_urls["English (en)"]
+                    # elif "nl" in current_backend or "nl.mindspeller" in current_backend:
+                    #     login_url = login_urls["Dutch (nl)"]
+                    # else:
+                    #     login_url = login_urls["Local"]
                 
                 # Store login_url in self for API calls
                 self.login_url = login_url
@@ -2418,7 +1942,7 @@ class LoginDialog(QDialog):
             else:
                 # Show prominent error message
                 self.error_info_label.setText(
-                    "⚠️ DEVICE CONNECTION FAILED\n\n"
+                    "Warning: DEVICE CONNECTION FAILED\n\n"
                     "The EEG headset could not be detected.\n\n"
                     "TO RESOLVE:\n"
                     "1. Close this application completely\n"
@@ -2434,7 +1958,7 @@ class LoginDialog(QDialog):
                 self.back_button.setEnabled(True)
         except Exception as e:
             self.error_info_label.setText(
-                "⚠️ DEVICE DETECTION ERROR\n\n"
+                "Warning: DEVICE DETECTION ERROR\n\n"
                 f"Error: {str(e)}\n\n"
                 "TO RESOLVE:\n"
                 "1. Close this application completely\n"
@@ -2504,10 +2028,10 @@ class LoginDialog(QDialog):
                 
                 if jwt_token:
                     self.workflow.main_window.jwt_token = jwt_token
-                    self.workflow.main_window.log_message("✓ Login successful. JWT token obtained.")
+                    self.workflow.main_window.log_message("Login successful. JWT token obtained.")
                     
                     if hwid:
-                        self.workflow.main_window.log_message(f"✓ Hardware ID received: {hwid}")
+                        self.workflow.main_window.log_message(f"Hardware ID received: {hwid}")
                         BL.ALLOWED_HWIDS = [hwid]
                     
                     # Fetch userData from dedicated endpoint
@@ -2522,7 +2046,7 @@ class LoginDialog(QDialog):
                     # Start device connection
                     self._connect_device()
                     
-                    self.status_label.setText("✓ Login successful. Please enter Partner ID...")
+                    self.status_label.setText("Login successful. Please enter Partner ID...")
                     self.status_label.setStyleSheet("color: #10b981; font-size: 12px; font-weight: 600;")
                     # Hide error message on success
                     self.error_info_label.setVisible(False)
@@ -2531,7 +2055,7 @@ class LoginDialog(QDialog):
                     QTimer.singleShot(1000, self.on_auto_next)
                 else:
                     self.error_info_label.setText(
-                        "⚠️ AUTHENTICATION FAILED\n\n"
+                        "Warning: AUTHENTICATION FAILED\n\n"
                         "The login response didn't contain an authentication token.\n\n"
                         "TO RESOLVE:\n"
                         "1. Verify your credentials are correct\n"
@@ -2545,7 +2069,7 @@ class LoginDialog(QDialog):
                     self.back_button.setEnabled(True)
             else:
                 self.error_info_label.setText(
-                    "⚠️ AUTHENTICATION FAILED\n\n"
+                    "Warning: AUTHENTICATION FAILED\n\n"
                     f"Login failed with status code: {login_response.status_code}\n\n"
                     "TO RESOLVE:\n"
                     "1. Verify your email and password are correct\n"
@@ -2561,7 +2085,7 @@ class LoginDialog(QDialog):
                 
         except Exception as e:
             self.error_info_label.setText(
-                "⚠️ AUTHENTICATION ERROR\n\n"
+                "Warning: AUTHENTICATION ERROR\n\n"
                 f"Error: {str(e)}\n\n"
                 "TO RESOLVE:\n"
                 "1. Check your internet connection\n"
@@ -2614,15 +2138,15 @@ class LoginDialog(QDialog):
                 print("="*60 + "\n")
                 
                 self.workflow.main_window.user_data = user_data
-                self.workflow.main_window.log_message(f"✓ User data fetched successfully")
+                self.workflow.main_window.log_message(f"User data fetched successfully")
                 
                 # Log initial_protocol status for debugging
                 initial_protocol = user_data.get('initial_protocol', '')
                 if initial_protocol:
-                    self.workflow.main_window.log_message(f"✓ User has completed initial protocol: {initial_protocol}")
+                    self.workflow.main_window.log_message(f"User has completed initial protocol: {initial_protocol}")
                     print(f"Initial protocol found: {initial_protocol}")
                 else:
-                    self.workflow.main_window.log_message("ℹ User has not completed initial protocol yet")
+                    self.workflow.main_window.log_message("User has not completed initial protocol yet")
                     print("No initial_protocol found (user is new)")
             else:
                 print(f"ERROR: Status code {user_response.status_code}")
@@ -2678,7 +2202,7 @@ class LoginDialog(QDialog):
                 print("="*60 + "\n")
                 
                 self.workflow.main_window.partners_list = partners_list
-                self.workflow.main_window.log_message(f"✓ Fetched {len(partners_list)} partners")
+                self.workflow.main_window.log_message(f"Fetched {len(partners_list)} partners")
             else:
                 print(f"ERROR: Status code {partners_response.status_code}")
                 print(f"Response Text: {partners_response.text}")
@@ -2713,7 +2237,7 @@ class LoginDialog(QDialog):
                     BL.ALLOWED_HWIDS = raw_hwids
                 else:
                     BL.ALLOWED_HWIDS = []
-                self.workflow.main_window.log_message(f"✓ Fetched {len(BL.ALLOWED_HWIDS)} authorized device IDs")
+                self.workflow.main_window.log_message(f"Fetched {len(BL.ALLOWED_HWIDS)} authorized device IDs")
         except Exception as e:
             self.workflow.main_window.log_message(f"Error fetching HWIDs: {e}")
     
@@ -2728,10 +2252,10 @@ class LoginDialog(QDialog):
             BL.SERIAL_PORT = port
         
         if not port:
-            self.workflow.main_window.log_message("✗ No MindLink device found!")
+            self.workflow.main_window.log_message("No MindLink device found!")
             return
         
-        self.workflow.main_window.log_message(f"✓ Connecting to MindLink device: {port}")
+        self.workflow.main_window.log_message(f"Connecting to MindLink device: {port}")
         
         # Start MindLink connection - EXACTLY like base GUI
         try:
@@ -2747,22 +2271,22 @@ class LoginDialog(QDialog):
             self.workflow.main_window.brainlink_thread.daemon = True
             self.workflow.main_window.brainlink_thread.start()
             
-            self.workflow.main_window.log_message("✓ MindLink connected successfully!")
+            self.workflow.main_window.log_message("MindLink connected successfully!")
         except Exception as e:
-            self.workflow.main_window.log_message(f"✗ Failed to connect: {str(e)}")
+            self.workflow.main_window.log_message(f"Failed to connect: {str(e)}")
     
     def _complete_login(self):
         """Complete login"""
-        self.status_label.setText("✓ Login successful")
+        self.status_label.setText("Login successful")
         self.status_label.setStyleSheet("color: #10b981; font-size: 12px; font-weight: 600;")
         self.login_button.setEnabled(True)
-        self.login_button.setText("Sign In to Connect")
+        self.login_button.setText("Sign In")
     
     def on_auto_next(self):
-        """Auto-proceed to Partner ID after successful login"""
+        """Auto-proceed to Live EEG after successful login"""
         self._programmatic_close = True
         self.close()
-        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.PARTNER_ID))
+        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.LIVE_EEG))
     
     def on_back(self):
         """Navigate back"""
@@ -2775,173 +2299,9 @@ class LoginDialog(QDialog):
 # STEP 3.5: PATHWAY SELECTION (Protocol Selection)
 # ============================================================================
 
-class PathwaySelectionDialog(QDialog):
-    """Step 3.5: Select protocol pathway"""
-    
-    def __init__(self, workflow: WorkflowManager, parent=None):
-        super().__init__(parent)
-        self.workflow = workflow
-        self.setWindowTitle("MindLink - Choose Your Pathway")
-        self.setModal(True)
-        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
-        self.setMinimumWidth(500)
-        
-        # Set window icon
-        set_window_icon(self)
-        
-        # UI Elements
-        title_label = QLabel("Choose Your Pathway")
-        title_label.setObjectName("DialogTitle")
-        
-        subtitle_label = QLabel("Step 6 of 9: Select the flow type to tailor your task list")
-        subtitle_label.setObjectName("DialogSubtitle")
-        subtitle_label.setWordWrap(True)
-        
-        # Pathway options card
-        pathway_card = QFrame()
-        pathway_card.setObjectName("DialogCard")
-        pathway_layout = QVBoxLayout(pathway_card)
-        pathway_layout.setContentsMargins(16, 16, 16, 16)
-        pathway_layout.setSpacing(14)
-        
-        pathway_label = QLabel("Select Protocol:")
-        pathway_label.setObjectName("DialogSectionTitle")
-        
-        # Protocol options - MATCHING ORIGINAL Enhanced GUI
-        self.radio_personal = QRadioButton("Personal Pathway")
-        self.radio_personal.setChecked(True)
-        
-        personal_desc = QLabel("Career Flow related tasks")
-        personal_desc.setStyleSheet("font-size: 12px; color: #64748b; margin-left: 24px; margin-bottom: 8px;")
-        personal_desc.setWordWrap(True)
-        
-        self.radio_connection = QRadioButton("Connection")
-        connection_desc = QLabel("Mind Flow related tasks")
-        connection_desc.setStyleSheet("font-size: 12px; color: #64748b; margin-left: 24px; margin-bottom: 8px;")
-        connection_desc.setWordWrap(True)
-        
-        self.radio_lifestyle = QRadioButton("Lifestyle")
-        lifestyle_desc = QLabel("Style Flow related tasks")
-        lifestyle_desc.setStyleSheet("font-size: 12px; color: #64748b; margin-left: 24px; margin-bottom: 8px;")
-        lifestyle_desc.setWordWrap(True)
-        
-        pathway_layout.addWidget(pathway_label)
-        pathway_layout.addWidget(self.radio_personal)
-        pathway_layout.addWidget(personal_desc)
-        pathway_layout.addWidget(self.radio_connection)
-        pathway_layout.addWidget(connection_desc)
-        pathway_layout.addWidget(self.radio_lifestyle)
-        pathway_layout.addWidget(lifestyle_desc)
-        
-        # Info note
-        info_label = QLabel("ℹ️ Baseline calibration and core cognitive tasks are included in all pathways")
-        info_label.setStyleSheet("font-size: 12px; color: #3b82f6; padding: 12px; background: #eff6ff; border-radius: 6px;")
-        info_label.setWordWrap(True)
-        
-        # Navigation buttons
-        nav_layout = QHBoxLayout()
-        
-        self.back_button = QPushButton("← Back")
-        self.back_button.clicked.connect(self.on_back)
-        self.back_button.setStyleSheet("""
-            QPushButton {
-                background-color: #e2e8f0;
-                color: #475569;
-            }
-            QPushButton:hover {
-                background-color: #cbd5e1;
-            }
-        """)
-        
-        nav_layout.addWidget(self.back_button)
-        nav_layout.addStretch()
-        
-        self.next_button = QPushButton("Next →")
-        self.next_button.clicked.connect(self.on_next)
-        nav_layout.addWidget(self.next_button)
-        
-        # Layout assembly
-        layout = QVBoxLayout()
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(18)
-        layout.addWidget(title_label)
-        layout.addWidget(subtitle_label)
-        layout.addWidget(pathway_card)
-        layout.addWidget(info_label)
-        layout.addLayout(nav_layout)
-        
-        self.setLayout(layout)
-        apply_modern_dialog_theme(self)
-        
-        # Add MindLink status bar
-        self.status_bar = add_status_bar_to_dialog(self, self.workflow.main_window)
-        self._programmatic_close = False
-    
-    def closeEvent(self, event):
-        """Handle dialog close"""
-        if self.status_bar:
-            self.status_bar.cleanup()
-        if hasattr(self, '_programmatic_close') and self._programmatic_close:
-            event.accept()
-        else:
-            # Temporarily clear WindowStaysOnTopHint so message box appears on top
-            was_on_top = bool(self.windowFlags() & Qt.WindowStaysOnTopHint)
-            if was_on_top:
-                self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
-                self.show()
-            
-            reply = QMessageBox.question(
-                self,
-                'Confirm Exit',
-                'Are you sure you want to exit MindLink Analyzer?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            
-            # Restore WindowStaysOnTopHint if it was set
-            if was_on_top:
-                self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-                self.show()
-            
-            if reply == QMessageBox.Yes:
-                event.accept()
-                cleanup_and_quit()
-            else:
-                event.ignore()
-    
-    def on_next(self):
-        """Save protocol selection and proceed"""
-        # Determine selected protocol - MATCHING ORIGINAL Enhanced GUI
-        if self.radio_connection.isChecked():
-            protocol = "Connection"
-        elif self.radio_lifestyle.isChecked():
-            protocol = "Lifestyle"
-        else:
-            protocol = "Personal Pathway"
-        
-        # Save to main window
-        self.workflow.main_window._selected_protocol = protocol
-        
-        # Apply protocol filter (same as original Enhanced GUI)
-        try:
-            self.workflow.main_window._apply_protocol_filter()
-        except Exception:
-            pass
-        
-        if self.status_bar:
-            self.status_bar.cleanup()
-        self._programmatic_close = True
-        self.close()
-        # After selecting a pathway, proceed to calibration (Live EEG already completed)
-        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.CALIBRATION))
-    
-    def on_back(self):
-        """Navigate back"""
-        if self.status_bar:
-            self.status_bar.cleanup()
-        self._programmatic_close = True
-        self.close()
-        QTimer.singleShot(100, lambda: self.workflow.go_back())
+class PathwaySelectionDialog:
+    """Removed - pathway defaults to Personal Pathway"""
+    pass
 
 
 # ============================================================================
@@ -2965,7 +2325,8 @@ class LiveEEGDialog(QDialog):
         # UI Elements
         title_label = QLabel("Live EEG Signal")
         title_label.setObjectName("DialogTitle")
-        title_label.setStyleSheet("font-size: 16px; font-weight: 600;")  # Reduced from 18px
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; font-weight: 700;")  # Header style, centered
         
         subtitle_label = QLabel("Step 5 of 9: Monitoring real brain activity")
         subtitle_label.setObjectName("DialogSubtitle")
@@ -2996,7 +2357,7 @@ class LiveEEGDialog(QDialog):
         
         # Important stabilization notice
         stabilization_notice = QLabel(
-            "⏱️ IMPORTANT: Please wait 20-30 seconds for the signal to stabilize after wearing the headset.\n\n"
+            " IMPORTANT: Please wait 20-30 seconds for the signal to stabilize after wearing the headset.\n\n"
             "Do NOT proceed to the next step until you see 'Signal quality: Good' displayed above."
         )
         stabilization_notice.setStyleSheet(
@@ -3008,7 +2369,7 @@ class LiveEEGDialog(QDialog):
         stabilization_notice.setAlignment(Qt.AlignCenter)
         
         # Device reconnection help button
-        self.reconnect_help_button = QPushButton("🔄 Device Disconnected?")
+        self.reconnect_help_button = QPushButton(" Device Disconnected?")
         self.reconnect_help_button.setStyleSheet("""
             QPushButton {
                 background-color: #fbbf24;
@@ -3128,7 +2489,7 @@ class LiveEEGDialog(QDialog):
             self._sq_worn_since = None
             if not getattr(self, '_sq_not_worn_since', None):
                 self._sq_not_worn_since = _now
-            self.info_label.setText("⚠ Headset Not Worn | Electrode contact lost - press headset firmly against forehead")
+            self.info_label.setText("Headset Not Worn | Electrode contact lost - press headset firmly against forehead")
             self.info_label.setStyleSheet("color: #ef4444; font-size: 13px; padding: 8px; font-weight: 600;")
             # Reset transmission error since device IS transmitting
             self.no_data_count = 0
@@ -3176,13 +2537,13 @@ class LiveEEGDialog(QDialog):
                     self._sq_displayed_noisy = False
             if getattr(self, '_sq_displayed_noisy', False):
                 if getattr(self, '_sq_noisy_reason', '') == 'demo_signal':
-                    self.info_label.setText("⚠ Demo Signal detected | Adjust electrode contact - press headset firmly against forehead")
+                    self.info_label.setText("Demo Signal detected | Adjust electrode contact - press headset firmly against forehead")
                     self.info_label.setStyleSheet("color: #ef4444; font-size: 13px; padding: 8px; font-weight: 600;")
                 else:
-                    self.info_label.setText("⚠ Signal quality: Noisy | Headset not detected - Please wear the headset properly")
+                    self.info_label.setText("Signal Noisy | Headset not detected - Please wear the headset properly")
                     self.info_label.setStyleSheet("color: #f59e0b; font-size: 13px; padding: 8px; font-weight: 600;")
             else:
-                self.info_label.setText("✓ Signal quality: Good | Data flowing normally")
+                self.info_label.setText("Signal quality: Good | Data flowing normally")
                 self.info_label.setStyleSheet("color: #10b981; font-size: 13px; padding: 8px; font-weight: 600;")
         else:
             # No data detected - increment counter
@@ -3192,7 +2553,7 @@ class LiveEEGDialog(QDialog):
             if self.no_data_count >= 20 and not self.transmission_stopped:
                 self.transmission_stopped = True
                 self.transmission_error_label.setText(
-                    "⚠️ TRANSMISSION STOPPED\n\n"
+                    "Warning: TRANSMISSION STOPPED\n\n"
                     "EEG signal transmission has stopped. The device may be disconnected.\n\n"
                     "TO RESOLVE:\n"
                     "1. Close this application completely\n"
@@ -3206,7 +2567,7 @@ class LiveEEGDialog(QDialog):
                 self.next_button.setEnabled(False)
             
             # Device disconnected or no data
-            self.info_label.setText("⚠ No signal detected | Device may be disconnected")
+            self.info_label.setText("No signal detected | Device may be disconnected")
             self.info_label.setStyleSheet("color: #ef4444; font-size: 13px; padding: 8px;")
     
     def show_reconnect_guidance(self):
@@ -3247,11 +2608,11 @@ class LiveEEGDialog(QDialog):
         self.workflow.go_back()
     
     def on_next(self):
-        """Proceed to pathway selection (user requested ordering: Live EEG before Pathway)"""
+        """Proceed to calibration"""
         self.update_timer.stop()
         self._programmatic_close = True
         self.close()
-        self.workflow.go_to_step(WorkflowStep.PATHWAY_SELECTION)
+        self.workflow.go_to_step(WorkflowStep.CALIBRATION)
     
     def closeEvent(self, event):
         """Cleanup"""
@@ -3311,6 +2672,8 @@ class CalibrationDialog(QDialog):
         # UI Elements
         title_label = QLabel("Baseline Calibration")
         title_label.setObjectName("DialogTitle")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; font-weight: 700;")
         
         subtitle_label = QLabel("Step 7 of 9: Establish your baseline brain activity")
         subtitle_label.setObjectName("DialogSubtitle")
@@ -3359,15 +2722,16 @@ class CalibrationDialog(QDialog):
             "background: #f3f4f6; border-radius: 4px;"
         )
         
-        self.ec_button = QPushButton("🎯 Start Eyes Closed Calibration")
+        self.ec_button = QPushButton("Start Eyes Closed Calibration")
         self.ec_button.clicked.connect(self.show_eyes_closed_prep)
         self.ec_button.setStyleSheet(
             "padding: 12px; font-size: 14px; font-weight: 600;"
         )
         
-        self.eo_button = QPushButton("🎯 Start Eyes Open Calibration")
+        self.eo_button = QPushButton("Start Eyes Open Calibration")
         self.eo_button.clicked.connect(self.show_eyes_open_prep)
         self.eo_button.setEnabled(False)
+        self.eo_button.setVisible(False)
         self.eo_button.setStyleSheet(
             "padding: 12px; font-size: 14px; font-weight: 600;"
         )
@@ -3407,7 +2771,6 @@ class CalibrationDialog(QDialog):
         layout.setSpacing(18)
         layout.addWidget(title_label)
         layout.addWidget(subtitle_label)
-        layout.addWidget(instr_card)
         layout.addWidget(progress_card)
         layout.addLayout(nav_layout)
         
@@ -3459,7 +2822,7 @@ class CalibrationDialog(QDialog):
                 self._sig_worn_since = None
                 if not self._sig_not_worn_since:
                     self._sig_not_worn_since = now
-                self.signal_quality_label.setText("⚠ Demo Signal")
+                self.signal_quality_label.setText("Demo Signal")
                 self.signal_quality_label.setStyleSheet(
                     "font-size: 12px; color: #dc2626; padding: 6px; "
                     "background: #fee2e2; border-radius: 4px; font-weight: 600;"
@@ -3492,25 +2855,25 @@ class CalibrationDialog(QDialog):
 
                 if self._sig_displayed_noisy:
                     if self._sig_noisy_reason == 'demo_signal':
-                        self.signal_quality_label.setText("⚠ Demo Signal")
+                        self.signal_quality_label.setText("Demo Signal")
                         self.signal_quality_label.setStyleSheet(
                             "font-size: 12px; color: #dc2626; padding: 6px; "
                             "background: #fee2e2; border-radius: 4px; font-weight: 600;"
                         )
                     else:
-                        self.signal_quality_label.setText("⚠ Signal: Noisy")
+                        self.signal_quality_label.setText("Signal: Noisy")
                         self.signal_quality_label.setStyleSheet(
                             "font-size: 12px; color: #d97706; padding: 6px; "
                             "background: #fef3c7; border-radius: 4px; font-weight: 600;"
                         )
                 else:
-                    self.signal_quality_label.setText("✓ Signal: Good")
+                    self.signal_quality_label.setText("Signal: Good")
                     self.signal_quality_label.setStyleSheet(
                         "font-size: 12px; color: #059669; padding: 6px; "
                         "background: #d1fae5; border-radius: 4px; font-weight: 600;"
                     )
             else:
-                self.signal_quality_label.setText("○ Signal: Waiting...")
+                self.signal_quality_label.setText("Signal: Waiting...")
                 self.signal_quality_label.setStyleSheet(
                     "font-size: 12px; color: #6b7280; padding: 6px; "
                     "background: #f3f4f6; border-radius: 4px;"
@@ -3533,7 +2896,7 @@ class CalibrationDialog(QDialog):
         layout.setSpacing(16)
         
         # Title
-        title = QLabel("🌙 Eyes Closed Baseline")
+        title = QLabel("Eyes Closed Baseline")
         title.setStyleSheet(
             "font-size: 18px; font-weight: 600; color: #1f2937; margin-bottom: 8px;"
         )
@@ -3549,7 +2912,7 @@ class CalibrationDialog(QDialog):
             "3. Close your eyes and relax for 30 seconds<br>"
             "4. Stay still and calm - don't think about anything specific<br>"
             "5. A sound will notify you when the 30 seconds are complete<br><br>"
-            "<b style='color: #dc2626;'>⚠ Important: Check your speakers/headphones are ON!</b>"
+            "<b style='color: #dc2626;'>Warning: Important: Check your speakers/headphones are ON!</b>"
         )
         instructions.setWordWrap(True)
         instructions.setStyleSheet(
@@ -3580,7 +2943,7 @@ class CalibrationDialog(QDialog):
                 # Headset is transmitting but electrode has no contact
                 _sq_state['displayed_noisy'] = True
                 _sq_state['noisy_reason'] = 'demo_signal'
-                signal_label.setText("⚠ Demo Signal")
+                signal_label.setText("Demo Signal")
                 signal_label.setStyleSheet(
                     "font-size: 13px; color: #dc2626; padding: 8px; "
                     "background: #fee2e2; border-radius: 6px; font-weight: 600;"
@@ -3594,7 +2957,7 @@ class CalibrationDialog(QDialog):
                     _sq_state['last_tail'] = current_tail
                     _sq_state['last_change'] = now
                 elif _sq_state['last_change'] and (now - _sq_state['last_change']) > _STALE_S:
-                    signal_label.setText("✗ Signal: No Signal")
+                    signal_label.setText("Signal: No Signal")
                     signal_label.setStyleSheet(
                         "font-size: 13px; color: #6b7280; padding: 8px; "
                         "background: #f3f4f6; border-radius: 6px; font-weight: 600;"
@@ -3620,25 +2983,25 @@ class CalibrationDialog(QDialog):
                         _sq_state['displayed_noisy'] = False
                 if _sq_state['displayed_noisy']:
                     if _sq_state.get('noisy_reason') == 'demo_signal':
-                        signal_label.setText("⚠ Demo Signal")
+                        signal_label.setText("Demo Signal")
                         signal_label.setStyleSheet(
                             "font-size: 13px; color: #dc2626; padding: 8px; "
                             "background: #fee2e2; border-radius: 6px; font-weight: 600;"
                         )
                     else:
-                        signal_label.setText("⚠ Signal: Noisy")
+                        signal_label.setText("Signal: Noisy")
                         signal_label.setStyleSheet(
                             "font-size: 13px; color: #d97706; padding: 8px; "
                             "background: #fef3c7; border-radius: 6px; font-weight: 600;"
                         )
                 else:
-                    signal_label.setText("✓ Signal: Good")
+                    signal_label.setText("Signal: Good")
                     signal_label.setStyleSheet(
                         "font-size: 13px; color: #059669; padding: 8px; "
                         "background: #d1fae5; border-radius: 6px; font-weight: 600;"
                     )
             else:
-                signal_label.setText("○ Signal: Waiting...")
+                signal_label.setText("Signal: Waiting...")
                 signal_label.setStyleSheet(
                     "font-size: 13px; color: #6b7280; padding: 8px; "
                     "background: #f3f4f6; border-radius: 6px; font-weight: 600;"
@@ -3651,7 +3014,7 @@ class CalibrationDialog(QDialog):
         update_prep_signal()  # Initial update
         
         # Start button
-        start_btn = QPushButton("▶ Start Recording")
+        start_btn = QPushButton("Start Recording")
         start_btn.setStyleSheet(
             "padding: 12px 24px; font-size: 14px; font-weight: 600; "
             "background-color: #2563eb; border-radius: 8px;"
@@ -3685,7 +3048,7 @@ class CalibrationDialog(QDialog):
     def start_eyes_closed(self):
         """Start eyes-closed calibration with countdown"""
         self.current_phase = 'eyes_closed'
-        self.status_label.setText("⏳ Countdown starting...")
+        self.status_label.setText("Countdown starting...")
         self.phase_label.setText("Get ready! Listen for the countdown...")
         self.ec_button.setEnabled(False)
         self.back_button.setEnabled(False)
@@ -3705,7 +3068,7 @@ class CalibrationDialog(QDialog):
     def update_countdown(self):
         """Update countdown display and play audio"""
         if self.countdown_value > 0:
-            self.status_label.setText(f"⏳ Countdown: {self.countdown_value}")
+            self.status_label.setText(f"Countdown: {self.countdown_value}")
             self.phase_label.setText(f"Listening to audio: {self.countdown_value}...")
             # Play countdown beep (cross-platform)
             play_beep(800, 200)  # 800Hz, 200ms
@@ -3715,12 +3078,12 @@ class CalibrationDialog(QDialog):
             self.countdown_timer.stop()
             # Use countdown_phase instead of current_phase to ensure correct phase starts
             if self.countdown_phase == 'eyes_closed':
-                self.status_label.setText("🎬 Recording: Eyes Closed")
+                self.status_label.setText("Recording: Eyes Closed")
                 self.phase_label.setText("Close your eyes and relax... (30 seconds)")
                 self.feature_engine.start_calibration_phase('eyes_closed')
                 print("[CalibrationDialog] Started eyes_closed phase")
             elif self.countdown_phase == 'eyes_open':
-                self.status_label.setText("🎬 Recording: Eyes Open")
+                self.status_label.setText("Recording: Eyes Open")
                 self.phase_label.setText("Keep your eyes open and stay relaxed... (30 seconds)")
                 self.feature_engine.start_calibration_phase('eyes_open')
                 print("[CalibrationDialog] Started eyes_open phase")
@@ -3741,7 +3104,7 @@ class CalibrationDialog(QDialog):
         layout.setSpacing(16)
         
         # Title
-        title = QLabel("👁️ Eyes Open Baseline")
+        title = QLabel("Eyes Open Baseline")
         title.setStyleSheet(
             "font-size: 18px; font-weight: 600; color: #1f2937; margin-bottom: 8px;"
         )
@@ -3757,7 +3120,7 @@ class CalibrationDialog(QDialog):
             "3. Keep your eyes open and relax for 30 seconds<br>"
             "4. Stay calm - look ahead calmly, minimize blinking<br>"
             "5. A sound will notify you when the 30 seconds are complete<br><br>"
-            "<b style='color: #dc2626;'>⚠ Important: Keep eyes open but stay relaxed!</b>"
+            "<b style='color: #dc2626;'>Warning: Important: Keep eyes open but stay relaxed!</b>"
         )
         instructions.setWordWrap(True)
         instructions.setStyleSheet(
@@ -3788,7 +3151,7 @@ class CalibrationDialog(QDialog):
                 # Headset is transmitting but electrode has no contact
                 _sq_state['displayed_noisy'] = True
                 _sq_state['noisy_reason'] = 'demo_signal'
-                signal_label.setText("⚠ Demo Signal")
+                signal_label.setText("Demo Signal")
                 signal_label.setStyleSheet(
                     "font-size: 13px; color: #dc2626; padding: 8px; "
                     "background: #fee2e2; border-radius: 6px; font-weight: 600;"
@@ -3802,7 +3165,7 @@ class CalibrationDialog(QDialog):
                     _sq_state['last_tail'] = current_tail
                     _sq_state['last_change'] = now
                 elif _sq_state['last_change'] and (now - _sq_state['last_change']) > _STALE_S:
-                    signal_label.setText("✗ Signal: No Signal")
+                    signal_label.setText("Signal: No Signal")
                     signal_label.setStyleSheet(
                         "font-size: 13px; color: #6b7280; padding: 8px; "
                         "background: #f3f4f6; border-radius: 6px; font-weight: 600;"
@@ -3828,25 +3191,25 @@ class CalibrationDialog(QDialog):
                         _sq_state['displayed_noisy'] = False
                 if _sq_state['displayed_noisy']:
                     if _sq_state.get('noisy_reason') == 'demo_signal':
-                        signal_label.setText("⚠ Demo Signal")
+                        signal_label.setText("Demo Signal")
                         signal_label.setStyleSheet(
                             "font-size: 13px; color: #dc2626; padding: 8px; "
                             "background: #fee2e2; border-radius: 6px; font-weight: 600;"
                         )
                     else:
-                        signal_label.setText("⚠ Signal: Noisy")
+                        signal_label.setText("Signal: Noisy")
                         signal_label.setStyleSheet(
                             "font-size: 13px; color: #d97706; padding: 8px; "
                             "background: #fef3c7; border-radius: 6px; font-weight: 600;"
                         )
                 else:
-                    signal_label.setText("✓ Signal: Good")
+                    signal_label.setText("Signal: Good")
                     signal_label.setStyleSheet(
                         "font-size: 13px; color: #059669; padding: 8px; "
                         "background: #d1fae5; border-radius: 6px; font-weight: 600;"
                     )
             else:
-                signal_label.setText("○ Signal: Waiting...")
+                signal_label.setText("Signal: Waiting...")
                 signal_label.setStyleSheet(
                     "font-size: 13px; color: #6b7280; padding: 8px; "
                     "background: #f3f4f6; border-radius: 6px; font-weight: 600;"
@@ -3859,7 +3222,7 @@ class CalibrationDialog(QDialog):
         update_prep_signal()  # Initial update
         
         # Start button
-        start_btn = QPushButton("▶ Start Recording")
+        start_btn = QPushButton("Start Recording")
         start_btn.setStyleSheet(
             "padding: 12px 24px; font-size: 14px; font-weight: 600; "
             "background-color: #2563eb; border-radius: 8px;"
@@ -3893,7 +3256,7 @@ class CalibrationDialog(QDialog):
     def start_eyes_open(self):
         """Start eyes-open calibration with countdown"""
         self.current_phase = 'eyes_open'
-        self.status_label.setText("⏳ Countdown starting...")
+        self.status_label.setText("Countdown starting...")
         self.phase_label.setText("Get ready! Listen for the countdown...")
         self.eo_button.setEnabled(False)
         self.back_button.setEnabled(False)
@@ -3920,8 +3283,10 @@ class CalibrationDialog(QDialog):
             self.feature_engine.stop_calibration_phase()
             
             if self.current_phase == 'eyes_closed':
-                self.status_label.setText("✅ Eyes Closed Complete!")
+                self.status_label.setText("Eyes Closed Complete!")
                 self.phase_label.setText("Great! Now let's record with eyes open.")
+                self.ec_button.setVisible(False)
+                self.eo_button.setVisible(True)
                 self.eo_button.setEnabled(True)
                 self.back_button.setEnabled(True)
                 
@@ -3935,14 +3300,14 @@ class CalibrationDialog(QDialog):
                     QMessageBox.Ok
                 )
             elif self.current_phase == 'eyes_open':
-                self.status_label.setText("✅ Calibration Complete!")
+                self.status_label.setText("Calibration Complete!")
                 self.phase_label.setText("Both baseline phases recorded successfully!")
                 self.back_button.setEnabled(True)
                 
                 # Compute REAL baseline statistics
                 try:
                     self.feature_engine.compute_baseline_statistics()
-                    self.phase_label.setText("✓ Both phases complete. Baseline computed successfully.")
+                    self.phase_label.setText("Both phases complete. Baseline computed successfully.")
                 except Exception as e:
                     print(f"Warning: Error computing baseline statistics: {e}")
                     self.phase_label.setText("Both phases complete. Baseline computed with warnings.")
@@ -4086,6 +3451,8 @@ class TaskSelectionDialog(QDialog):
         # UI Elements
         title_label = QLabel("Cognitive Tasks")
         title_label.setObjectName("DialogTitle")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; font-weight: 700;")
         
         subtitle_label = QLabel("Step 8 of 9: Select tasks to perform")
         subtitle_label.setObjectName("DialogSubtitle")
@@ -4117,7 +3484,7 @@ class TaskSelectionDialog(QDialog):
                 
                 # Mark completed tasks with checkmark
                 if task_id in completed_tasks:
-                    display_name = f"✓ {task_name} (Completed)"
+                    display_name = f"{task_name} (Completed)"
                 else:
                     display_name = task_name
                 
@@ -4195,10 +3562,10 @@ class TaskSelectionDialog(QDialog):
         
         self.next_button = QPushButton("Proceed to Analysis →")
         self.next_button.clicked.connect(self.on_next)
-        # Enable if tasks have been completed
+        # Hidden until 4 tasks have been completed
         completed_count = len([t for t in self.workflow.main_window.feature_engine.calibration_data.get('tasks', {}).keys() 
                                if t not in ['baseline', 'eyes_closed', 'eyes_open']])
-        self.next_button.setEnabled(completed_count > 0)
+        self.next_button.setVisible(completed_count >= 4)
         nav_layout.addWidget(self.next_button)
         
         # Layout assembly
@@ -4318,7 +3685,7 @@ class TaskSelectionDialog(QDialog):
             return None
         
         # Strip UI adornments
-        display = display.replace("✓ ", "")
+        display = display.replace("", "")
         display = display.replace(" (Completed)", "")
         display = display.replace(" (Advanced)", "")
         
@@ -4361,7 +3728,7 @@ class TaskSelectionDialog(QDialog):
             preview_text = f"<b>{task_name}</b>"
             
             if is_completed:
-                preview_text += " <span style='color: #10b981; font-weight: 600;'>✓ Completed</span>"
+                preview_text += " <span style='color: #10b981; font-weight: 600;'>Completed</span>"
             
             preview_text += "<br><br>"
             preview_text += f"Description: {desc}<br>"
@@ -4375,11 +3742,11 @@ class TaskSelectionDialog(QDialog):
                 preview_text += "Instructions: Follow the on-screen prompts to complete this task."
             
             if is_completed:
-                preview_text += "<br><br><span style='color: #f59e0b; font-weight: 600;'>⚠️ This task has already been completed. Please select a different task.</span>"
+                preview_text += "<br><br><span style='color: #f59e0b; font-weight: 600;'>Warning: This task has already been completed. Please select a different task.</span>"
             elif is_locked:
                 preview_text += (
                     "<br><br><span style='color: #dc2626; font-weight: 600;'>"
-                    "🔒 Advanced task – requires a valid booking with the partner.<br>"
+                    "Advanced task – requires a valid booking with the partner.<br>"
                     "Please ask your partner to create an advanced session booking for you."
                     "</span>"
                 )
@@ -4392,7 +3759,7 @@ class TaskSelectionDialog(QDialog):
             if is_completed:
                 self.start_task_button.setText("Task Already Completed")
             elif is_locked:
-                self.start_task_button.setText("🔒 Booking Required")
+                self.start_task_button.setText("Booking Required")
             else:
                 self.start_task_button.setText("Start This Task")
         else:
@@ -4445,7 +3812,7 @@ class TaskSelectionDialog(QDialog):
         # This method handles EVERYTHING: start_calibration_phase, show_task_interface, audio cues, etc.
         try:
             self.workflow.main_window.start_task()
-            self.workflow.main_window.log_message(f"✓ Started task via start_task(): {task_id}")
+            self.workflow.main_window.log_message(f"Started task via start_task(): {task_id}")
         except Exception as e:
             self.workflow.main_window.log_message(f"Error starting task: {e}")
             QMessageBox.warning(self, "Task Start Error", f"Failed to start task:\n{str(e)}")
@@ -4497,7 +3864,7 @@ class TaskSelectionDialog(QDialog):
                     task_name = f"{task_name} (Advanced)"
                 
                 if task_id in completed_tasks:
-                    display_name = f"✓ {task_name} (Completed)"
+                    display_name = f"{task_name} (Completed)"
                 else:
                     display_name = task_name
                 
@@ -4536,11 +3903,18 @@ class TaskSelectionDialog(QDialog):
         count = len(completed_tasks)
         
         if count == 0:
-            self.completed_label.setText("No tasks completed yet. Complete at least one task to proceed.")
-        elif count == 1:
-            self.completed_label.setText(f"✓ {count} task completed: {', '.join(completed_tasks)}")
+            self.completed_label.setText("No tasks completed yet. Complete 4 tasks to proceed.")
+        elif count < 4:
+            remaining = 4 - count
+            task_list = ', '.join(completed_tasks)
+            self.completed_label.setText(f"{count} task{'s' if count > 1 else ''} completed: {task_list} — {remaining} more needed to proceed.")
         else:
-            self.completed_label.setText(f"✓ {count} tasks completed: {', '.join(completed_tasks)}")
+            task_list = ', '.join(completed_tasks)
+            self.completed_label.setText(f"{count} tasks completed: {task_list}")
+        
+        # Update proceed button state
+        if hasattr(self, 'next_button'):
+            self.next_button.setVisible(count >= 4)
     
     def on_back(self):
         """Navigate back"""
@@ -4589,7 +3963,13 @@ class MultiTaskAnalysisDialog(QDialog):
         # UI Elements
         title_label = QLabel("Multi-Task Analysis")
         title_label.setObjectName("DialogTitle")
-        
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; font-weight: 700;")
+
+        headset_label = QLabel("You can turn off and remove the headset now.")
+        headset_label.setAlignment(Qt.AlignCenter)
+        headset_label.setStyleSheet("font-size: 13px; color: #555; margin-bottom: 4px;")
+
         subtitle_label = QLabel("Step 9 of 9: Analyze all completed tasks")
         subtitle_label.setObjectName("DialogSubtitle")
         
@@ -4612,26 +3992,29 @@ class MultiTaskAnalysisDialog(QDialog):
         self.report_button = QPushButton("Generate Report")
         self.report_button.clicked.connect(self.generate_report)
         self.report_button.setEnabled(False)
+        self.report_button.setVisible(False)  # Hidden until seeding fails
         self.report_button.setStyleSheet("padding: 10px;")
         
         # Two protocol-specific seed buttons
-        self.seed_initial_button = QPushButton("Seed Initial Protocol")
+        _waiting_tooltip = "Please wait for the analysis to complete before proceeding."
+        
+        self.seed_initial_button = QPushButton("Upload Result to your profile")
         self.seed_initial_button.clicked.connect(lambda: self.seed_report("initial"))
         self.seed_initial_button.setEnabled(False)
+        self.seed_initial_button.setToolTip(_waiting_tooltip)
         self.seed_initial_button.setStyleSheet("""
             padding: 10px;
             background-color: #1e3a8a;
         """)
-        self.seed_initial_button.setToolTip("Seed initial protocol report to Mindspeller API")
         
         self.seed_advanced_button = QPushButton("Seed Advanced Protocol")
         self.seed_advanced_button.clicked.connect(lambda: self.seed_report("advanced"))
         self.seed_advanced_button.setEnabled(False)
+        self.seed_advanced_button.setToolTip(_waiting_tooltip)
         self.seed_advanced_button.setStyleSheet("""
             padding: 10px;
             background-color: #1e3a8a;
         """)
-        self.seed_advanced_button.setToolTip("Seed advanced protocol report to Mindspeller API")
         
         # Determine which button to enable based on userData
         user_data = getattr(self.workflow.main_window, 'user_data', {})
@@ -4657,12 +4040,12 @@ class MultiTaskAnalysisDialog(QDialog):
         
         # Detect selected region from backend URL
         selected_region = "Unknown"
-        if "en" in BL.BACKEND_URL or "en.mindspeller" in BL.BACKEND_URL:
-            selected_region = "English (en)"
-        elif "nl" in BL.BACKEND_URL or "nl.mindspeller" in BL.BACKEND_URL:
-            selected_region = "Dutch (nl)"
-        elif "127.0.0.1" in BL.BACKEND_URL or "localhost" in BL.BACKEND_URL:
-            selected_region = "Local"
+        # if "en" in BL.BACKEND_URL or "en.mindspeller" in BL.BACKEND_URL:
+        selected_region = "English (en)"
+        # elif "nl" in BL.BACKEND_URL or "nl.mindspeller" in BL.BACKEND_URL:
+        #     selected_region = "Dutch (nl)"
+        # elif "127.0.0.1" in BL.BACKEND_URL or "localhost" in BL.BACKEND_URL:
+        #     selected_region = "Local"
         
         # Add informational text about the buttons with selected region
         user_data = getattr(self.workflow.main_window, 'user_data', {})
@@ -4670,10 +4053,9 @@ class MultiTaskAnalysisDialog(QDialog):
         protocol_status = "Initial Protocol (first time)" if not initial_protocol else "Advanced Protocol (follow-up)"
         
         info_text = QLabel(
-            f"📄 Generate Report: Save locally & share via superadmin panel\n"
-            f"☁️  Seed Protocol: Send directly to Mindspeller database\n"
-            f"    Protocol Type: {protocol_status}\n"
-            f"    Selected Region: {selected_region} (from Step 2)"
+            f"Generate Report: Save locally & share via superadmin panel\n"
+            f"Upload result: Send directly to Mindspeller database\n"
+
         )
         info_text.setStyleSheet("""
             font-size: 11px; 
@@ -4711,31 +4093,20 @@ class MultiTaskAnalysisDialog(QDialog):
         # Navigation buttons
         nav_layout = QHBoxLayout()
         
-        self.back_button = QPushButton("← Back")
-        self.back_button.clicked.connect(self.on_back)
-        self.back_button.setStyleSheet("""
-            QPushButton {
-                background-color: #e2e8f0;
-                color: #475569;
-            }
-            QPushButton:hover {
-                background-color: #cbd5e1;
-            }
-        """)
-        
-        nav_layout.addWidget(self.back_button)
-        nav_layout.addStretch()
-        
         self.finish_button = QPushButton("Finish")
         self.finish_button.clicked.connect(self.on_finish)
-        self.finish_button.setEnabled(False)  # Disabled until analysis completes
+        self.finish_button.setEnabled(False)
+        self.finish_button.setVisible(False)  # Hidden until seeding completes
+        nav_layout.addStretch()
         nav_layout.addWidget(self.finish_button)
+        nav_layout.addStretch()
         
         # Layout assembly
         layout = QVBoxLayout()
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(18)
         layout.addWidget(title_label)
+        layout.addWidget(headset_label)
         layout.addWidget(subtitle_label)
         layout.addWidget(actions_card)
         layout.addWidget(results_card)
@@ -4813,7 +4184,7 @@ class MultiTaskAnalysisDialog(QDialog):
             if hasattr(self.workflow.main_window, 'serial_obj') and self.workflow.main_window.serial_obj:
                 try:
                     self.workflow.main_window.serial_obj.close()
-                    self.workflow.main_window.log_message("✓ Serial connection closed")
+                    self.workflow.main_window.log_message("Serial connection closed")
                 except Exception as e:
                     self.workflow.main_window.log_message(f"Warning: Error closing serial: {e}")
             
@@ -4824,9 +4195,9 @@ class MultiTaskAnalysisDialog(QDialog):
                     if self.workflow.main_window.brainlink_thread.is_alive():
                         self.workflow.main_window.log_message("Warning: Thread did not stop cleanly")
                     else:
-                        self.workflow.main_window.log_message("✓ Data streaming stopped")
+                        self.workflow.main_window.log_message("Data streaming stopped")
             
-            self.workflow.main_window.log_message("✓ Headset disconnected successfully")
+            self.workflow.main_window.log_message("Headset disconnected successfully")
         except Exception as e:
             self.workflow.main_window.log_message(f"Error disconnecting headset: {e}")
             import traceback
@@ -4883,9 +4254,9 @@ class MultiTaskAnalysisDialog(QDialog):
         # Show initial progress message
         self.results_text.setPlainText(
             "Analysis in progress...\n\n"
-            "⏳ Initializing analysis engine...\n"
-            "⏳ Computing baseline statistics...\n"
-            "⏳ Preparing task comparisons...\n\n"
+            "Initializing analysis engine...\n"
+            " Computing baseline statistics...\n"
+            " Preparing task comparisons...\n\n"
             "Please wait, this may take 3-5 minutes. Wait for the Generate Report button to be enabled.."
         )
         
@@ -4908,7 +4279,7 @@ class MultiTaskAnalysisDialog(QDialog):
                 # Update progress message (thread-safe via Qt invoke)
                 progress_msg = (
                     f"Analysis in progress...\n\n"
-                    f"📊 Permutation testing: {current:,}/{total:,} ({progress_pct}%)\n\n"
+                    f"Permutation testing: {current:,}/{total:,} ({progress_pct}%)\n\n"
                     f"Statistical validation is running. This may take 3-5 minutes. Wait for the Generate Report button to be enabled.."
                 )
                 
@@ -5012,7 +4383,7 @@ class MultiTaskAnalysisDialog(QDialog):
         
         self.results_text.setPlainText(
             f"Analysis in progress{dots}{spaces}\n\n"
-            f"⏳ Computing features and statistics...\n\n"
+            f"Computing features and statistics...\n\n"
             f"Please wait, this may take 3-5 minutes. Wait for the Generate Report button to be enabled.."
         )
     
@@ -5035,7 +4406,7 @@ class MultiTaskAnalysisDialog(QDialog):
         if hasattr(engine, 'multi_task_results') and engine.multi_task_results:
             res = engine.multi_task_results
             
-            results = "✅ ANALYSIS COMPLETE!\n"
+            results = "ANALYSIS COMPLETE!\n"
             results += "=" * 60 + "\n\n"
             results += "=== MULTI-TASK ANALYSIS RESULTS ===\n\n"
             
@@ -5084,29 +4455,39 @@ class MultiTaskAnalysisDialog(QDialog):
             
             # Add completion message
             results += "\n" + "=" * 60 + "\n"
-            results += "✅ Analysis complete! Click 'Generate Report' to save detailed results.\n"
+            results += "Analysis complete! Click the Seed button to submit your results.\n"
             
             print(f">>> [MAIN THREAD] Setting results text (length: {len(results)} chars) <<<")
             self.results_text.setPlainText(results)
-            print(f">>> [MAIN THREAD] Enabling report buttons and finish button <<<")
-            self.report_button.setEnabled(True)
+            print(f">>> [MAIN THREAD] Enabling seed buttons and finish button <<<")
             
-            # Enable the visible seed button based on protocol status
+            # Enable the visible seed button based on protocol status and highlight it bright blue
+            seed_button_style = """
+                padding: 10px;
+                background-color: #2563eb;
+                font-weight: 600;
+            """
             if self.seed_initial_button.isVisible():
                 self.seed_initial_button.setEnabled(True)
+                self.seed_initial_button.setToolTip("")
+                self.seed_initial_button.setStyleSheet(seed_button_style)
             if self.seed_advanced_button.isVisible():
                 self.seed_advanced_button.setEnabled(True)
+                self.seed_advanced_button.setToolTip("")
+                self.seed_advanced_button.setStyleSheet(seed_button_style)
             
-            self.finish_button.setEnabled(True)  # Enable finish button after successful analysis
+            # Play completion beep sequence
+            for i in range(3):
+                QTimer.singleShot(i * 250, lambda: play_beep(1000, 200))
+            
+            # analyze_button stays disabled permanently after successful analysis
             print(f">>> [MAIN THREAD] Results displayed successfully <<<")
         else:
             print(f">>> [MAIN THREAD] No results found - showing error message <<<")
-            self.results_text.setPlainText("❌ No analysis results found.\n\nPlease ensure tasks have been recorded and try analyzing again.")
-            self.report_button.setEnabled(False)
-            self.seed_button.setEnabled(False)
+            self.results_text.setPlainText("No analysis results found.\n\nPlease ensure tasks have been recorded and try analyzing again.")
+            # Allow retry only when no results were found
+            self.analyze_button.setEnabled(True)
         
-        print(f">>> [MAIN THREAD] Re-enabling analyze button <<<")
-        self.analyze_button.setEnabled(True)
         print(f">>> [MAIN THREAD] _display_results() COMPLETE <<<\n")
     
     @QtCore.Slot(str)
@@ -5114,7 +4495,7 @@ class MultiTaskAnalysisDialog(QDialog):
         """Show error message in UI (called from main thread)"""
         print(f">>> [MAIN THREAD] _show_error_callback() CALLED <<<")
         self.results_text.setPlainText(f"Error during analysis:\n{error_msg}\n\nSee console for details.")
-        self.analyze_button.setEnabled(True)
+        self.analyze_button.setEnabled(True)  # Allow retry on error
     
     def _generate_report_text(self):
         """Generate report text internally (without triggering download)"""
@@ -5318,7 +4699,7 @@ class MultiTaskAnalysisDialog(QDialog):
         # Use partner_id from workflow (entered in Partner ID dialog)
         partner_id = getattr(self.workflow.main_window, 'partner_id', None)
         if not partner_id:
-            partner_id = 1  # Fallback if not set
+            partner_id = "PARTNER_000001"  # Default fallback
         
         # Get task count for metadata
         engine = self.workflow.main_window.feature_engine
@@ -5393,18 +4774,18 @@ class MultiTaskAnalysisDialog(QDialog):
                 
                 # Create a success dialog with enhanced styling
                 success_dialog = QMessageBox(self)
-                success_dialog.setWindowTitle("✓ Report Seeded Successfully")
+                success_dialog.setWindowTitle("Report Seeded Successfully")
                 success_dialog.setIcon(QMessageBox.Information)
                 
                 success_message = (
-                    "🎉 Your EEG report has been successfully sent to the Mindspeller database!\n\n"
+                    " Your EEG report has been successfully sent to the Mindspeller database!\n\n"
                     "Report Details:\n"
                     f"• User ID: {result.get('user_id', 'N/A')}\n"
                     f"• Session ID: {result.get('session_id', 'N/A')}\n"
                     f"• Report ID: {result.get('report_id', 'N/A')}\n\n"
-                    "✓ Your neuroprofiling report is now available in your Mindspeller account.\n"
-                    "✓ You can access it immediately at mindspeller.com\n"
-                    "✓ You can safely close this application now.\n\n"
+                    "Your neuroprofiling report is now available in your Mindspeller account.\n"
+                    "You can access it immediately at mindspeller.com\n"
+                    "You can safely close this application now.\n\n"
                     "Thank you for using MindLink Analyzer!"
                 )
                 
@@ -5437,20 +4818,28 @@ class MultiTaskAnalysisDialog(QDialog):
                 # Show a toast notification as well
                 try:
                     self.workflow.main_window.log_message(
-                        f"✓ Report seeded successfully! User ID: {result.get('user_id')}, "
+                        f"Report seeded successfully! User ID: {result.get('user_id')}, "
                         f"Session ID: {result.get('session_id')}, Report ID: {result.get('report_id')}"
                     )
                 except:
                     pass
                 
+                # Enable Finish button now that seeding succeeded
+                self.finish_button.setVisible(True)
+                self.finish_button.setEnabled(True)
+                self.finish_button.setMinimumWidth(200)
+                
             else:
                 error_msg = response.json().get('error', 'Unknown error') if response.content else 'Unknown error'
+                self.report_button.setVisible(True)
+                self.report_button.setEnabled(True)
                 QMessageBox.warning(
                     self,
                     "Seeding Failed",
                     f"Failed to seed report.\n\n"
                     f"Status: {response.status_code}\n"
-                    f"Error: {error_msg}"
+                    f"Error: {error_msg}\n\n"
+                    f"You can use 'Generate Report' to save the report locally."
                 )
                 
         except requests.exceptions.RequestException as e:
@@ -5481,11 +4870,12 @@ class MultiTaskAnalysisDialog(QDialog):
                 error_msg = f"Failed to connect to API:\n{error_details}"
             
             self.workflow.main_window.log_message(f"Error seeding report: {error_details}")
-            
+            self.report_button.setVisible(True)
+            self.report_button.setEnabled(True)
             QMessageBox.critical(
                 self,
                 "Network Error",
-                error_msg
+                error_msg + "\n\nYou can use 'Generate Report' to save the report locally."
             )
         except Exception as e:
             # Ensure progress dialog is closed on error - use hide + deleteLater
@@ -5493,10 +4883,12 @@ class MultiTaskAnalysisDialog(QDialog):
             progress.close()
             progress.deleteLater()
             QtWidgets.QApplication.processEvents()
+            self.report_button.setVisible(True)
+            self.report_button.setEnabled(True)
             QMessageBox.critical(
                 self,
                 "Error",
-                f"Unexpected error while seeding report:\n{str(e)}"
+                f"Unexpected error while seeding report:\n{str(e)}\n\nYou can use 'Generate Report' to save the report locally."
             )
     
     def on_back(self):
@@ -5569,7 +4961,17 @@ class SequentialBrainLinkAnalyzerWindow(EnhancedBrainLinkAnalyzerWindow):
     
     def start_workflow(self):
         """Begin the sequential workflow"""
-        self.workflow.go_to_step(WorkflowStep.OS_SELECTION)
+        # OS is always Windows by default
+        self.user_os = "Windows"
+        # Partner ID defaults to PARTNER_000001
+        self.partner_id = "PARTNER_000001"
+        # Protocol defaults to Personal Pathway
+        self._selected_protocol = "Personal Pathway"
+        try:
+            self._apply_protocol_filter()
+        except Exception:
+            pass
+        self.workflow.go_to_step(WorkflowStep.ENVIRONMENT_SELECTION)
     
     def closeEvent(self, event):
         """Handle window close with confirmation"""

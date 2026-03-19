@@ -214,8 +214,8 @@ AVAILABLE_TASKS = {
         'instructions': '🔊 EYES CLOSED TASK - Visualize walking through your home in rich sensory detail.\n\nAudio cues:\n• 1st beep = Read instructions on screen\n• 2nd beep = Close eyes & start visualizing\n• 2 beeps = Task complete, you can stop',
         'phases': ['analyze', 'rest'],
         'phase_structure': [
-            {'type': 'cue', 'duration': 8, 'record': False, 'instruction': 'CUE: Visualize walking through your home in rich sensory detail continuously. (Start on beep sound).'},
-            {'type': 'task', 'duration': 52, 'record': True, 'instruction': 'IMAGERY: Visualize walking through your home in rich sensory detail continuously.'}
+            {'type': 'cue', 'duration': 8, 'record': False, 'instruction': 'CUE: Close your eyes and visualize walking through your home in rich sensory detail continuously. (Start on beep sound).'},
+            {'type': 'task', 'duration': 52, 'record': True, 'instruction': 'IMAGERY: Close your eyes and visualize walking through your home in rich sensory detail continuously.'}
         ]
     },
     'attention_focus': {
@@ -225,8 +225,8 @@ AVAILABLE_TASKS = {
         'instructions': '🔊 EYES CLOSED TASK - Focus all attention on your breathing. Count breaths 1–10 and repeat.\n\nAudio cues:\n• 1st beep = Read instructions on screen\n• 2nd beep = Close eyes & start focusing\n• 2 beeps = Task complete, you can stop',
         'phases': ['analyze', 'rest'],
         'phase_structure': [
-            {'type': 'cue', 'duration': 8, 'record': False, 'instruction': 'FOCUS: Attend only to breathing. Count breaths 1–10 and restart; gently return if distracted with EYES CLOSED.'},
-            {'type': 'task', 'duration': 52, 'record': True, 'instruction': 'FOCUS: Attend only to breathing. Count breaths 1–10 and restart; gently return if distracted with EYES CLOSED.'}
+            {'type': 'cue', 'duration': 8, 'record': False, 'instruction': 'FOCUS: Close your eyes and focus on your breathing. Breathe slowly while counting1–10 and repeat. Start on beep sound.'},
+            {'type': 'task', 'duration': 52, 'record': True, 'instruction': 'FOCUS: Close your eyes and focus on your breathing. Breathe slowly while counting 1–10 and repeat.'}
         ]
     },
     'mental_math': {
@@ -236,7 +236,7 @@ AVAILABLE_TASKS = {
         'instructions': '🔊 EYES CLOSED TASK - Count backwards from 200 by 7s: 200, 193, 186, 179...\n\nAudio cues:\n• 1st beep = Read instructions on screen\n• 2nd beep = Close eyes & start counting\n• 2 beeps = Task complete, you can stop',
         'phases': ['analyze', 'rest'],
         'phase_structure': [
-            {'type': 'cue', 'duration': 8, 'record': False, 'instruction': 'CUE: Prepare to count backwards from 200 by 7s with your EYES CLOSED.'},
+            {'type': 'cue', 'duration': 8, 'record': False, 'instruction': 'CUE: Prepare to count backwards from 200 by 7s with your EYES CLOSED. Start at the sound of the beep.'},
             {'type': 'task', 'duration': 52, 'record': True, 'instruction': 'COUNT: 200, 193, 186, 179... Keep counting backwards by 7s.'}
         ]
     },

@@ -1,0 +1,523 @@
+/* Live EEG Reading Page Styles */
+
+/* Custom EEG Header */
+.eeg-header {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    padding: 16px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-left,
+.header-center,
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Battery Indicator */
+.battery-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+}
+
+.battery-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.battery-bar-container {
+    width: 120px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.battery-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #27ae60 0%, #2ecc71 100%);
+    transition: width 0.3s ease;
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+}
+
+.battery-percentage {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #2ecc71;
+}
+
+/* Status Items */
+.header-center {
+    flex: 1;
+    justify-content: center;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+}
+
+.status-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.status-icon {
+    font-size: 1.1rem;
+}
+
+.status-icon.warning {
+    color: #f39c12;
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.7;
+        transform: scale(1.1);
+    }
+}
+
+.status-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.warning-text {
+    color: #e74c3c;
+}
+
+.good-text {
+    color: #2ecc71;
+}
+
+.status-icon.good {
+    color: #2ecc71;
+}
+
+.header-user {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.status-divider {
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 1.2rem;
+    margin: 0 10px;
+}
+
+/* Help Button */
+.help-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: rgba(52, 152, 219, 0.8);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.help-btn:hover {
+    background: rgba(52, 152, 219, 1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+}
+
+.help-icon {
+    font-size: 1.2rem;
+}
+
+/* EEG Page */
+.eeg-page {
+    max-width: 900px;
+    width: 100%;
+    padding: 350px 20px 30px 20px;
+}
+
+.page-header-eeg {
+    margin-bottom: 30px;
+    text-align: left;
+}
+
+.page-title-eeg {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 8px;
+}
+
+.step-indicator {
+    font-size: 1rem;
+    color: #7f8c8d;
+    font-weight: 500;
+}
+
+/* Info Box */
+.info-box {
+    display: flex;
+    gap: 15px;
+    padding: 20px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-left: 5px solid #2196f3;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+}
+
+.info-icon {
+    font-size: 1.8rem;
+    color: #2196f3;
+}
+
+.info-content {
+    flex: 1;
+}
+
+.info-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1976d2;
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.info-subtitle {
+    font-size: 0.95rem;
+    color: #0d47a1;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+/* EEG Chart */
+.eeg-chart-container {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    margin-bottom: 25px;
+}
+
+.chart-header {
+    background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+    color: white;
+    padding: 15px 20px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.chart-area {
+    background: #000;
+    padding: 20px;
+    min-height: 320px;
+    position: relative;
+}
+
+.eeg-grid {
+    width: 100%;
+    height: 100%;
+}
+
+/* Warning Box */
+.warning-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+    border-left: 5px solid #e74c3c;
+    border-radius: 10px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15);
+}
+
+.warning-icon-box {
+    font-size: 1.5rem;
+    color: #e74c3c;
+}
+
+.warning-message {
+    font-size: 0.95rem;
+    color: #c0392b;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+/* Device Disconnect Button */
+.device-disconnect-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+    margin-bottom: 30px;
+}
+
+.device-disconnect-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(243, 156, 18, 0.4);
+}
+
+.disconnect-icon {
+    font-size: 1.2rem;
+}
+
+/* Navigation Buttons */
+.navigation-buttons-eeg {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    margin-top: 30px;
+}
+
+.btn-back-eeg,
+.btn-next-eeg {
+    padding: 14px 32px;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-back-eeg {
+    background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(127, 140, 141, 0.3);
+}
+
+.btn-back-eeg:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(127, 140, 141, 0.4);
+}
+
+.btn-next-eeg {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.btn-next-eeg:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(52, 152, 219, 0.4);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .eeg-header {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px 20px;
+    }
+
+    .header-center {
+        width: 100%;
+        justify-content: space-around;
+    }
+
+    .eeg-page {
+        padding: 20px 15px;
+    }
+
+    .page-title-eeg {
+        font-size: 1.5rem;
+    }
+
+    .info-box {
+        flex-direction: column;
+    }
+
+    .navigation-buttons-eeg {
+        flex-direction: column;
+    }
+
+    .btn-back-eeg,
+    .btn-next-eeg {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ── Disabled next button ──────────────────────────────────────────────────── */
+.btn-next-eeg:disabled {
+    background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+    opacity: 0.7;
+}
+
+/* ── Device scan section ───────────────────────────────────────────────────── */
+.device-scan-section {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    margin-bottom: 25px;
+}
+
+.scan-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.scan-status.scanning {
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    color: #1565c0;
+    border-left: 5px solid #2196f3;
+}
+
+.scan-status.warn {
+    background: linear-gradient(135deg, #fff8e1, #ffecb3);
+    color: #e65100;
+    border-left: 5px solid #f39c12;
+}
+
+.scan-status.error {
+    background: linear-gradient(135deg, #ffebee, #ffcdd2);
+    color: #b71c1c;
+    border-left: 5px solid #e74c3c;
+}
+
+.scan-spinner {
+    font-size: 1.4rem;
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── Port list ─────────────────────────────────────────────────────────────── */
+.port-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.port-item-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    background: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    gap: 20px;
+}
+
+.port-item-btn:hover {
+    border-color: #3498db;
+    background: #e8f4fd;
+    transform: translateX(4px);
+}
+
+.port-path {
+    font-family: monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+.port-desc {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+}
+
+/* ── Rescan button ─────────────────────────────────────────────────────────── */
+.rescan-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.rescan-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(102, 126, 234, 0.4);
+}
+
+/* ── Signal quality line (below chart) ─────────────────────────────────────── */
+.signal-quality-line {
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    letter-spacing: 0.02em;
+}
+
+.signal-quality-line.sig-good {
+    color: #27ae60;
+    background: rgba(39, 174, 96, 0.08);
+    border: 1px solid rgba(39, 174, 96, 0.25);
+}
+
+.signal-quality-line.sig-warn {
+    color: #e67e22;
+    background: rgba(230, 126, 34, 0.08);
+    border: 1px solid rgba(230, 126, 34, 0.25);
+}

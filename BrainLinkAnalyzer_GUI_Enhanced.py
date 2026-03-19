@@ -6697,6 +6697,8 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                 if ptype == 'video' and task_type == 'curiosity':
                     # Play integrated curiosity video (prefers curiosity_clip_04.mp4)
                     _play_video(phase.get('media_file', 'curiosity_clip_04.mp4'))
+                    instruction_label.setVisible(True)
+                    next_phase_label.setVisible(True)
                 elif task_type == 'emotion_face' and ptype in ('viewing','writing'):
                     imgs = (task_cfg.get('media') or {}).get('images', [])
                     idx = phase.get('media_index', 0)
@@ -6707,6 +6709,8 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                         media_label.setVisible(True)
                     except Exception:
                         pass
+                    instruction_label.setVisible(True)
+                    next_phase_label.setVisible(True)
                     if 0 <= idx < len(imgs):
                         _set_image(imgs[idx])
                     else:
@@ -6719,6 +6723,8 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                         media_label.setVisible(True)
                     except Exception:
                         pass
+                    instruction_label.setVisible(True)
+                    next_phase_label.setVisible(True)
                     img_name = phase.get('media_file')
                     # For order_surprise / num_form always route through fullscreen helper
                     # so ORDER/NUMBERS first viewing uses identical scaling path as SURPRISE/FORMS.
@@ -6744,9 +6750,33 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                         if self._video_widget:
                             self._video_widget.setVisible(False)
                         media_label.setVisible(True)
-                        media_label.clear()
+                        # Show instruction big and centered inside the empty box
+                        try:
+                            import html as _html_mod
+                            _escaped = _html_mod.escape(instr_txt).replace('\n', '<br>')
+                        except Exception:
+                            _escaped = instr_txt.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br>')
+                        _next_hint = next_phase_label.text()
+                        if _next_hint:
+                            try:
+                                import html as _html_mod2
+                                _next_escaped = _html_mod2.escape(_next_hint)
+                            except Exception:
+                                _next_escaped = _next_hint.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                            _hint_html = f'<br><span style="font-size:15px; color:#BBBBBB; font-style:italic;">{_next_escaped}</span>'
+                        else:
+                            _hint_html = ""
+                        media_label.setText(
+                            f'<div style="text-align:center; padding:40px;">'
+                            f'<span style="font-size:26px; font-weight:600; color:#ffffff; line-height:1.6;">{_escaped}</span>'
+                            f'{_hint_html}'
+                            f'</div>'
+                        )
+                        media_label.setAlignment(Qt.AlignCenter)
+                        instruction_label.setVisible(False)
+                        next_phase_label.setVisible(False)
                     except Exception:
-                        pass
+                        media_label.clear()
                     try:
                         _close_fullscreen_image()
                     except Exception:
