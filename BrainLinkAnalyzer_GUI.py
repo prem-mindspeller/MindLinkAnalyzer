@@ -258,8 +258,8 @@ AVAILABLE_TASKS = {
         'instructions': '🔊 EYES CLOSED TASK - Focus all attention on your breathing. Count breaths 1–10 and repeat.\n\nAudio cues:\n• 1st beep = Read instructions on screen\n• 2nd beep = Close eyes & start focusing\n• 2 beeps = Task complete, you can stop',
         'phases': ['analyze', 'rest'],
         'phase_structure': [
-            {'type': 'cue', 'duration': 8, 'record': False, 'instruction': 'FOCUS: Attend only to breathing. Count breaths 1–10 and restart; gently return if distracted with EYES CLOSED.'},
-            {'type': 'task', 'duration': 52, 'record': True, 'instruction': 'FOCUS: Attend only to breathing. Count breaths 1–10 and restart; gently return if distracted with EYES CLOSED.'}
+            {'type': 'cue', 'duration': 8, 'record': False, 'instruction': 'FOCUS:Breath slowly and count 1–10, then repeat. Keep your attention fully on the sensation of breathing with EYES CLOSED. Start on beep sound.'},
+            {'type': 'task', 'duration': 52, 'record': True, 'instruction': 'FOCUS: Breath slowly and count 1–10, then repeat. Keep your attention fully on the sensation of breathing with EYES CLOSED.'}
         ]
     },
     'language_processing': {

@@ -2028,6 +2028,7 @@ class LoginDialog(QDialog):
                 
                 if jwt_token:
                     self.workflow.main_window.jwt_token = jwt_token
+                    self.workflow.main_window.logged_in_email = username
                     self.workflow.main_window.log_message("Login successful. JWT token obtained.")
                     
                     if hwid:
@@ -2068,9 +2069,32 @@ class LoginDialog(QDialog):
                     self.login_button.setEnabled(True)
                     self.back_button.setEnabled(True)
             else:
+                status = login_response.status_code
+                status_messages = {
+                    400: "Bad request — please check your credentials.",
+                    401: "Incorrect email or password.",
+                    403: "Account access denied. Contact support if this is unexpected.",
+                    404: "Login service not found. Please try again later.",
+                    429: "Too many login attempts. Please wait a moment and try again.",
+                    500: "Server error. Please try again in a few minutes.",
+                    502: "Server is temporarily unavailable. Please try again later.",
+                    503: "Service unavailable. Please try again later.",
+                }
+                friendly = status_messages.get(status, f"Unexpected error (HTTP {status}).")
+                try:
+                    err_data = login_response.json()
+                    api_msg = (
+                        err_data.get("detail")
+                        or err_data.get("error")
+                        or err_data.get("message")
+                        or (err_data.get("non_field_errors", [None])[0] if isinstance(err_data.get("non_field_errors"), list) else None)
+                    )
+                except Exception:
+                    api_msg = None
+                detail_line = f"\nServer: {api_msg}" if api_msg else ""
                 self.error_info_label.setText(
-                    "Warning: AUTHENTICATION FAILED\n\n"
-                    f"Login failed with status code: {login_response.status_code}\n\n"
+                    f"Warning: AUTHENTICATION FAILED (HTTP {status})\n\n"
+                    f"{friendly}{detail_line}\n\n"
                     "TO RESOLVE:\n"
                     "1. Verify your email and password are correct\n"
                     "2. Check your internet connection\n"
@@ -2083,10 +2107,41 @@ class LoginDialog(QDialog):
                 self.login_button.setEnabled(True)
                 self.back_button.setEnabled(True)
                 
-        except Exception as e:
+        except requests.exceptions.ConnectionError:
+            err_msg = "Could not reach the login server. Check your internet connection."
             self.error_info_label.setText(
-                "Warning: AUTHENTICATION ERROR\n\n"
-                f"Error: {str(e)}\n\n"
+                "Warning: CONNECTION ERROR\n\n"
+                f"{err_msg}\n\n"
+                "TO RESOLVE:\n"
+                "1. Check your internet connection\n"
+                "2. If the problem persists, close this application\n"
+                "3. Restart the application and try again"
+            )
+            self.error_info_label.setVisible(True)
+            self.status_label.setText("Connection error. Please follow the instructions above.")
+            self.status_label.setStyleSheet("color: #dc2626; font-size: 12px;")
+            self.login_button.setEnabled(True)
+            self.back_button.setEnabled(True)
+        except requests.exceptions.Timeout:
+            self.error_info_label.setText(
+                "Warning: CONNECTION TIMED OUT\n\n"
+                "The login server did not respond in time.\n\n"
+                "TO RESOLVE:\n"
+                "1. Check your internet connection\n"
+                "2. Try again in a few moments\n"
+                "3. If the problem persists, restart the application"
+            )
+            self.error_info_label.setVisible(True)
+            self.status_label.setText("Timeout. Please follow the instructions above.")
+            self.status_label.setStyleSheet("color: #dc2626; font-size: 12px;")
+            self.login_button.setEnabled(True)
+            self.back_button.setEnabled(True)
+        except Exception as e:
+            # Show only a short, sanitized summary — never dump raw exception bodies
+            short = type(e).__name__
+            self.error_info_label.setText(
+                f"Warning: AUTHENTICATION ERROR ({short})\n\n"
+                "An unexpected error occurred during login.\n\n"
                 "TO RESOLVE:\n"
                 "1. Check your internet connection\n"
                 "2. Verify your credentials are correct\n"
@@ -3429,7 +3484,8 @@ class TaskSelectionDialog(QDialog):
         self.setWindowTitle("MindLink - Task Selection")
         self.setModal(True)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
-        self.setMinimumSize(550, 500)
+        self.setMinimumSize(760, 620)
+        self.resize(900, 680)
         
         # Set window icon
         set_window_icon(self)
@@ -3514,6 +3570,7 @@ class TaskSelectionDialog(QDialog):
         # Task preview card
         preview_card = QFrame()
         preview_card.setObjectName("DialogCard")
+        preview_card.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         preview_layout = QVBoxLayout(preview_card)
         preview_layout.setContentsMargins(16, 16, 16, 16)
         preview_layout.setSpacing(10)
@@ -3521,21 +3578,29 @@ class TaskSelectionDialog(QDialog):
         preview_title = QLabel("Task Details:")
         preview_title.setObjectName("DialogSectionTitle")
         
-        self.task_description = QLabel()
-        self.task_description.setWordWrap(True)
-        self.task_description.setTextFormat(Qt.RichText)
-        self.task_description.setStyleSheet("font-size: 13px; color: #475569;")
+        self.task_description = QtWidgets.QTextBrowser()
+        self.task_description.setOpenExternalLinks(False)
+        self.task_description.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.task_description.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.task_description.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.task_description.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.task_description.setMinimumHeight(180)
+        self.task_description.document().setDocumentMargin(0)
+        self.task_description.setStyleSheet(
+            "QTextBrowser { background: transparent; border: none; font-size: 13px; color: #475569; }"
+        )
         
         self.start_task_button = QPushButton("Start This Task")
         self.start_task_button.clicked.connect(self.start_selected_task)
         self.start_task_button.setStyleSheet("padding: 10px; font-size: 14px; font-weight: 600;")
         
         preview_layout.addWidget(preview_title)
-        preview_layout.addWidget(self.task_description)
+        preview_layout.addWidget(self.task_description, 1)
         preview_layout.addWidget(self.start_task_button)
         
         # Completed tasks info
         self.completed_label = QLabel()
+        self.completed_label.setWordWrap(True)
         self.completed_label.setStyleSheet("font-size: 12px; color: #64748b; padding: 8px;")
         self.update_completed_tasks_display()
         
@@ -3575,7 +3640,7 @@ class TaskSelectionDialog(QDialog):
         layout.addWidget(title_label)
         layout.addWidget(subtitle_label)
         layout.addWidget(task_card)
-        layout.addWidget(preview_card)
+        layout.addWidget(preview_card, 1)
         layout.addWidget(self.completed_label)
         layout.addLayout(nav_layout)
         
@@ -3705,7 +3770,7 @@ class TaskSelectionDialog(QDialog):
         
         # Safety check: if task_id is None (combo rebuilding or empty), do nothing
         if not task_id:
-            self.task_description.setText("Please select a task to view details")
+            self.task_description.setHtml("<p>Please select a task to view details.</p>")
             self.start_task_button.setEnabled(False)
             return
         
@@ -3751,7 +3816,7 @@ class TaskSelectionDialog(QDialog):
                     "</span>"
                 )
             
-            self.task_description.setText(preview_text)
+            self.task_description.setHtml(preview_text)
             
             # Disable start button if task is completed or locked
             can_start = not is_completed and not is_locked
@@ -3763,7 +3828,7 @@ class TaskSelectionDialog(QDialog):
             else:
                 self.start_task_button.setText("Start This Task")
         else:
-            self.task_description.setText("Task information not available")
+            self.task_description.setHtml("<p>Task information not available.</p>")
             self.start_task_button.setEnabled(False)
     
     def start_selected_task(self):
@@ -4580,87 +4645,22 @@ class MultiTaskAnalysisDialog(QDialog):
         
         # Store protocol type for API call
         self.current_protocol_type = protocol_type
-        
-        # Create confirmation dialog with email input
-        dialog = QDialog(self)
-        protocol_display = "Initial Protocol" if protocol_type == "initial" else "Advanced Protocol"
-        dialog.setWindowTitle(f"Seed {protocol_display} Report")
-        dialog.setModal(True)
-        dialog.setMinimumWidth(450)
-        
-        # Set window icon
-        set_window_icon(dialog)
-        
-        layout = QVBoxLayout()
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(18)
-        
-        # Title
-        title = QLabel(f"Confirm {protocol_display} Seeding")
-        title.setObjectName("DialogTitle")
-        
-        # Info text
-        info = QLabel(f"Enter the email address for which this {protocol_display} EEG report should be seeded in the database:")
-        info.setWordWrap(True)
-        info.setStyleSheet("font-size: 13px; color: #475569; margin-bottom: 8px;")
-        
-        # Email input
-        email_label = QLabel("Email Address:")
-        email_label.setStyleSheet("font-size: 13px; font-weight: 600; color: #1f2937;")
-        
-        email_input = QLineEdit()
-        email_input.setPlaceholderText("user@example.com")
-        email_input.setClearButtonEnabled(True)
-        
-        # Get saved username as default
-        settings = QSettings("MindLink", "FeatureAnalyzer")
-        saved_email = settings.value("username", "")
-        email_input.setText(saved_email)
-        
-        # Button layout
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e2e8f0;
-                color: #475569;
-                padding: 8px 18px;
-            }
-            QPushButton:hover {
-                background-color: #cbd5e1;
-            }
-        """)
-        cancel_btn.clicked.connect(dialog.reject)
-        
-        confirm_btn = QPushButton("Confirm & Seed")
-        confirm_btn.setStyleSheet("padding: 8px 18px;")
-        confirm_btn.clicked.connect(dialog.accept)
-        
-        button_layout.addWidget(cancel_btn)
-        button_layout.addWidget(confirm_btn)
-        
-        # Assembly
-        layout.addWidget(title)
-        layout.addWidget(info)
-        layout.addWidget(email_label)
-        layout.addWidget(email_input)
-        layout.addLayout(button_layout)
-        
-        dialog.setLayout(layout)
-        apply_modern_dialog_theme(dialog)
-        
-        # Show dialog
-        if dialog.exec() == QDialog.Accepted:
-            email = email_input.text().strip()
-            
-            if not email:
-                QMessageBox.warning(self, "Invalid Email", "Please enter a valid email address.")
-                return
-            
-            # Send report to API
-            self._send_report_to_api(email)
+
+        # Use the email from the authenticated login session (no confirmation popup)
+        email = str(getattr(self.workflow.main_window, 'logged_in_email', '') or '').strip()
+        if not email:
+            settings = QSettings("MindLink", "FeatureAnalyzer")
+            email = str(settings.value("username", "") or "").strip()
+
+        if not email:
+            QMessageBox.warning(
+                self,
+                "Email Not Found",
+                "No logged-in email was found. Please sign in again and retry seeding."
+            )
+            return
+
+        self._send_report_to_api(email)
     
     def _send_report_to_api(self, email):
         """Send the report to the seeding API endpoint with protocol_type"""
@@ -4775,38 +4775,47 @@ class MultiTaskAnalysisDialog(QDialog):
                 # Create a success dialog with enhanced styling
                 success_dialog = QMessageBox(self)
                 success_dialog.setWindowTitle("Report Seeded Successfully")
-                success_dialog.setIcon(QMessageBox.Information)
+                success_dialog.setIcon(QMessageBox.NoIcon)
                 
                 success_message = (
-                    " Your EEG report has been successfully sent to the Mindspeller database!\n\n"
-                    "Report Details:\n"
-                    f"• User ID: {result.get('user_id', 'N/A')}\n"
-                    f"• Session ID: {result.get('session_id', 'N/A')}\n"
-                    f"• Report ID: {result.get('report_id', 'N/A')}\n\n"
-                    "Your neuroprofiling report is now available in your Mindspeller account.\n"
-                    "You can access it immediately at mindspeller.com\n"
-                    "You can safely close this application now.\n\n"
-                    "Thank you for using MindLink Analyzer!"
+                    "<div style='text-align:center; line-height:1.5;'>"
+                    "<div style='font-size:24px; font-weight:900; color:#14532d; margin-bottom:12px;'>"
+                    "REPORT UPLOADED SUCCESSFULLY"
+                    "</div>"
+                    "<div style='font-size:18px; font-weight:800; color:#166534;'>"
+                    "Your EEG report is now in the Mindspeller database."
+                    "</div>"
+                    "<div style='font-size:15px; font-weight:700; color:#166534; margin-top:14px;'>"
+                    "Return to the website, refresh the page, then click Unlock to generate your Neuroprofile."
+                    "</div>"
+                    "</div>"
                 )
                 
                 success_dialog.setText(success_message)
+                success_dialog.setTextFormat(Qt.RichText)
                 success_dialog.setStandardButtons(QMessageBox.Ok)
+                msg_label = success_dialog.findChild(QLabel, "qt_msgbox_label")
+                if msg_label is not None:
+                    msg_label.setAlignment(Qt.AlignCenter)
                 
                 # Style the dialog
                 success_dialog.setStyleSheet("""
                     QMessageBox {
                         background-color: #f0fdf4;
                     }
-                    QLabel {
+                    QLabel#qt_msgbox_label {
                         color: #166534;
-                        font-size: 13px;
+                        font-size: 16px;
+                        font-weight: 700;
+                        min-width: 540px;
                     }
                     QPushButton {
                         background-color: #10b981;
                         color: white;
-                        padding: 8px 24px;
+                        padding: 10px 28px;
                         border-radius: 6px;
-                        font-weight: 600;
+                        font-weight: 800;
+                        font-size: 14px;
                     }
                     QPushButton:hover {
                         background-color: #059669;

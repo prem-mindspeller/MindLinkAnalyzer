@@ -6076,6 +6076,9 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
             # Image placeholder (used for non-video media) with size constraints
             media_label = QLabel("")
             media_label.setAlignment(Qt.AlignCenter)
+            media_label.setWordWrap(True)
+            media_label.setTextFormat(Qt.RichText)
+            media_label.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
             media_label.setStyleSheet("background:#222;border:1px solid #333;padding:4px;")
             # Set maximum height to prevent overflow - images will be scaled to fit
             try:
@@ -6127,12 +6130,8 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
             prompt_label = QLabel("")
             prompt_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
             prompt_label.setWordWrap(True)
+            prompt_label.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
             prompt_label.setStyleSheet("font-size:13px;margin-top:6px;")
-            # Constrain prompt label height to prevent excessive growth
-            try:
-                prompt_label.setMaximumHeight(150)
-            except Exception:
-                pass
             layout.addWidget(prompt_label)
 
             stop_btn = QPushButton("Stop Now")
@@ -6663,6 +6662,10 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                 except Exception:
                     pass
                 instruction_label.setText(instr_txt)
+                instruction_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+                instruction_label.setStyleSheet("font-size:16px;line-height:1.4;")
+                next_phase_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+                next_phase_label.setStyleSheet("font-size:11px;color:#BBBBBB;font-style:italic;margin-top:2px;")
 
                 # Action banner + color
                 try:
@@ -6749,32 +6752,18 @@ class EnhancedBrainLinkAnalyzerWindow(BL.BrainLinkAnalyzerWindow):
                     try:
                         if self._video_widget:
                             self._video_widget.setVisible(False)
-                        media_label.setVisible(True)
-                        # Show instruction big and centered inside the empty box
-                        try:
-                            import html as _html_mod
-                            _escaped = _html_mod.escape(instr_txt).replace('\n', '<br>')
-                        except Exception:
-                            _escaped = instr_txt.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br>')
-                        _next_hint = next_phase_label.text()
-                        if _next_hint:
-                            try:
-                                import html as _html_mod2
-                                _next_escaped = _html_mod2.escape(_next_hint)
-                            except Exception:
-                                _next_escaped = _next_hint.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                            _hint_html = f'<br><span style="font-size:15px; color:#BBBBBB; font-style:italic;">{_next_escaped}</span>'
-                        else:
-                            _hint_html = ""
-                        media_label.setText(
-                            f'<div style="text-align:center; padding:40px;">'
-                            f'<span style="font-size:26px; font-weight:600; color:#ffffff; line-height:1.6;">{_escaped}</span>'
-                            f'{_hint_html}'
-                            f'</div>'
+                        media_label.clear()
+                        media_label.setVisible(False)
+                        instruction_label.setVisible(True)
+                        next_phase_label.setVisible(True)
+                        instruction_label.setAlignment(Qt.AlignCenter)
+                        instruction_label.setStyleSheet(
+                            "font-size:26px;font-weight:600;color:#ffffff;line-height:1.6;padding:24px 12px;"
                         )
-                        media_label.setAlignment(Qt.AlignCenter)
-                        instruction_label.setVisible(False)
-                        next_phase_label.setVisible(False)
+                        next_phase_label.setAlignment(Qt.AlignCenter)
+                        next_phase_label.setStyleSheet(
+                            "font-size:15px;color:#BBBBBB;font-style:italic;margin-top:2px;"
+                        )
                     except Exception:
                         media_label.clear()
                     try:
