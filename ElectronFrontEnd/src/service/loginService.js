@@ -1,9 +1,7 @@
 const API_ENDPOINTS = {
-    en: "https://stg-en.mindspell.be",
-    nl: "https://stg-nl.mindspell.be",
-    local: "http://127.0.0.1:5000"
+    en: 'https://en.mindspeller.com',
+    nl: 'https://nl.mindspeller.com',
 };
-
 
 const loginUser = async (email, password, region = 'en') => {
     const baseUrl = API_ENDPOINTS[region]
@@ -24,8 +22,20 @@ const loginUser = async (email, password, region = 'en') => {
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Login failed: ${response.status} - ${errorText}`);
+            const status = response.status;
+            let message;
+            if (status === 401 || status === 403) {
+                message = 'Incorrect email or password. Please try again.';
+            } else if (status === 503 || status === 502) {
+                message = 'The server is temporarily unavailable. Please try again in a few minutes.';
+            } else if (status >= 500) {
+                message = `Server error (${status}). Please try again later.`;
+            } else if (status === 404) {
+                message = 'Login service not found. Please check your region selection.';
+            } else {
+                message = `Login failed (${status}). Please try again.`;
+            }
+            throw new Error(message);
         }
 
         const data = await response.json();
@@ -38,6 +48,10 @@ const loginUser = async (email, password, region = 'en') => {
         sessionStorage.setItem('jwtToken', token);
         sessionStorage.setItem('loggedInUser', email);
         sessionStorage.setItem('region', region);
+        if (data['x-jwt-refresh-token']) {
+            sessionStorage.setItem('jwtRefreshToken', data['x-jwt-refresh-token']);
+        }
+        _startRefreshInterval();
 
         return {
             success: true,
@@ -70,10 +84,66 @@ const getRegion = () => {
 };
 
 const logout = () => {
+    _stopRefreshInterval();
     sessionStorage.removeItem('jwtToken');
+    sessionStorage.removeItem('jwtRefreshToken');
     sessionStorage.removeItem('loggedInUser');
     sessionStorage.removeItem('region');
+    window.dispatchEvent(new Event('app:logout'));
+};
 
+let _refreshTimer = null;
+
+const _refreshToken = async () => {
+    const refreshToken = sessionStorage.getItem('jwtRefreshToken');
+    const region = getRegion();
+    const baseUrl = API_ENDPOINTS[region];
+    if (!refreshToken) return;
+
+    try {
+        const response = await fetch(`${baseUrl}/api/cas/token/refresh`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${refreshToken}`,
+                'X-Authorization': `Bearer ${refreshToken}`,
+            },
+        });
+
+        if (response.status === 401) {
+            console.warn('[tokenRefresh] Refresh token expired, logging out.');
+            logout();
+            return;
+        }
+
+        if (!response.ok) {
+            console.error('[tokenRefresh] Refresh failed:', response.status);
+            return;
+        }
+
+        const data = await response.json();
+        if (data['x-jwt-access-token']) {
+            sessionStorage.setItem('jwtToken', data['x-jwt-access-token']);
+        }
+        if (data['x-jwt-refresh-token']) {
+            sessionStorage.setItem('jwtRefreshToken', data['x-jwt-refresh-token']);
+        }
+        console.log('[tokenRefresh] Token refreshed successfully.');
+    } catch (err) {
+        console.error('[tokenRefresh] Error during refresh:', err);
+    }
+};
+
+const _startRefreshInterval = () => {
+    _stopRefreshInterval();
+    _refreshTimer = setInterval(_refreshToken, 10 * 60 * 1000);
+};
+
+const _stopRefreshInterval = () => {
+    if (_refreshTimer) {
+        clearInterval(_refreshTimer);
+        _refreshTimer = null;
+    }
 };
 
 const checkPartnerBookings = async (partnerId) => {
@@ -130,7 +200,8 @@ const loginService = {
     getRegion,
     logout,
     isAuthenticated,
-    checkPartnerBookings
+    checkPartnerBookings,
+    refreshToken: _refreshToken,
 };
 
 export default loginService;

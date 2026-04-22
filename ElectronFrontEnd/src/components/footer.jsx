@@ -3,7 +3,7 @@ import React from 'react';
 const Footer = () => {
     return (
         <footer className="app-footer">
-            <p>BrainLink Analyzer v1.0.0 | © 2026 Mindspeller</p>
+            <p>Mindlink Analyzer v1.0.0 | &copy; <span id="current-year">{new Date().getFullYear()}</span> Mindspeller</p>
         </footer>
     );
 }

@@ -1,4 +1,4 @@
-# BrainLink Analyzer - Electron + React Frontend
+# Mindlink Analyzer - Electron + React Frontend
 
 Modern desktop frontend for the BrainLink EEG Analysis System built with Electron and React.
 

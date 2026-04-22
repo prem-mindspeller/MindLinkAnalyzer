@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import eegConnectService, { CONNECTION_STATUS } from '../service/EegConnectService';
+import eegConnectService, { CONNECTION_STATUS } from '../service/wsEegService';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCircleCheck, faTriangleExclamation, faBatteryFull } from '@fortawesome/free-solid-svg-icons';
+import StepInfoPopup from './StepInfoPopup';
 
 const LoggedInHeader = () => {
     const [battery, setBattery] = useState(eegConnectService.getBattery());
@@ -10,6 +13,7 @@ const LoggedInHeader = () => {
         const unsubBattery = eegConnectService.on('battery', setBattery);
         const unsubEeg = eegConnectService.on('eegData', d => setPoorSignal(d.poorSignal));
         const unsubStatus = eegConnectService.on('status', setStatus);
+        eegConnectService.fetchStatus();
         return () => { unsubBattery(); unsubEeg(); unsubStatus(); };
     }, []);
 
@@ -24,8 +28,8 @@ const LoggedInHeader = () => {
 
     const signalText = !isConnected ? 'No Device'
         : poorSignal >= 200 ? 'Not Worn'
-            : poorSignal < 25 ? 'Signal: Good ✅'
-                : 'Signal: Poor ⚠';
+            : poorSignal < 25 ? 'Signal: Good'
+                : 'Signal: Noisy';
 
     const signalClass = isConnected && poorSignal < 25 ? 'good' : 'warning';
     const deviceClass = isConnected ? 'good' : 'warning';
@@ -34,7 +38,8 @@ const LoggedInHeader = () => {
         <header className="eeg-header">
             <div className="header-left">
                 <div className="battery-indicator">
-                    <span className="battery-label">Battery</span>
+                    <FontAwesomeIcon icon={faBatteryFull} style={{ marginRight: 6 }} />
+                    {/* <span className="battery-label">Battery</span> */}
                     {battery != null ? (
                         <>
                             <div className="battery-bar-container">
@@ -52,7 +57,7 @@ const LoggedInHeader = () => {
                 <div className="status-item">
                     <span className="status-label">Device:</span>
                     <span className={`status-icon ${deviceClass}`}>
-                        {isConnected ? '✅' : '⚠'}
+                        <FontAwesomeIcon icon={isConnected ? faCircleCheck : faTriangleExclamation} />
                     </span>
                     <span className={`status-value ${deviceClass}-text`}>{deviceText}</span>
                 </div>
@@ -60,13 +65,14 @@ const LoggedInHeader = () => {
                 <div className="status-item">
                     <span className="status-label">Signal:</span>
                     <span className={`status-icon ${signalClass}`}>
-                        {isConnected && poorSignal < 25 ? '✅' : '⚠'}
+                        <FontAwesomeIcon icon={isConnected && poorSignal < 25 ? faCircleCheck : faTriangleExclamation} />
                     </span>
                     <span className={`status-value ${signalClass}-text`}>{signalText}</span>
                 </div>
             </div>
 
             <div className="header-right">
+                <StepInfoPopup />
                 <span className="header-user">
                     {sessionStorage.getItem('loggedInUser') || ''}
                 </span>

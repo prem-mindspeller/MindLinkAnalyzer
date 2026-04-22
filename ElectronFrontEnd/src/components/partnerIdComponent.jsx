@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import loginService from '../service/loginService';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faXmark, faTriangleExclamation, faArrowRight, faSpinner } from '@fortawesome/free-solid-svg-icons';
 
 const PartnerIdComponent = () => {
-    const [id, setId] = useState(sessionStorage.getItem('partnerId') || '');
+    const [id, setId] = useState(localStorage.getItem('partnerId') || sessionStorage.getItem('partnerId') || '');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
@@ -29,6 +31,7 @@ const PartnerIdComponent = () => {
         }
 
         sessionStorage.setItem('partnerId', trimmedId);
+        localStorage.setItem('partnerId', trimmedId);
         sessionStorage.setItem('hasAdvancedBooking', result.hasAdvancedBooking ? 'true' : 'false');
 
         setIsLoading(false);
@@ -58,7 +61,7 @@ const PartnerIdComponent = () => {
                                 className="clear-btn"
                                 onClick={() => setId('')}
                             >
-                                ✕
+                                <FontAwesomeIcon icon={faXmark} />
                             </button>
                         )}
                     </div>
@@ -66,7 +69,7 @@ const PartnerIdComponent = () => {
 
                 {error && (
                     <div className="error-message">
-                        <span className="error-icon">⚠️</span>
+                        <span className="error-icon"><FontAwesomeIcon icon={faTriangleExclamation} /></span>
                         <span>{error}</span>
                     </div>
                 )}
@@ -78,13 +81,13 @@ const PartnerIdComponent = () => {
                 >
                     {isLoading ? (
                         <>
-                            <span className="spinner"></span>
+                            <FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />
                             Submitting...
                         </>
                     ) : (
                         <>
                             <span>Submit Partner ID</span>
-                            <span className="arrow">→</span>
+                            <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 8 }} />
                         </>
                     )}
                 </button>

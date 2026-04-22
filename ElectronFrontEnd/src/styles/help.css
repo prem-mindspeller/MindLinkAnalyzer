@@ -1,0 +1,243 @@
+/* ============================================================
+   Help Page
+   ============================================================ */
+
+/* Outer wrapper */
+.help-wrapper {
+    width: 100%;
+    max-width: 860px;
+    padding-top: 32px;
+    padding-bottom: 32px;
+}
+
+/* Page header */
+.help-page-header {
+    margin-bottom: 28px;
+}
+
+.help-page-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 6px;
+}
+
+.help-page-subtitle {
+    font-size: 14px;
+    color: #64748b;
+}
+
+/* ── Tab bar ── */
+.help-tab-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.help-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.15s;
+    background: #ffffff;
+    color: #475569;
+    font-family: inherit;
+}
+
+.help-tab-btn.active {
+    background: #3b5bdb;
+    color: #ffffff;
+    border-color: #3b5bdb;
+}
+
+.help-tab-btn:not(.active):hover {
+    border-color: #3b5bdb;
+    color: #3b5bdb;
+}
+
+/* ── Accordion list ── */
+.help-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Accordion card ── */
+.help-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Accordion trigger ── */
+.help-card-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+}
+
+.help-card-trigger:hover {
+    background: #f8fafc;
+}
+
+/* ── Icon badge (Getting Started) ── */
+.help-icon-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #eff6ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3b5bdb;
+    flex-shrink: 0;
+}
+
+.help-icon-badge--tip {
+    background: #fefce8;
+    color: #ca8a04;
+}
+
+/* ── Number badge (User Manual) ── */
+.help-num-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #f0fdf4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #16a34a;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* ── Card title ── */
+.help-card-title {
+    font-weight: 600;
+    font-size: 15px;
+    color: #1e293b;
+    flex: 1;
+}
+
+/* ── Toggle +/− ── */
+.help-toggle {
+    color: #94a3b8;
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1;
+}
+
+/* ── Card body ── */
+.help-card-body {
+    padding: 0 20px 20px 70px;
+    font-size: 14px;
+    color: #475569;
+    line-height: 1.75;
+}
+
+/* Two-column layout: text left, image right */
+.help-card-body-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+}
+
+.help-card-text {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.help-card-img-col {
+    flex: 0 0 auto;
+}
+
+.help-instruction-img {
+    width: 180px;
+    border-radius: 8px;
+    border: 2px solid #cbd5e1;
+    background: #fff;
+    display: block;
+    object-fit: contain;
+}
+
+.help-card-body--manual {
+    padding: 0 20px 20px 62px;
+    font-size: 14px;
+    color: #475569;
+    line-height: 1.75;
+}
+
+/* Spacing helpers inside card body */
+.help-card-body ul,
+.help-card-body ol,
+.help-card-body--manual ul,
+.help-card-body--manual ol {
+    padding-left: 20px;
+}
+
+.help-p-gap {
+    margin-top: 12px;
+}
+
+.help-list-gap {
+    margin-top: 8px;
+}
+
+.help-li-gap {
+    margin-top: 6px;
+}
+
+/* ── Callout notes ── */
+.help-note {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border-left-width: 4px;
+    border-left-style: solid;
+}
+
+.help-note--blue {
+    background: #eff6ff;
+    border-left-color: #3b82f6;
+    color: #1e40af;
+}
+
+.help-note--green {
+    background: #f0fdf4;
+    border-left-color: #22c55e;
+    color: #15803d;
+}
+
+.help-note--yellow {
+    background: #fefce8;
+    border-left-color: #eab308;
+    color: #854d0e;
+}
+
+/* ── Back button row ── */
+.help-back-row {
+    margin-top: 32px;
+}
+
+.help-back-row .btn-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}

@@ -1,4 +1,4 @@
-/* Pathway Page Styles */
+﻿/* Pathway Page Styles */
 
 /* Custom Header - Same as Live EEG */
 .pathway-header {
@@ -127,7 +127,7 @@
 .pathway-page {
     max-width: 900px;
     width: 100%;
-    padding: 400px 20px 30px 20px;
+    padding: 20px 20px 30px 20px;
 }
 
 .page-header-pathway {

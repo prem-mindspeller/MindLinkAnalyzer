@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import loginService from '../service/loginService';
+import wsEegService from '../service/wsEegService';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faXmark, faEye, faEyeSlash, faTriangleExclamation, faSpinner } from '@fortawesome/free-solid-svg-icons';
 
 const LoginFormComponent = ({ onLoginSuccess }) => {
     const [email, setEmail] = useState('');
@@ -12,7 +15,7 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
         e.preventDefault();
         setIsLoading(true);
         setError('');
-        
+
         const region = sessionStorage.getItem('region') || 'en';
 
         try {
@@ -20,6 +23,7 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
 
             if (result.success) {
                 console.log('Login successful');
+                wsEegService.init();
                 onLoginSuccess(email);
             } else {
                 setError(result.error || 'Login failed. Please check your credentials.');
@@ -58,7 +62,7 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
                                 className="clear-btn"
                                 onClick={() => setEmail('')}
                             >
-                                ✕
+                                <FontAwesomeIcon icon={faXmark} />
                             </button>
                         )}
                     </div>
@@ -86,14 +90,14 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
                             className="toggle-password-btn"
                             onClick={() => setShowPassword(!showPassword)}
                         >
-                            {showPassword ? '👁️' : '👁️‍🗨️'}
+                            <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
                         </button>
                     </div>
                 </div>
 
                 {error && (
                     <div className="error-message">
-                        <span className="error-icon">⚠️</span>
+                        <span className="error-icon"><FontAwesomeIcon icon={faTriangleExclamation} /></span>
                         <span>{error}</span>
                     </div>
                 )}
@@ -105,13 +109,11 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
                 >
                     {isLoading ? (
                         <>
-                            <span className="spinner"></span>
+                            <FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />
                             Signing in...
                         </>
                     ) : (
-                        <>
-                            <span>Sign In</span>
-                        </>
+                        <span>Sign In</span>
                     )}
                 </button>
             </form>

@@ -1,0 +1,347 @@
+﻿/* ── Baseline Calibration Page ─────────────────────────────────────────────── */
+
+.calibration-page {
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 20px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex: 1;
+}
+
+/* Header */
+.calibration-header {
+    text-align: center;
+}
+
+.calibration-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 6px;
+}
+
+.calibration-subtitle {
+    font-size: 0.95rem;
+    color: #6b7280;
+}
+
+/* Signal quality badge */
+.cal-signal-badge {
+    display: inline-block;
+    align-self: center;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.cal-signal-good {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.cal-signal-noisy {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.cal-signal-waiting {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+/* Status card */
+.calibration-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.calibration-status-label {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.calibration-phase-label {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+/* Countdown big number */
+.cal-countdown-display {
+    font-size: 4rem;
+    font-weight: 800;
+    color: #2563eb;
+    text-align: center;
+    line-height: 1;
+    margin-top: 8px;
+    animation: cal-pulse 0.8s ease-in-out;
+}
+
+@keyframes cal-pulse {
+    0% {
+        transform: scale(1.4);
+        opacity: 0.6;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Progress bar */
+.cal-progress-wrap {
+    position: relative;
+    background: #e2e8f0;
+    border-radius: 8px;
+    height: 28px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.cal-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #2563eb, #3b82f6);
+    border-radius: 8px;
+    transition: width 0.9s linear;
+}
+
+.cal-progress-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1e3a8a;
+}
+
+/* Phase cards */
+.calibration-phases {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.cal-phase-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 18px 20px;
+    transition: border-color 0.2s;
+}
+
+.cal-phase-card.phase-done {
+    border-color: #059669;
+    background: #f0fdf4;
+}
+
+.cal-phase-card.phase-locked {
+    opacity: 0.5;
+}
+
+.cal-phase-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+}
+
+.cal-phase-info {
+    flex: 1;
+}
+
+.cal-phase-info h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 4px;
+}
+
+.cal-phase-info p {
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.cal-phase-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: #2563eb;
+    color: #fff;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.cal-phase-btn:hover:not(:disabled) {
+    background: #1d4ed8;
+}
+
+.cal-phase-btn:disabled {
+    background: #e2e8f0;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+/* ── Prep modal ── */
+.cal-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+/* ── Eyes-open fixation cross overlay ── */
+.cal-fixation-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.cal-fixation-cross {
+    position: relative;
+    width: 60px;
+    height: 60px;
+}
+
+.cal-fixation-h,
+.cal-fixation-v {
+    position: absolute;
+    background: #fff;
+    border-radius: 2px;
+}
+
+.cal-fixation-h {
+    width: 60px;
+    height: 6px;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+}
+
+.cal-fixation-v {
+    width: 6px;
+    height: 60px;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+}
+
+.cal-fixation-countdown {
+    position: absolute;
+    bottom: 15%;
+    font-size: 4rem;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.cal-fixation-progress {
+    position: absolute;
+    bottom: 10%;
+    width: 40%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.cal-fixation-bar {
+    height: 100%;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+    transition: width 0.9s linear;
+}
+
+.cal-modal-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 36px;
+    max-width: 520px;
+    width: 92%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.cal-modal-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #1f2937;
+    text-align: center;
+}
+
+.cal-modal-instructions {
+    font-size: 0.9rem;
+    color: #475569;
+    line-height: 1.8;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 16px 18px;
+}
+
+.cal-modal-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cal-btn-cancel {
+    padding: 10px 22px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: #e2e8f0;
+    color: #475569;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.cal-btn-cancel:hover {
+    background: #cbd5e1;
+}
+
+.cal-btn-start {
+    padding: 12px 28px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    background: #2563eb;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.cal-btn-start:hover {
+    background: #1d4ed8;
+}
+
+.navigation-buttons-baseline {
+    display: flex;
+    justify-content: space-between;
+    margin-top: auto;
+}

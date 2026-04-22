@@ -149,6 +149,49 @@ function parsePayload(payload) {
     return result
 }
 
+
+const { spawn } = require('child_process')
+const http = require('http')
+
+const backendPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'backend', 'MindlinkBackend.exe')
+    : path.join(__dirname, '..', 'newBackend', 'dist', 'MindlinkBackend', 'MindlinkBackend.exe')
+
+let backendProcess = null
+
+function startBackend() {
+    console.log('[Backend] Launching:', backendPath)
+    backendProcess = spawn(backendPath, [], {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    backendProcess.stdout.on('data', d => console.log('[Backend]', d.toString().trim()))
+    backendProcess.stderr.on('data', d => console.error('[Backend]', d.toString().trim()))
+    backendProcess.on('exit', (code) => console.log('[Backend] exited with code', code))
+}
+
+function waitForBackend(retries = 30, delayMs = 500) {
+    return new Promise((resolve, reject) => {
+        let attempts = 0
+        const check = () => {
+            http.get('http://localhost:8000/health', (res) => {
+                if (res.statusCode < 500) { resolve(); return }
+                retry()
+            }).on('error', retry)
+        }
+        function retry() {
+            attempts++
+            if (attempts >= retries) { reject(new Error('Backend did not start in time')); return }
+            setTimeout(check, delayMs)
+        }
+        check()
+    })
+}
+
+app.on('will-quit', () => {
+    if (backendProcess) backendProcess.kill()
+})
+
 // ─── Electron App ─────────────────────────────────────────────────────────────
 let mainWin = null
 let activePort = null
@@ -157,6 +200,8 @@ const createWindow = () => {
     mainWin = new BrowserWindow({
         width: 1200,
         height: 800,
+        icon: path.join(__dirname, 'src', 'assets', 'logo-no-text.png'),
+        autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -174,7 +219,15 @@ const createWindow = () => {
     return mainWin
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    startBackend()
+    try {
+        await waitForBackend(40, 500)
+        console.log('[Backend] Ready')
+    } catch (e) {
+        console.error('[Backend] Failed to start:', e.message)
+        // Open anyway — user sees connection errors but app is usable
+    }
     createWindow()
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow()
