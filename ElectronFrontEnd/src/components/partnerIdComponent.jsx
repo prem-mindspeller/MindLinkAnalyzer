@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import loginService from '../service/loginService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faXmark, faTriangleExclamation, faArrowRight, faSpinner } from '@fortawesome/free-solid-svg-icons';
 
 const PartnerIdComponent = () => {
+    const { t } = useTranslation();
     const [id, setId] = useState(localStorage.getItem('partnerId') || sessionStorage.getItem('partnerId') || '');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -19,13 +21,13 @@ const PartnerIdComponent = () => {
         const result = await loginService.checkPartnerBookings(trimmedId);
 
         if (result.notFound) {
-            setError(`Partner ID "${trimmedId}" is not recognised. Please check and try again.`);
+            setError(t('partnerId.errorNotFound'));
             setIsLoading(false);
             return;
         }
 
         if (!result.success) {
-            setError('Could not verify Partner ID. Please check your connection and try again.');
+            setError(t('partnerId.errorConnection'));
             setIsLoading(false);
             return;
         }
@@ -43,14 +45,14 @@ const PartnerIdComponent = () => {
             <form onSubmit={handleSubmit} className="login-form">
                 <div className="form-group">
                     <label className="input-label">
-                        <span className="label-text">Partner ID:</span>
+                        <span className="label-text">{t('partnerId.label')}</span>
                         <span className="label-required">*</span>
                     </label>
                     <div className="input-wrapper">
                         <input
                             type="text"
                             className="form-input"
-                            placeholder="Enter your Partner ID"
+                            placeholder={t('partnerId.placeholder')}
                             value={id}
                             onChange={(e) => { setId(e.target.value); setError(''); }}
                             required
@@ -82,11 +84,11 @@ const PartnerIdComponent = () => {
                     {isLoading ? (
                         <>
                             <FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />
-                            Submitting...
+                            {t('partnerId.submitting')}
                         </>
                     ) : (
                         <>
-                            <span>Submit Partner ID</span>
+                            <span>{t('partnerId.submit')}</span>
                             <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 8 }} />
                         </>
                     )}

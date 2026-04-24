@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Footer from '../components/footer';
 import LoggedInHeader from '../components/LoggedInHeader';
 import EegWaveform from '../components/EegWaveform';
@@ -13,6 +14,7 @@ import '../styles/liveEegReading.css';
 
 const LiveEegReading = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
 
     const [status, setStatus] = useState(eegConnectService.getStatus());
     const [poorSignal, setPoorSignal] = useState(eegConnectService.getPoorSignal());
@@ -66,8 +68,8 @@ const LiveEegReading = () => {
             <LoggedInHeader />
             <main className="app-main">
                 <div className="eeg-page" style={{ paddingTop: '20px' }}>
-                    <h1 className='live-eeg-header'>Live EEG Reading</h1>
-                    <p className="page-subtitle-eeg" style={{ textAlign: 'center', marginBottom: 16 }}>Step 4 of 7: Connect your EEG device</p>
+                    <h1 className='live-eeg-header'>{t('liveEeg.title')}</h1>
+                    <p className="page-subtitle-eeg" style={{ textAlign: 'center', marginBottom: 16 }}>{t('liveEeg.subtitle')}</p>
 
                     {!isConnected && (
                         <div className="device-scan-section">
@@ -76,8 +78,8 @@ const LiveEegReading = () => {
                                     <FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />
                                     <span>
                                         {status === CONNECTION_STATUS.CONNECTING
-                                            ? 'Connecting to device…'
-                                            : 'Scanning for EEG device…'}
+                                            ? t('liveEeg.connecting')
+                                            : t('liveEeg.scanning')}
                                     </span>
                                 </div>
                             ) : (
@@ -95,7 +97,7 @@ const LiveEegReading = () => {
                                         </div>
                                     )}
                                     <button className="rescan-btn" onClick={handleRescan}>
-                                        <FontAwesomeIcon icon={faRotate} style={{ marginRight: 8 }} />Reconnect
+                                        <FontAwesomeIcon icon={faRotate} style={{ marginRight: 8 }} />{t('liveEeg.reconnect')}
                                     </button>
                                 </>
                             )}
@@ -106,11 +108,11 @@ const LiveEegReading = () => {
                     <div className="eeg-chart-container">
                         <div className={`signal-quality-line ${isGoodSignal ? 'sig-good' : 'sig-warn'}`}>
                             {isGoodSignal ? (
-                                <><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 6 }} />Signal quality: Good | Data flowing normally</>
+                                <><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 6 }} />{t('liveEeg.signalGood')}</>
                             ) : poorSignal >= 200 ? (
-                                <><FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />Headset not worn — place it firmly against your forehead</>
+                                <><FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />{t('liveEeg.notWorn')}</>
                             ) : (
-                                <><FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />Signal quality: Noisy — hold still and press the headset against your forehead</>
+                                <><FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />{t('liveEeg.signalNoisy')}</>
                             )}
                         </div>
                         <div className="chart-area" style={{ padding: 0, height: '360px' }}>
@@ -121,7 +123,7 @@ const LiveEegReading = () => {
                         <>
                             <div className="info-box">
                                 <div className="info-content">
-                                    <p className="info-subtitle">Click on the <strong>Reconnect</strong> button above to connect to the device before proceeding</p>
+                                    <p className="info-subtitle">{t('liveEeg.infoDisconnected')}</p>
                                 </div>
                             </div></>
                     )}
@@ -130,7 +132,7 @@ const LiveEegReading = () => {
                         <>
                             <div className="info-box">
                                 <div className="info-content">
-                                    <p className="info-subtitle">Do NOT proceed until you see <strong>Signal quality: Good </strong> in the header above.</p>
+                                    <p className="info-subtitle">{t('liveEeg.infoConnected')}</p>
                                 </div>
                             </div>
                         </>

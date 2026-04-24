@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import Header from "../components/header";
 import Footer from "../components/footer";
 import StepsComponent from "../components/region/stepsComponent";
@@ -9,31 +10,32 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import "../styles/home.css";
 
-const FEATURES = [
+const FEATURES = (t) => [
     {
         icon: faBrain,
-        title: "Real-Time EEG Recording",
-        description: "Capture live brainwave data from your EEG headset with millisecond precision.",
+        title: t('home.feature1Title'),
+        description: t('home.feature1Desc'),
     },
     {
         icon: faChartLine,
-        title: "Cognitive Task Analysis",
-        description: "Run validated cognitive tasks and receive a statistical analysis of your brain activity across frequency bands.",
+        title: t('home.feature2Title'),
+        description: t('home.feature2Desc'),
     },
     {
         icon: faHeadset,
-        title: "Guided Workflow",
-        description: "A step-by-step process walks you through device setup, baseline calibration, tasks, and results — no expertise needed.",
+        title: t('home.feature3Title'),
+        description: t('home.feature3Desc'),
     },
     {
         icon: faShieldHalved,
-        title: "Data Sovereignty",
-        description: "Choose your regional server so your neurological data stays within your preferred jurisdiction.",
+        title: t('home.feature4Title'),
+        description: t('home.feature4Desc'),
     },
 ];
 
 const HomePage = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
 
     return (
         <div className="app-container">
@@ -43,22 +45,18 @@ const HomePage = () => {
                 {/* ── Hero ── */}
                 <section className="home-hero">
                     <div className="home-hero-text">
-                        <p className="home-hero-eyebrow">Mindspeller · MindLink Analyzer</p>
+                        <p className="home-hero-eyebrow">{t('home.eyebrow')}</p>
                         <h1 className="home-hero-title">
-                            Understand your brain.<br />
-                            <span className="home-hero-accent">One session at a time.</span>
+                            {t('home.title')}<br />
+                            <span className="home-hero-accent">{t('home.titleAccent')}</span>
                         </h1>
-                        <p className="home-hero-subtitle">
-                            MindLink Analyzer records your EEG activity during a series of cognitive tasks,
-                            compares it against your personal baseline, and generates a detailed neural
-                            profile — all from a consumer-grade headset.
-                        </p>
+                        <p className="home-hero-subtitle">{t('home.subtitle')}</p>
                         <div className="home-hero-actions">
                             <button className="home-btn-primary" onClick={() => navigate("/region")}>
-                                Get Started <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 8 }} />
+                                {t('home.getStarted')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 8 }} />
                             </button>
                             <button className="home-btn-secondary" onClick={() => navigate("/help")}>
-                                How it works
+                                {t('home.howItWorks')}
                             </button>
                         </div>
                     </div>
@@ -66,9 +64,9 @@ const HomePage = () => {
 
                 {/* ── Features ── */}
                 <section className="home-features">
-                    <h2 className="home-section-title">What MindLink Analyzer does</h2>
+                    <h2 className="home-section-title">{t('home.featuresTitle')}</h2>
                     <div className="home-feature-grid">
-                        {FEATURES.map((f) => (
+                        {FEATURES(t).map((f) => (
                             <div key={f.title} className="home-feature-card">
                                 <div className="home-feature-icon">
                                     <FontAwesomeIcon icon={f.icon} />
@@ -82,10 +80,8 @@ const HomePage = () => {
 
                 {/* ── Steps ── */}
                 <section className="home-steps-section">
-                    <h2 className="home-section-title">Your session at a glance</h2>
-                    <p className="home-section-subtitle">
-                        A complete session takes around 20–30 minutes and is fully guided.
-                    </p>
+                    <h2 className="home-section-title">{t('home.stepsTitle')}</h2>
+                    <p className="home-section-subtitle">{t('home.stepsSubtitle')}</p>
                     <div className="home-steps-wrap">
                         <StepsComponent currentStep={0} />
                     </div>

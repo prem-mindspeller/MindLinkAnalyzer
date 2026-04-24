@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import eegConnectService, { CONNECTION_STATUS } from '../service/wsEegService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleCheck, faTriangleExclamation, faBatteryFull } from '@fortawesome/free-solid-svg-icons';
 import StepInfoPopup from './StepInfoPopup';
 
 const LoggedInHeader = () => {
+    const { t, i18n } = useTranslation();
+
+    const handleLanguageChange = (e) => {
+        const lang = e.target.value;
+        i18n.changeLanguage(lang);
+        sessionStorage.setItem('language', lang);
+    };
     const [battery, setBattery] = useState(eegConnectService.getBattery());
     const [poorSignal, setPoorSignal] = useState(eegConnectService.getPoorSignal());
     const [status, setStatus] = useState(eegConnectService.getStatus());
@@ -20,16 +28,16 @@ const LoggedInHeader = () => {
     const isConnected = status === CONNECTION_STATUS.CONNECTED;
 
     const deviceText = {
-        [CONNECTION_STATUS.DISCONNECTED]: 'Disconnected',
-        [CONNECTION_STATUS.SEARCHING]: 'Searching…',
-        [CONNECTION_STATUS.CONNECTING]: 'Connecting…',
-        [CONNECTION_STATUS.CONNECTED]: 'Connected',
+        [CONNECTION_STATUS.DISCONNECTED]: t('loggedInHeader.disconnected'),
+        [CONNECTION_STATUS.SEARCHING]: t('loggedInHeader.searching'),
+        [CONNECTION_STATUS.CONNECTING]: t('loggedInHeader.connecting'),
+        [CONNECTION_STATUS.CONNECTED]: t('loggedInHeader.connected'),
     }[status] || status;
 
-    const signalText = !isConnected ? 'No Device'
-        : poorSignal >= 200 ? 'Not Worn'
-            : poorSignal < 25 ? 'Signal: Good'
-                : 'Signal: Noisy';
+    const signalText = !isConnected ? t('loggedInHeader.noDevice')
+        : poorSignal >= 200 ? t('loggedInHeader.notWorn')
+            : poorSignal < 25 ? t('loggedInHeader.signalGood')
+                : t('loggedInHeader.signalNoisy');
 
     const signalClass = isConnected && poorSignal < 25 ? 'good' : 'warning';
     const deviceClass = isConnected ? 'good' : 'warning';
@@ -55,7 +63,7 @@ const LoggedInHeader = () => {
 
             <div className="header-center">
                 <div className="status-item">
-                    <span className="status-label">Device:</span>
+                    <span className="status-label">{t('loggedInHeader.device')}</span>
                     <span className={`status-icon ${deviceClass}`}>
                         <FontAwesomeIcon icon={isConnected ? faCircleCheck : faTriangleExclamation} />
                     </span>
@@ -63,7 +71,7 @@ const LoggedInHeader = () => {
                 </div>
                 <div className="status-divider">|</div>
                 <div className="status-item">
-                    <span className="status-label">Signal:</span>
+                    <span className="status-label">{t('loggedInHeader.signal')}</span>
                     <span className={`status-icon ${signalClass}`}>
                         <FontAwesomeIcon icon={isConnected && poorSignal < 25 ? faCircleCheck : faTriangleExclamation} />
                     </span>
@@ -73,6 +81,17 @@ const LoggedInHeader = () => {
 
             <div className="header-right">
                 <StepInfoPopup />
+                <div className="badge language-badge">
+                    <select
+                        className="language-select"
+                        value={i18n.language}
+                        onChange={handleLanguageChange}
+                    >
+                        <option value="en">English</option>
+                        <option value="nl">Nederlands</option>
+                    </select>
+                    <span className="language-chevron">▾</span>
+                </div>
                 <span className="header-user">
                     {sessionStorage.getItem('loggedInUser') || ''}
                 </span>

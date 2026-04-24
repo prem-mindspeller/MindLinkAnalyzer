@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const RegionSelectionCard = () => {
+    const { t } = useTranslation();
     const [selectedRegion, setSelectedRegion] = useState(() => {
         return sessionStorage.getItem('region') || 'en';
     });
@@ -27,8 +29,8 @@ const RegionSelectionCard = () => {
                     </svg>
                 </div>
                 <div className="region-label-group">
-                    <h3 className="region-identity-title">Region</h3>
-                    <p className="region-identity-sub">Data Sovereignty</p>
+                    <h3 className="region-identity-title">{t('regionCard.region')}</h3>
+                    <p className="region-identity-sub">{t('regionCard.dataSovereignty')}</p>
                 </div>
             </div>
 
@@ -56,8 +58,8 @@ const RegionSelectionCard = () => {
                 <div className="region-info-box">
                     <div className="info-circle">i</div>
                     <div className="region-info-text">
-                        <strong>Important Notice</strong>
-                        <p>Before continuing, make sure your device is paired with your EEG headset via Bluetooth and that you have an existing account on the website. Consult the <Link to="/help">help menu</Link> in the top right corner for guidance.</p>
+                        <strong>{t('regionCard.noticeTitle')}</strong>
+                        <p>{t('regionCard.noticePre')}<Link to="/help">{t('regionCard.helpMenuLink')}</Link>{t('regionCard.noticePost')}</p>
                     </div>
                 </div>
             </div>

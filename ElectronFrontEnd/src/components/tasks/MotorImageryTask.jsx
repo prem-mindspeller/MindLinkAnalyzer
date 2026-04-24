@@ -1,26 +1,23 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import TaskRunner from './TaskRunner';
 
-const PHASES = [
-    {
-        type: 'cue', duration: 8, record: false,
-        instruction: 'INSTRUCTION: Prepare to imagine throwing a ball — right hand then left, alternating. Close your eyes on the beep.',
-    },
-    {
-        type: 'task', duration: 52, record: true,
-        instruction: 'IMAGINE: Throw a ball with your right hand, then left hand, alternating. Feel the motion vividly. Eyes closed.',
-    },
-];
-
-const MotorImageryTask = ({ onComplete, onBack }) => (
-    <TaskRunner
-        phases={PHASES}
-        taskName="Motor Imagery"
-        eyesClosed={true}
-        introText="Mentally imagine throwing a ball with your right hand, then your left hand, alternating continuously. Feel each movement as vividly as possible for 52 seconds."
-        onComplete={onComplete}
-        onBack={onBack}
-    />
-);
+const MotorImageryTask = ({ onComplete, onBack }) => {
+    const { t } = useTranslation();
+    const phases = [
+        { type: 'cue', duration: 8, record: false, instruction: t('taskContent.motorImagery.cueInstruction') },
+        { type: 'task', duration: 52, record: true, instruction: t('taskContent.motorImagery.phaseInstruction') },
+    ];
+    return (
+        <TaskRunner
+            phases={phases}
+            taskName={t('taskContent.motorImagery.name')}
+            eyesClosed={true}
+            introText={t('taskContent.motorImagery.intro')}
+            onComplete={onComplete}
+            onBack={onBack}
+        />
+    );
+};
 
 export default MotorImageryTask;

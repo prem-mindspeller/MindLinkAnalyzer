@@ -1,17 +1,16 @@
 import React from "react";
+import { useTranslation } from 'react-i18next';
 import "../../styles/main.css";
 
-const STEPS = [
-    { number: 1, label: "Region Selection", description: "Choose your data sovereignty region" },
-    { number: 2, label: "Login", description: "Sign in to your Mindspeller account" },
-    { number: 3, label: "Connect Device", description: "Pair your EEG headset via Bluetooth" },
-    { number: 4, label: "Baseline Calibration", description: "Record your baseline brainwave activity" },
-    { number: 5, label: "Task Selection", description: "Choose your cognitive tasks" },
-    { number: 6, label: "Run Tasks", description: "Complete the selected EEG tasks" },
-    { number: 7, label: "Upload & Analyze", description: "Upload and analyze your brainwave data" },
-];
+const STEP_IDS = [1, 2, 3, 4, 5, 6, 7];
 
 const StepsComponent = ({ currentStep = 1 }) => {
+    const { t } = useTranslation();
+    const STEPS = STEP_IDS.map(n => ({
+        number: n,
+        label: t(`stepsData.${n}.label`),
+        description: t(`stepsData.${n}.description`),
+    }));
     return (
         <div className="steps-wrapper">
             <ol className="steps-list">

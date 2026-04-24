@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import LoggedInHeader from '../components/LoggedInHeader';
 import Footer from '../components/footer';
 import AnalysisResultsPanel from '../components/AnalysisResultsPanel';
@@ -23,6 +24,7 @@ const STATUS = {
 
 const UploadPage = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
 
     const [status, setStatus] = useState(STATUS.IDLE);
     const [results, setResults] = useState(null);
@@ -102,13 +104,13 @@ const UploadPage = () => {
 
 
                     <div className="page-header-eeg">
-                        <h1 className="page-title-eeg">Task Analysis</h1>
-                        <p className="page-subtitle-eeg">Step 7 of 7: Analyse EEG data and send report</p>
+                        <h1 className="page-title-eeg">{t('upload.title')}</h1>
+                        <p className="page-subtitle-eeg">{t('upload.subtitle')}</p>
                     </div>
 
                     <div className="upload-card">
                         <p className="upload-desc">
-                            Click Analyze All Tasks to see how your brain responded to each challenge. This just takes a few seconds! Once your results appear, click Save Profile to securely upload your data and complete your assessment.
+                            {t('upload.desc')}
                         </p>
 
                         <div className="upload-actions">
@@ -118,17 +120,17 @@ const UploadPage = () => {
                                 disabled={status === STATUS.RUNNING || status === STATUS.DONE || seedStatus === 'success'}
                             >
                                 {status === STATUS.RUNNING
-                                    ? <><FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />Analysing…</>
+                                    ? <><FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />{t('upload.analysing')}</>
                                     : status === STATUS.DONE
-                                        ? <><FontAwesomeIcon icon={faCheck} style={{ marginRight: 8 }} />Analysis Complete</>
-                                        : <><FontAwesomeIcon icon={faPlay} style={{ marginRight: 8 }} />Analyse All Tasks</>}
+                                        ? <><FontAwesomeIcon icon={faCheck} style={{ marginRight: 8 }} />{t('upload.analysisComplete')}</>
+                                        : <><FontAwesomeIcon icon={faPlay} style={{ marginRight: 8 }} />{t('upload.analyse')}</>}
                             </button>
 
                             {status === STATUS.DONE && (
                                 <>
                                     {showDownloadProfileButton && (
                                         <button className="upload-btn-secondary" onClick={handleDownload}>
-                                            <FontAwesomeIcon icon={faDownload} style={{ marginRight: 8 }} />Download Report
+                                            <FontAwesomeIcon icon={faDownload} style={{ marginRight: 8 }} />{t('upload.downloadReport')}
                                         </button>
                                     )}
                                     <button
@@ -137,10 +139,10 @@ const UploadPage = () => {
                                         disabled={seedStatus === 'seeding' || seedStatus === 'success'}
                                     >
                                         {seedStatus === 'seeding'
-                                            ? <><FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />uploading</>
+                                            ? <><FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />{t('upload.uploading')}</>
                                             : seedStatus === 'success'
-                                                ? <><FontAwesomeIcon icon={faCheck} style={{ marginRight: 8 }} />Uploaded</>
-                                                : <><FontAwesomeIcon icon={faCloud} style={{ marginRight: 8 }} />Upload to Mindspeller</>}
+                                                ? <><FontAwesomeIcon icon={faCheck} style={{ marginRight: 8 }} />{t('upload.uploaded')}</>
+                                                : <><FontAwesomeIcon icon={faCloud} style={{ marginRight: 8 }} />{t('upload.upload')}</>}
                                     </button>
                                 </>
                             )}
@@ -148,7 +150,7 @@ const UploadPage = () => {
 
                         {status === STATUS.ERROR && (
                             <div className="upload-error">
-                                <strong>Analysis failed:</strong> {errorMsg}
+                                <strong>{t('upload.analysisFailed')}</strong> {errorMsg}
                             </div>
                         )}
 
@@ -165,14 +167,14 @@ const UploadPage = () => {
 
                     <div className="navigation-buttons-eeg">
                         <button className="btn-back-eeg" onClick={() => navigate('/taskSelection')}>
-                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />Back
+                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
                         </button>
                         <button
                             className="btn-next-eeg"
                             disabled={notUploadedProfile}
                             onClick={handleFinish}
                         >
-                            Finish <FontAwesomeIcon icon={faCheck} style={{ marginLeft: 6 }} />
+                            {t('upload.finish')} <FontAwesomeIcon icon={faCheck} style={{ marginLeft: 6 }} />
                         </button>
                     </div>
                 </div>

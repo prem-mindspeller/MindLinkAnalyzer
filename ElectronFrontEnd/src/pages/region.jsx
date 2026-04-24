@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Footer from '../components/footer';
 import Header from '../components/header';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -10,6 +11,7 @@ import StepsComponent from '../components/region/stepsComponent';
 
 const RegionPage = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
 
     const handleNext = () => {
         navigate('/login');
@@ -22,10 +24,10 @@ const RegionPage = () => {
                 <main className="app-main">
                     <div className="region-page">
                         <h1 className="rp-title">
-                            Welcome to <span className="rp-title-accent">Mindlink  Analyzer</span>
+                            {t('region.welcome')} <span className="rp-title-accent">{t('region.appName')}</span>
                         </h1>
                         <p className="rp-subtitle">
-                            Step 1 of 7: Get started with your brainwave analysis session by selecting your region.
+                            {t('region.description')}
                         </p>
                         <div className='content'>
                             <RegionSelectionCard />
@@ -33,14 +35,14 @@ const RegionPage = () => {
 
                         <div className="navigation-buttons">
                             <button className="btn-next" onClick={handleNext}>
-                                Get Started <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                                {t('region.getStarted')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
                             </button>
                         </div>
                     </div>
                 </main>
                 <Footer />
             </div>
-            
+
         </>
     );
 }

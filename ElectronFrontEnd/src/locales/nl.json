@@ -1,0 +1,554 @@
+{
+    "header": {
+        "help": "Help",
+        "logout": "Uitloggen"
+    },
+    "home": {
+        "eyebrow": "Mindspeller · MindLink Analyzer",
+        "title": "Begrijp uw brein.",
+        "titleAccent": "Één sessie tegelijk.",
+        "subtitle": "MindLink Analyzer registreert uw EEG-activiteit tijdens een reeks cognitieve taken, vergelijkt deze met uw persoonlijke basislijn en genereert een gedetailleerd neuraal profiel — allemaal via een consumentenheadset.",
+        "getStarted": "Aan de slag",
+        "howItWorks": "Hoe het werkt",
+        "featuresTitle": "Wat MindLink Analyzer doet",
+        "stepsTitle": "Uw sessie in één oogopslag",
+        "stepsSubtitle": "Een volledige sessie duurt ongeveer 20–30 minuten en wordt volledig begeleid.",
+        "feature1Title": "Realtime EEG-opname",
+        "feature1Desc": "Registreer live hersenactiviteit van uw EEG-headset met millisecondeprecisie.",
+        "feature2Title": "Cognitieve taakanalyse",
+        "feature2Desc": "Voer gevalideerde cognitieve taken uit en ontvang een statistische analyse van uw hersenactiviteit over frequentiebanden.",
+        "feature3Title": "Begeleide workflow",
+        "feature3Desc": "Een stapsgewijs proces begeleidt u door apparaatinstallatie, basislijnkalibratie, taken en resultaten — geen expertise vereist.",
+        "feature4Title": "Gegevenssouvereiniteit",
+        "feature4Desc": "Kies uw regionale server zodat uw neurologische gegevens binnen uw gewenste rechtsgebied blijven."
+    },
+    "region": {
+        "title": "Selecteer uw regio",
+        "subtitle": "Stap 1 van 7: Kies uw gegevenssouvereiniteitsregio",
+        "welcome": "Welkom bij",
+        "appName": "Mindlink Analyzer",
+        "description": "Stap 1 van 7: Begin uw hersengolfanalyse door uw regio te selecteren.",
+        "getStarted": "Aan de slag"
+    },
+    "login": {
+        "title": "Aanmelden",
+        "subtitle": "Stap 2 van 7: Voer uw Mindspeller-accountgegevens in om door te gaan",
+        "partnerTitle": "Partner-ID invoeren",
+        "partnerSubtitle": "Stap 3 van 7: Voer uw partner-ID in om door te gaan"
+    },
+    "loginForm": {
+        "emailLabel": "E-mail:",
+        "passwordLabel": "Wachtwoord:",
+        "emailPlaceholder": "Voer uw e-mailadres in",
+        "passwordPlaceholder": "Voer uw wachtwoord in",
+        "signIn": "Aanmelden",
+        "signingIn": "Aanmelden...",
+        "errorFailed": "Aanmelden mislukt. Controleer uw aanmeldgegevens.",
+        "errorGeneral": "Er is een fout opgetreden tijdens het aanmelden. Probeer het opnieuw."
+    },
+    "partnerId": {
+        "label": "Partner-ID:",
+        "placeholder": "Voer uw partner-ID in",
+        "submit": "Partner-ID indienen",
+        "submitting": "Indienen...",
+        "errorNotFound": "Partner-ID wordt niet herkend. Controleer en probeer opnieuw.",
+        "errorConnection": "Kan partner-ID niet verifi\u00ebren. Controleer uw verbinding en probeer opnieuw."
+    },
+    "warning": {
+        "title": "Controleer vóór het aanmelden of uw headset:",
+        "bluetooth": "Via Bluetooth is gekoppeld met uw apparaat",
+        "turnedOn": "Ingeschakeld is en correct op uw hoofd is geplaatst",
+        "sound": "Geluid is ingeschakeld (u hoort afteltonen)",
+        "note": "De apparaatverbinding wordt na het aanmelden geverifieerd.",
+        "helpLink": "Installatiegids bekijken →"
+    },
+    "baseline": {
+        "title": "Basislijnkalibratie",
+        "subtitle": "Stap 5 van 7: Stel uw basislijn-hersenactiviteit in",
+        "signalWaiting": "Signaal: Wachten...",
+        "notWorn": "Niet gedragen",
+        "signalGood": "Signaal: Goed",
+        "signalNoisy": "Signaal: Ruisachtig",
+        "readyToStart": "Klaar om te starten",
+        "recordingEC": "Opname: Ogen gesloten",
+        "recordingEO": "Opname: Ogen open",
+        "phaseMsgEC": "Sluit uw ogen en ontspan... (30 seconden)",
+        "phaseMsgEO": "Houd uw ogen open en blijf ontspannen... (30 seconden)",
+        "ecComplete": "Ogen gesloten voltooid!",
+        "ecCompleteSub": "Geweldig! Laten we nu opnemen met ogen open.",
+        "calibComplete": "Kalibratie voltooid!",
+        "calibCompleteSub": "Beide basislijnfasen succesvol opgenomen!",
+        "countdownReady": "Maak u klaar! Luister naar het aftellen...",
+        "countdown": "Aftellen: {{count}}",
+        "ecCardTitle": "Basislijn met ogen gesloten",
+        "ecCardDesc": "Ontspan met gesloten ogen gedurende 30 seconden",
+        "eoCardTitle": "Basislijn met ogen open",
+        "eoCardDesc": "Blijf ontspannen met open ogen gedurende 30 seconden",
+        "complete": "Voltooid",
+        "start": "Starten",
+        "cancel": "Annuleren",
+        "startRecording": "Opname starten",
+        "modalECTitle": "Basislijn met ogen gesloten",
+        "modalEOTitle": "Basislijn met ogen open",
+        "modalECIntro": "Maak u klaar om uw ogen te sluiten en te ontspannen.",
+        "modalECDuration": "De sensoren registreren uw basislijn hersengolfpatroon gedurende 30 seconden.",
+        "modalEOIntro": "Maak u klaar om uw ogen open te houden en ontspannen te blijven.",
+        "modalEODuration": "De sensoren registreren uw basislijn met open ogen gedurende 30 seconden.",
+        "modalWhatWillHappen": "Wat er gaat gebeuren:",
+        "modalStep1": "Klik hieronder op 'Opname starten'",
+        "modalStep2": "U hoort een aftelling: 5, 4, 3, 2, 1 piepjes",
+        "modalECStep3": "Zit comfortabel en ontspan",
+        "modalECStep4": "Laat uw gedachten vrij dwalen zonder u op iets specifieks te concentreren",
+        "modalStep5": "Een geluid meldt u wanneer de opname is voltooid",
+        "modalECWarning": "Belangrijk: Controleer of uw luidsprekers/hoofdtelefoon AAN staan!",
+        "modalEOStep3": "Houd uw ogen open en ontspan gedurende 30 seconden",
+        "modalEOStep4": "Blijf kalm en focus op het witte kruis in het midden van het scherm",
+        "modalEOStep5": "Maak u geen zorgen over knipperen.",
+        "modalEOStep6": "Een geluid meldt u wanneer de opname is voltooid",
+        "modalEOWarning": "Belangrijk: Houd uw ogen open maar blijf ontspannen!"
+    },
+    "tasks": {
+        "title": "Cognitieve taken",
+        "subtitle": "Stap 6 van 7"
+    },
+    "upload": {
+        "title": "Taakanalyse",
+        "subtitle": "Stap 7 van 7: EEG-gegevens analyseren en rapport verzenden",
+        "desc": "Klik op Alle taken analyseren om te zien hoe uw brein reageerde op elke uitdaging. Dit duurt slechts enkele seconden! Zodra uw resultaten verschijnen, klikt u op Uploaden naar Mindspeller om uw gegevens veilig te uploaden.",
+        "analyse": "Alle taken analyseren",
+        "analysing": "Analyseren\u2026",
+        "analysisComplete": "Analyse voltooid",
+        "upload": "Uploaden naar Mindspeller",
+        "uploading": "Uploaden\u2026",
+        "uploaded": "Ge\u00fcpload",
+        "downloadReport": "Rapport downloaden",
+        "analysisFailed": "Analyse mislukt:",
+        "finish": "Voltooien"
+    },
+    "liveEeg": {
+        "title": "Live EEG-meting",
+        "subtitle": "Stap 4 van 7: Verbind uw EEG-apparaat",
+        "connecting": "Verbinding maken met apparaat\u2026",
+        "scanning": "Scannen naar EEG-apparaat\u2026",
+        "reconnect": "Opnieuw verbinden",
+        "signalGood": "Signaalkwaliteit: Goed | Gegevens stromen normaal",
+        "notWorn": "Headset niet gedragen \u2014 druk hem stevig tegen uw voorhoofd",
+        "signalNoisy": "Signaalkwaliteit: Ruisachtig \u2014 blijf stil en druk de headset tegen uw voorhoofd",
+        "infoConnected": "Ga NIET verder totdat u Signaalkwaliteit: Goed ziet in de header hierboven.",
+        "infoDisconnected": "Klik op de knop Opnieuw verbinden hierboven om het apparaat te verbinden voordat u doorgaat"
+    },
+    "loggedInHeader": {
+        "device": "Apparaat:",
+        "signal": "Signaal:",
+        "disconnected": "Verbroken",
+        "searching": "Zoeken\u2026",
+        "connecting": "Verbinden\u2026",
+        "connected": "Verbonden",
+        "noDevice": "Geen apparaat",
+        "notWorn": "Niet gedragen",
+        "signalGood": "Signaal: Goed",
+        "signalNoisy": "Signaal: Ruisachtig"
+    },
+    "footer": {
+        "text": "Mindlink Analyzer v1.0.0 | \u00a9 {{year}} Mindspeller"
+    },
+    "nav": {
+        "back": "Terug",
+        "next": "Volgende"
+    },
+    "help": {
+        "title": "Help & Gebruikershandleiding",
+        "subtitle": "Instructies voor hardware-installatie en toepassingsbegeleiding",
+        "gettingStarted": "Aan de slag",
+        "userManual": "Gebruikershandleiding",
+        "tips": "Tips"
+    },
+    "eegWaveform": {
+        "time": "Tijd",
+        "chartTitle": "Ruw EEG  ·  1–45 Hz bandpassfilter  ·  50 Hz notchfilter",
+        "waiting": "Wachten op EEG-gegevens…",
+        "scanning": "Scannen naar apparaat…",
+        "noDevice": "Geen apparaat — klik op Opnieuw scannen"
+    },
+    "analysis": {
+        "significant": "Significant",
+        "notSignificant": "Niet significant",
+        "pValue": "p-waarde (SomP)",
+        "effectSize": "Effectgrootte (d)",
+        "samples": "Steekproeven",
+        "tasksAnalysed": "Taken geanalyseerd",
+        "significantCount": "Significant (p < 0,05)",
+        "baselineSamples": "Basislijnsteekproeven"
+    },
+    "regionCard": {
+        "region": "Regio",
+        "dataSovereignty": "Gegevenssouvereiniteit",
+        "noticeTitle": "Belangrijke mededeling",
+        "noticePre": "Zorg ervoor dat uw apparaat via Bluetooth is gekoppeld met uw EEG-headset en dat u een bestaand account op de website heeft. Raadpleeg het ",
+        "noticePost": " in de rechterbovenhoek voor begeleiding.",
+        "helpMenuLink": "helpmenu"
+    },
+    "stepsData": {
+        "1": {
+            "label": "Regioselectie",
+            "description": "Kies uw gegevenssouvereiniteitsregio"
+        },
+        "2": {
+            "label": "Aanmelden",
+            "description": "Meld u aan bij uw Mindspeller-account"
+        },
+        "3": {
+            "label": "Apparaat verbinden",
+            "description": "Koppel uw EEG-headset via Bluetooth"
+        },
+        "4": {
+            "label": "Basislijnkalibratie",
+            "description": "Neem uw basislijn-hersenactiviteit op"
+        },
+        "5": {
+            "label": "Taakselectie",
+            "description": "Kies uw cognitieve taken"
+        },
+        "6": {
+            "label": "Taken uitvoeren",
+            "description": "Voltooi de geselecteerde EEG-taken"
+        },
+        "7": {
+            "label": "Uploaden & Analyseren",
+            "description": "Upload en analyseer uw hersengolfgegevens"
+        }
+    },
+    "taskRunner": {
+        "readInstruction": "Lees de instructie hieronder voor u begint",
+        "eyesClosed": "Ogen-gesloten taak",
+        "eyesOpen": "Ogen-open taak",
+        "soundNotice": "Zorg dat uw geluid aan staat voor u begint.",
+        "countdownHint": "U hoort een aftelling van 5 seconden voor de taak begint, en een dubbele piep aan het einde.",
+        "cancel": "Annuleren",
+        "start": "▶ Taak starten",
+        "getReady": "Maak u klaar…",
+        "listenBeeps": "Luister naar de piepjes",
+        "recording": "Opname",
+        "getReadyBadge": "Klaar maken",
+        "readInstructions": "Instructies lezen",
+        "eyesClosedHint": "Houd uw ogen gesloten",
+        "eyesOpenHint": "Houd uw ogen open",
+        "abort": "✕ Afbreken",
+        "complete": "{{taskName}} voltooid!",
+        "doneMsg": "EEG-gegevens zijn opgenomen. U kunt nu terugkeren naar de takenlijst.",
+        "backToTasks": "← Terug naar taken"
+    },
+    "taskContent": {
+        "attentionFocus": {
+            "name": "Gerichte aandacht",
+            "intro1": "Richt al uw aandacht op uw ademhaling.",
+            "intro2": "Tel uw ademhalingen niet — voel gewoon het natuurlijke ritme van uw in- en uitademing.",
+            "intro3": "Tel stilletjes van 1 tot 10 in uw hoofd — het maakt niet uit hoe snel of langzaam.",
+            "intro4": "Als u bij 10 bent, begin dan opnieuw bij 1.",
+            "intro5": "Als uw gedachten afdwalen, breng ze dan zacht terug en begin opnieuw bij 1.",
+            "intro6": "Ga 52 seconden door met gesloten ogen.",
+            "phaseInstruction": "FOCUS: Richt u alleen op uw ademhaling. Tel ademhalingen 1–10 en begin opnieuw; keer vriendelijk terug als u afgeleid raakt. Ogen gesloten."
+        },
+        "visualImagery": {
+            "name": "Visuele verbeelding",
+            "intro1": "Sluit uw ogen en stel u levendig voor dat u door uw huis loopt.",
+            "intro2": "Gebruik al uw zintuigen — zicht, geluid, geur en aanraking.",
+            "intro3": "Probeer de verbeelding zo gedetailleerd en continu mogelijk te maken.",
+            "intro4": "Ga 52 seconden door zonder uw ogen te openen.",
+            "phaseInstruction": "VERBEELDING: Stel u voor dat u door uw huis loopt met rijke zintuiglijke details."
+        },
+        "mentalMath": {
+            "name": "Mentaal rekenen",
+            "intro": "Begin bij 200. Trek in uw hoofd elke keer 7 af (200, 193, 186, 179, 172, …). Ga zo snel en nauwkeurig mogelijk mentaal door gedurende 52 seconden.",
+            "phaseInstruction": "TEL: 200, 193, 186, 179… Blijf achteruit tellen met stappen van 7. Ogen gesloten."
+        },
+        "emotionFace": {
+            "name": "Emotieherkenning",
+            "introLine1": "Zo dadelijk ziet u een reeks gezichten.",
+            "introLine2": "Kijk gewoon naar elk gezicht en sta uzelf toe uw reactie er op natuurlijk te ervaren.",
+            "introLine3": "U hoeft de emotie niet te benoemen of te analyseren — merk gewoon op hoe het gezicht u beïnvloedt.",
+            "introLine4": "Houd uw blik op het scherm en reageer natuurlijk.",
+            "cueInstruction": "INSTRUCTIE: Maak u klaar voor het volgende gezicht."
+        },
+        "workingMemory": {
+            "name": "Werkgeheugen",
+            "intro": "Onthoud de reeks 3-8-2-9-5-1. Tel dan mentaal bij elk cijfer 2 op, herhaaldelijk. Blijf 52 seconden door de gewijzigde reeks gaan.",
+            "cueInstruction": "INSTRUCTIE: Maak u klaar om te onthouden en te bewerken: 3-8-2-9-5-1. Tel 2 op bij elk getal. Sluit uw ogen bij de piep.",
+            "phaseInstruction": "ONTHOUD: 3-8-2-9-5-1. Tel 2 op bij elk: 5-10-4-11-7-3. Blijf door de reeks gaan. Ogen gesloten."
+        },
+        "languageProcessing": {
+            "name": "Taalverwerking",
+            "intro": "Genereer stilletjes zoveel mogelijk woorden die beginnen met de letter 'S'. Vermijd herhalingen en houd een consistent mentaal tempo aan gedurende 52 seconden.",
+            "phaseInstruction": "INSTRUCTIE: Maak stilletjes een lijst van unieke 'S'-woorden. Vermijd herhalingen, houd een constant tempo aan. Ogen gesloten."
+        },
+        "motorImagery": {
+            "name": "Motorische verbeelding",
+            "intro": "Stel u mentaal voor dat u een bal gooit met uw rechterhand, dan uw linkerhand, afwisselend en continu. Voel elke beweging zo levendig mogelijk gedurende 52 seconden.",
+            "cueInstruction": "INSTRUCTIE: Maak u klaar om voor te stellen dat u een bal gooit — eerst rechterhand dan linker, afwisselend. Sluit uw ogen bij de piep.",
+            "phaseInstruction": "STEL U VOOR: Gooi een bal met uw rechterhand, dan linkerhand, afwisselend. Voel de beweging levendig. Ogen gesloten."
+        },
+        "cognitiveLoad": {
+            "name": "Cognitieve belasting",
+            "intro": "Voer twee mentale taken tegelijkertijd uit: tel achteruit van 50 met stappen van 3 EN stel u elk getal voor in helder blauw. Ga 52 seconden door.",
+            "phaseInstruction": "TEL & VISUALISEER: 50, 47, 44, 41… Tel achteruit met stappen van 3 terwijl u elk getal in blauw ziet. Ogen gesloten."
+        },
+        "diverseThinking": {
+            "name": "Creatieve vaardigheid",
+            "intro": "U ontvangt 2 creatieve denkopdrachten. Lees voor elke opdracht de prompt zorgvuldig en bedenk dan zoveel mogelijk creatieve en ongebruikelijke toepassingen. Ogen open gedurende de hele taak. Totale duur ~96 seconden.",
+            "getReady1": "Maak u klaar voor creatief denken…",
+            "cue1": "PROMPT 1 — PAPERCLIP: Bedenk zoveel mogelijk creatieve en ongebruikelijke toepassingen voor een PAPERCLIP.",
+            "phase1": "DENK: Creatieve toepassingen voor een PAPERCLIP. Wees creatief — ga verder dan het voor de hand liggende!",
+            "getReady2": "Maak u klaar voor de volgende prompt…",
+            "cue2": "PROMPT 2 — KUNSTMATIGE INTELLIGENTIE: Bedenk creatieve en innovatieve toepassingen voor AI.",
+            "phase2": "DENK: Creatieve toepassingen voor KUNSTMATIGE INTELLIGENTIE. Overweeg huidige en toekomstige mogelijkheden!"
+        },
+        "reappraisal": {
+            "name": "Perspectief wisselen",
+            "intro": "U ontvangt 2 scenario's. Verschuif voor elk scenario opzettelijk uw perspectief zoals geïnstrueerd — zie eerst de positieven, focus dan op de negatieven. Ogen open gedurende de hele taak. Totale duur ~96 seconden.",
+            "getReady1": "Maak u klaar voor de denktaak…",
+            "cue1": "SCENARIO 1 — DENK POSITIEF: 'Onverwachte feedback ontvangen van een goede vriend.' Zie de positieve kant.",
+            "phase1": "DENK POSITIEF: Wat goeds kan er uit deze feedback komen? Wat zijn de positieve kanten?",
+            "getReady2": "Maak u klaar voor het volgende scenario…",
+            "cue2": "SCENARIO 2 — FOCUS OP NEGATIEVEN: 'U staat op het punt een vlucht te missen.' Focus op wat er mis ging.",
+            "phase2": "FOCUS OP NEGATIEVEN: Denk na over wat er mis ging en de negatieve gevolgen van het missen van de vlucht."
+        },
+        "curiosity": {
+            "name": "Nieuwsgierigheidsonthulling",
+            "intro": "Kijk met volledige aandacht en echte nieuwsgierigheid naar een korte onthullende video. Laat uzelf meenemen door wat er onthuld wordt. Ogen open gedurende de hele taak. Totale duur ~45 seconden.",
+            "getReady": "Maak u klaar voor de onthullende video…",
+            "cue": "Video begint binnenkort — kijk met volledige aandacht!",
+            "wait": "Video begint…",
+            "phase": "KIJK: Bekijk de onthullende video met volledige aandacht. Laat uw nieuwsgierigheid u leiden."
+        },
+        "numForm": {
+            "name": "Numerieke voorkeur",
+            "intro": "U bekijkt een stimulusafbeelding in twee fasen: focus eerst op GETALLEN, dan op VORMEN (figuren). Houd uw blik standvastig en minimaliseer beweging. Ogen open gedurende de hele taak. Totale duur ~60 seconden.",
+            "getReady": "Maak u klaar…",
+            "cue1": "GETALLEN: Op het volgende scherm, zoek naar de getallen. Houd uw blik standvastig.",
+            "phase1": "GETALLEN: Kijk naar de getallen. Houd uw blik standvastig en minimaliseer beweging.",
+            "cue2": "VORMEN: Op het volgende scherm, zoek naar de vormen. Houd uw blik standvastig.",
+            "phase2": "VORMEN: Kijk naar de vormen. Houd uw blik standvastig en minimaliseer beweging.",
+            "rest": "Rust."
+        },
+        "orderSurprise": {
+            "name": "Orde & Verrassing",
+            "intro": "U bekijkt een stimulusafbeelding in twee fasen: tel eerst ORDE (symmetrische/normale vormen), dan VERRASSING (niet-symmetrische/abnormale vormen). Ogen open gedurende de hele taak. Totale duur ~60 seconden.",
+            "getReady": "Maak u klaar…",
+            "cue1": "ORDE: Tel symmetrische/normale vormen in de volgende afbeelding. Houd uw blik standvastig.",
+            "phase1": "ORDE: Tel symmetrische/normale vormen. Houd uw blik standvastig en minimaliseer beweging.",
+            "cue2": "VERRASSING: Tel niet-symmetrische/abnormale vormen in de volgende afbeelding. Houd uw blik standvastig.",
+            "phase2": "VERRASSING: Tel niet-symmetrische/abnormale vormen. Houd uw blik standvastig en minimaliseer beweging.",
+            "rest": "Rust."
+        }
+    },
+    "taskMeta": {
+        "visual_imagery": {
+            "name": "Visuele verbeelding",
+            "description": "Visuele verbeelding meet het vermogen om interne representaties te genereren en te stabiliseren zonder externe zintuiglijke input."
+        },
+        "attention_focus": {
+            "name": "Gerichte aandacht",
+            "description": "Deze taak isoleert het vermogen om stabiele interne focus te handhaven met minimale externe stimulatie, wat fundamenteel is voor alle andere cognitieve domeinen."
+        },
+        "mental_math": {
+            "name": "Mentaal rekenen",
+            "description": "Deze taak legt gecontroleerde uitvoerende vraag op om verwerkingsefficiëntie en cognitieve belasting te meten zonder spraak of beweging te vereisen."
+        },
+        "emotion_face": {
+            "name": "Emotieherkenning",
+            "description": "Deze taak introduceert affectieve beoordeling in de batterij, als brug tussen uitvoerende en emotionele domeinen."
+        },
+        "working_memory": {
+            "name": "Werkgeheugen",
+            "description": "Een specifieke werkgeheugentaak isoleert cognitieve belastingseffecten, waardoor interpreteerbare capaciteitscurves mogelijk worden."
+        },
+        "language_processing": {
+            "name": "Taalverwerking",
+            "description": "Taaltaken introduceren een conceptueel gestructureerd domein dat redeneren, communicatiestijl en semantische organisatie weerspiegelt."
+        },
+        "motor_imagery": {
+            "name": "Motorische verbeelding",
+            "description": "Deze taak breidt het simulatiedomein uit naar actiegerichte cognitie door het vermogen te testen om acties intern te simuleren."
+        },
+        "cognitive_load": {
+            "name": "Cognitieve belasting",
+            "description": "Dit dient als domein-algemene uitvoerende stresstest door het hersengedrag te monitoren bij conflict, wisseling en interferentie."
+        },
+        "diverse_thinking": {
+            "name": "Creatieve vaardigheid",
+            "description": "Genereer creatieve en ongebruikelijke toepassingen voor twee gegeven objecten/concepten."
+        },
+        "reappraisal": {
+            "name": "Perspectief wisselen",
+            "description": "Verschuif opzettelijk het perspectief bij twee contrasterende scenario's."
+        },
+        "curiosity": {
+            "name": "Nieuwsgierigheidsonthulling",
+            "description": "Kijk met volledige aandacht en echte nieuwsgierigheid naar een korte onthullende video."
+        },
+        "num_form": {
+            "name": "Numerieke voorkeur",
+            "description": "Evalueer esthetische voorkeur tussen getallen en vormen."
+        },
+        "order_surprise": {
+            "name": "Orde & Verrassing",
+            "description": "Tel symmetrische (ORDE) vs niet-symmetrische (VERRASSING) vormen."
+        }
+    },
+    "taskSelection": {
+        "subtitle": "Stap 6 van 7 · Traject: {{pathway}}",
+        "taskSubtitle": "Stap 6 van 7: Cognitieve taakopname",
+        "generalTasks": "Algemene taken",
+        "advancedTasks": "{{pathway}} — Geavanceerde taken",
+        "completed": "Voltooid",
+        "eyesClosed": "Ogen gesloten",
+        "eyesOpen": "Ogen open",
+        "advanced": "Geavanceerd",
+        "locked": "Vergrendeld",
+        "alreadyDone": "Deze taak is al voltooid. U kunt hem opnieuw uitvoeren of een andere taak selecteren.",
+        "runAgain": "Opnieuw uitvoeren",
+        "taskInstructions": "Taakinstructies",
+        "selectPlaceholder": "Selecteer een taak uit de lijst om details te zien.",
+        "pathwayPersonal": "Persoonlijk traject",
+        "pathwayConnection": "Verbinding",
+        "pathwayLifestyle": "Levensstijl"
+    },
+    "manual": {
+        "0": {
+            "title": "Applicatieworkflow",
+            "content": "De MindLink Analyzer begeleidt u door een workflow van 7 stappen: Regioselectie → Aanmelden → Live EEG-verificatie → Basislijnkalibratie → Taakselectie → Taakuitvoering → Resultaten uploaden. Elke stap wordt getoond in de paginaondertitel."
+        },
+        "1": {
+            "title": "Signaalkwaliteitsindicatoren",
+            "content": "De statusbalk toont realtime EEG-signaalkwaliteit. Groen (Goed) betekent dat de headset correct geplaatst is. Geel (Ruisachtig) betekent mogelijke beweging of slecht contact. Rood / Niet gedragen betekent dat de elektrode geen huidcontact heeft; herpositioneer de headset."
+        },
+        "2": {
+            "title": "Basislijnkalibratie",
+            "content": "Er worden twee fasen van 30 seconden opgenomen: Ogen gesloten (EC) en Ogen open (EO). Zit stil en ontspan. De kalibratie stelt uw persoonlijke basislijn in."
+        },
+        "3": {
+            "title": "Cognitieve taken",
+            "content": "Elke taak duurt 45 tot 114 seconden. Volg de instructies op het scherm nauwkeurig. Blijf zo stil mogelijk om bewegingsartefacten te minimaliseren."
+        },
+        "4": {
+            "title": "Resultaten uploaden",
+            "content": "Klik op de uploadpagina op Analyse uitvoeren om uw EEG-functieprofiel te berekenen. U kunt het rapport downloaden als tekstbestand of uploaden naar uw Mindspeller-account."
+        },
+        "5": {
+            "title": "Probleemoplossing",
+            "content": "Als het signaal 'Niet gedragen' toont: herpositioneer de headset. Als het signaal 'Ruisachtig' blijft: controleer de Bluetooth-verbinding. Als de app de headset niet kan vinden: zorg dat het apparaat via Windows Bluetooth-instellingen is gekoppeld."
+        },
+        "6": {
+            "title": "Contact en ondersteuning",
+            "content": "Voor technische ondersteuning neemt u contact op met contact@mindspeller.com. Vermeld uw OS-versie, app-versie en een beschrijving van het probleem."
+        }
+    },
+    "tips": {
+        "0": {
+            "title": "Licht ruisachtige metingen zijn normaal",
+            "content": "EEG-signalen zijn zeer gevoelig. Een paar gele (Ruisachtige) metingen zijn normaal. Zorg dat het signaal grotendeels groen (Goed) blijft."
+        },
+        "1": {
+            "title": "Zorg voor goed huidcontact",
+            "content": "De voorhoofdselektrode heeft stevig contact nodig met schone, droge huid. Druk de headset zacht maar stevig tegen uw voorhoofd."
+        },
+        "2": {
+            "title": "Laad op voor een sessie",
+            "content": "Een lage batterij kan signaaluitval veroorzaken. Controleer altijd of de versterker volledig opgeladen is."
+        },
+        "3": {
+            "title": "Voer de basislijnkalibratie zorgvuldig uit",
+            "content": "De basislijn wordt gebruikt om alle taakresultaten te normaliseren. Haasten of bewegen tijdens de kalibratiefasen vermindert de nauwkeurigheid."
+        },
+        "4": {
+            "title": "Voer een taak opnieuw uit als er iets mis gaat",
+            "content": "Als u gestoord werd tijdens een taak, kunt u hem opnieuw uitvoeren vanuit de takenlijst. Alleen de laatste opname wordt gebruikt in de analyse."
+        },
+        "5": {
+            "title": "Gebruik een rustige, goed verlichte kamer",
+            "content": "Voor ogen-open taken vermindert consistent omgevingslicht visuele ruis. Een rustige omgeving helpt bij cognitieve focustaken."
+        }
+    },
+    "gettingStarted": {
+        "power": {
+            "title": "1. De versterker aan/uitzetten",
+            "onLabel": "Inschakelen:",
+            "on1": "Houd de aan/uit-knop <1>2 seconden</1> ingedrukt.",
+            "on2": "De versterker trilt <1>één keer</1> om te bevestigen dat hij is ingeschakeld.",
+            "offLabel": "Uitschakelen:",
+            "off1": "Druk de aan/uit-knop <1>één keer</1> in (kort drukken).",
+            "off2": "De versterker trilt <1>twee keer</1> om te bevestigen dat hij is uitgeschakeld.",
+            "batLabel": "Lage batterijwaarschuwing:",
+            "bat1": "Als de batterij leeg is, zal de versterker <1>continu meerdere keren trillen</1> en automatisch uitschakelen.",
+            "bat2": "Laad de versterker op wanneer dit gebeurt."
+        },
+        "bluetooth": {
+            "title": "2. De versterker koppelen met uw apparaat",
+            "importantLabel": "Belangrijk:",
+            "introText": "Volg het standaard Windows Bluetooth-koppelingsproces:",
+            "step1": "Zet de versterker aan (houd 2 seconden ingedrukt).",
+            "step2": "Open <1>Instellingen → Bluetooth en apparaten → Apparaat toevoegen</1> in Windows.",
+            "step3": "Selecteer <1>\"Bluetooth\"</1> uit de opties voor het toevoegen van een apparaat.",
+            "step4": "Wacht tot <1>\"Brainlink_Pro (Audio)\"</1> in de lijst verschijnt.",
+            "step5": "Klik op <1>\"Brainlink_Pro (Audio)\"</1> om te koppelen.",
+            "note": "<0>Opmerking:</0> De hoofdtelefoon zal automatisch <2>even verbinden en dan verbreken</2> — dit is normaal! Het koppelingsproces registreert de hoofdtelefoon alleen bij uw apparaat. De werkelijke verbinding wordt automatisch gemaakt wanneer u inlogt in de applicatie."
+        },
+        "wearing": {
+            "title": "3. De headset correct dragen",
+            "amp": "<0>Positie versterker:</0> Plaats de versterker <2>boven uw linkeroor</2>.",
+            "light": "<0>Positie lichtsensor:</0> De lichtsensor moet <2>precies tussen uw wenkbrauwen</2> worden geplaatst.",
+            "electrode": "<0>Positie elektroden:</0> De elektroden moeten <2>5 cm boven uw wenkbrauwen</2> worden geplaatst voor optimale signaalkwaliteit.",
+            "tip": "<0>Tip:</0> Een correcte plaatsing zorgt voor nauwkeurige EEG-metingen. Neem even de tijd om de headset aan te passen voordat u de kalibratie start."
+        },
+        "charging": {
+            "title": "4. De versterker verwijderen voor opladen",
+            "intro": "Om de versterker op te laden, moet u hem uit de clip verwijderen:",
+            "step1": "Zoek de clip die de versterker aan de hoofdband bevestigt.",
+            "step2": "Trek de versterker voorzichtig <1>uit de clip</1>.",
+            "step3": "Sluit de oplaadkabel aan op de versterker.",
+            "step4": "Laad op totdat de indicator een volle batterij aangeeft.",
+            "note": "<0>Opmerking:</0> De versterker kan niet worden opgeladen terwijl hij aan de headset-clip is bevestigd."
+        },
+        "reinsert": {
+            "title": "5. De versterker terugplaatsen in de clip",
+            "intro": "Bevestig de versterker na het opladen weer aan de headset:",
+            "step1": "Houd de versterker in de juiste richting.",
+            "step2": "Lijn de versterker uit met de opening van de clip.",
+            "step3": "Druk de versterker voorzichtig in de clip totdat hij <1>stevig vastklikt</1>.",
+            "step4": "Zorg ervoor dat de versterker goed vastzit voordat u de headset opzet.",
+            "note": "<0>Belangrijk:</0> Zorg ervoor dat de versterker goed geplaatst is om goed elektrodencontact te behouden."
+        }
+    },
+    "stepInfo": {
+        "btnLabel": "Waarom deze stap?",
+        "btnAriaLabel": "Waarom is deze stap belangrijk?",
+        "closeAriaLabel": "Sluiten",
+        "stepBadge": "Stap {{step}}",
+        "steps": {
+            "region": {
+                "title": "Stap 1 — Regioselectie",
+                "why": "Door uw regio te selecteren zorgt u ervoor dat uw hersengolfgegevens worden verwerkt en opgeslagen conform de lokale wet- en regelgeving inzake gegevenssouvereiniteit. Dit houdt uw persoonlijke neurale gegevens privé en wettelijk beschermd."
+            },
+            "login": {
+                "title": "Stap 2&3 — Aanmelden en Partner-ID",
+                "why": "Door in te loggen worden uw EEG-opnames gekoppeld aan uw Mindspeller-account, wat veilige opslag en vergelijking van uw cognitieve profielen in de loop van de tijd mogelijk maakt. Zonder authenticatie kunnen uw sessiegegevens niet worden opgeslagen of geanalyseerd. Het invoeren van uw Partner-ID koppelt uw sessie aan een specifieke partner."
+            },
+            "liveReading": {
+                "title": "Stap 4 — Live signaal verifiëren",
+                "why": "Een live Bluetooth-verbinding met uw EEG-headset stelt de app in staat om ruwe hersengolfsignalen in realtime te streamen. Een stabiele, kwalitatieve verbinding is vereist voordat opnames kunnen beginnen."
+            },
+            "baseline": {
+                "title": "Stap 5 — Basislijnkalibratie",
+                "why": "Uw persoonlijke basislijn legt de rustgevende hersenactiviteit vast. Elke cognitieve maatstaf die tijdens taken wordt gemeten, wordt vergeleken met deze basislijn, waardoor uw analyse uniek nauwkeurig is in plaats van te vertrouwen op gemiddelden."
+            },
+            "taskSelection": {
+                "title": "Stap 6 — Taakselectie & opname",
+                "why": "Verschillende cognitieve taken activeren specifieke hersengebieden. Door de juiste taken te kiezen, brengt u specifieke mentale vermogens in kaart — focus, geheugen, creativiteit en meer — voor een rijk en gepersonaliseerd cognitief profiel."
+            },
+            "upload": {
+                "title": "Stap 7 — Uploaden & analyseren",
+                "why": "Door uw opnames te uploaden worden ze naar de Mindspeller AI-analysepijplijn gestuurd, die uw cognitieve scores berekent en een gedetailleerd hersengolfrapport genereert dat u kunt downloaden en delen."
+            }
+        }
+    }
+}

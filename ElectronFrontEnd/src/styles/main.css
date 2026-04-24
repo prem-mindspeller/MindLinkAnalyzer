@@ -312,6 +312,36 @@ body {
     box-shadow: none;
 }
 
+.language-badge {
+    position: relative;
+}
+
+.language-select {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 4px;
+}
+
+.language-select option {
+    background: #3b5bdb;
+    color: white;
+}
+
+.language-chevron {
+    color: white;
+    font-size: 0.75rem;
+    pointer-events: none;
+    margin-left: 2px;
+}
+
 /* Welcome Screen */
 .welcome-screen {
     text-align: center;

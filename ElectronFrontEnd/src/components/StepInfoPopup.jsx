@@ -1,65 +1,54 @@
 import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
-const STEP_INFO = {
-    '/region': {
-        step: 1,
-        title: 'Step 1 — Region Selection',
-        why: 'Selecting your region ensures your brainwave data is processed and stored in compliance with local data sovereignty laws. This keeps your personal neural data private and legally protected.',
-    },
-    '/login': {
-        step: 2,
-        title: 'Step 2&3 — Sign In and Partner ID',
-        why: 'Signing in links your EEG recordings to your Mindspeller account, enabling secure storage and comparison of your cognitive profiles over time. Without authentication, your session data cannot be saved or analysed. Entering your Partner ID connects your session to a specific partner.',
-    },
-    '/liveReading': {
-        step: 4,
-        title: 'Step 4 — Verify Live Signal',
-        why: 'A live Bluetooth connection to your EEG headset allows the app to stream raw brainwave signals in real time. A stable, quality connection is required before any recordings can begin.',
-    },
-    '/baselineCalibration1': {
-        step: 5,
-        title: 'Step 5 — Baseline Calibration',
-        why: 'Your personal baseline captures your brain\'s resting-state activity. Every cognitive metric measured during tasks is compared against this baseline, making your analysis uniquely accurate rather than relying on generic averages.',
-    },
-    '/taskSelection': {
-        step: 6,
-        title: 'Step 6 — Task Selection & Recording',
-        why: 'Different cognitive tasks activate distinct brain regions. Choosing the right tasks maps specific mental abilities — focus, memory, creativity, and more — giving you a rich and personalised cognitive profile.',
-    },
-    '/upload': {
-        step: 7,
-        title: 'Step 7 — Upload & Analyse',
-        why: 'Uploading your recordings sends them to the Mindspeller AI analysis pipeline, which computes your cognitive scores and generates a detailed brainwave report you can download and share.',
-    },
+const STEP_KEYS = {
+    '/region': 'region',
+    '/login': 'login',
+    '/liveReading': 'liveReading',
+    '/baselineCalibration1': 'baseline',
+    '/taskSelection': 'taskSelection',
+    '/upload': 'upload',
+};
+
+const STEP_NUMBERS = {
+    '/region': 1,
+    '/login': 2,
+    '/liveReading': 4,
+    '/baselineCalibration1': 5,
+    '/taskSelection': 6,
+    '/upload': 7,
 };
 
 const StepInfoPopup = () => {
     const { pathname } = useLocation();
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
 
-    const info = STEP_INFO[pathname];
-    if (!info) return null;
+    const key = STEP_KEYS[pathname];
+    if (!key) return null;
+
+    const stepNum = STEP_NUMBERS[pathname];
 
     return (
         <>
             <button
                 className="step-info-btn"
                 onClick={() => setOpen(true)}
-                aria-label="Why is this step important?"
-                title="Why is this step important?"
+                aria-label={t('stepInfo.btnAriaLabel')}
+                title={t('stepInfo.btnAriaLabel')}
             >
                 <span className="step-info-btn-icon">?</span>
-                <span className="step-info-btn-label">Why this step?</span>
+                <span className="step-info-btn-label">{t('stepInfo.btnLabel')}</span>
             </button>
 
             {open && (
                 <div className="step-info-overlay" onClick={() => setOpen(false)}>
                     <div className="step-info-modal" onClick={e => e.stopPropagation()}>
-                        <button className="step-info-close" onClick={() => setOpen(false)} aria-label="Close">&#x2715;</button>
-                        <div className="step-info-badge">Step {info.step}</div>
-                        <h2 className="step-info-title">{info.title}</h2>
-                        <p className="step-info-body">{info.why}</p>
+                        <button className="step-info-close" onClick={() => setOpen(false)} aria-label={t('stepInfo.closeAriaLabel')}>&#x2715;</button>
+                        <div className="step-info-badge">{t('stepInfo.stepBadge', { step: stepNum })}</div>
+                        <h2 className="step-info-title">{t(`stepInfo.steps.${key}.title`)}</h2>
+                        <p className="step-info-body">{t(`stepInfo.steps.${key}.why`)}</p>
                     </div>
                 </div>
             )}

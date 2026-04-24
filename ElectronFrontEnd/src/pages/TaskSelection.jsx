@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import LoggedInHeader from '../components/LoggedInHeader';
 import Footer from '../components/footer';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -72,9 +73,10 @@ const TASK_COMPONENTS = {
     order_surprise: OrderSurpriseTask,
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+
 const TaskSelection = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const pathway = sessionStorage.getItem('selectedPathway') || 'personal';
     const hasAdvancedBooking = sessionStorage.getItem('hasAdvancedBooking') === 'true';
 
@@ -113,7 +115,6 @@ const TaskSelection = () => {
         setActiveTaskId(null);
     }, []);
 
-    // ── Active task execution ──────────────────────────────────────────────
     if (activeTaskId) {
         const TaskComp = TASK_COMPONENTS[activeTaskId];
         return (
@@ -122,8 +123,8 @@ const TaskSelection = () => {
                 <main className="app-main">
                     <div className="task-selection-page">
                         <div className="ts-task-exec-header">
-                            <h1 className="ts-page-title">{TASK_META[activeTaskId]?.name}</h1>
-                            <p className="ts-page-subtitle">Step 6 of 7: Cognitive Task Recording</p>
+                            <h1 className="ts-page-title">{t(`taskMeta.${activeTaskId}.name`, { defaultValue: TASK_META[activeTaskId]?.name })}</h1>
+                            <p className="ts-page-subtitle">{t('taskSelection.taskSubtitle')}</p>
                         </div>
                         <TaskComp
                             onComplete={(samples) => handleTaskComplete(activeTaskId, samples)}
@@ -136,8 +137,12 @@ const TaskSelection = () => {
         );
     }
 
-    // ── Task selection UI ──────────────────────────────────────────────────
-    const pathwayLabel = { personal: 'Personal Pathway', connection: 'Connection', lifestyle: 'Lifestyle' }[pathway] || pathway;
+
+    const pathwayLabel = {
+        personal: t('taskSelection.pathwayPersonal'),
+        connection: t('taskSelection.pathwayConnection'),
+        lifestyle: t('taskSelection.pathwayLifestyle'),
+    }[pathway] || pathway;
 
     return (
         <div className="app-container">
@@ -146,8 +151,8 @@ const TaskSelection = () => {
                 <div className="task-selection-page">
 
                     <div className="ts-page-header">
-                        <h1 className="ts-page-title">Cognitive Tasks</h1>
-                        <p className="ts-page-subtitle">Step 6 of 7 · Pathway: <strong>{pathwayLabel}</strong></p>
+                        <h1 className="ts-page-title">{t('tasks.title')}</h1>
+                        <p className="ts-page-subtitle">{t('taskSelection.subtitle', { pathway: pathwayLabel })}</p>
                     </div>
 
                     <div className="ts-layout">
@@ -155,7 +160,7 @@ const TaskSelection = () => {
                         <div className="ts-task-list">
                             {/* General tasks group */}
                             <p className="ts-group-label">
-                                General Tasks
+                                {t('taskSelection.generalTasks')}
                                 <span className="ts-group-progress">
                                     {COGNITIVE_TASKS.filter(id => completedIds.includes(id)).length}/{COGNITIVE_TASKS.length}
                                 </span>
@@ -176,7 +181,7 @@ const TaskSelection = () => {
                                                     ? <FontAwesomeIcon icon={faMoon} />
                                                     : <FontAwesomeIcon icon={faEye} />}
                                         </span>
-                                        <span className="ts-task-item-name">{meta.name}</span>
+                                        <span className="ts-task-item-name">{t(`taskMeta.${id}.name`, { defaultValue: meta.name })}</span>
                                         <span className="ts-task-item-dur">{meta.duration}s</span>
                                     </button>
                                 );
@@ -186,7 +191,7 @@ const TaskSelection = () => {
                             {advancedTaskIds.length > 0 && (
                                 <>
                                     <p className="ts-group-label" style={{ marginTop: 16 }}>
-                                        {pathwayLabel} — Advanced Tasks
+                                        {t('taskSelection.advancedTasks', { pathway: pathwayLabel })}
                                     </p>
                                     {advancedTaskIds.map(id => {
                                         const meta = TASK_META[id];
@@ -206,8 +211,8 @@ const TaskSelection = () => {
                                                             ? <FontAwesomeIcon icon={faCircleCheck} />
                                                             : <FontAwesomeIcon icon={faStar} />}
                                                 </span>
-                                                <span className="ts-task-item-name">{meta.name}</span>
-                                                <span className="ts-task-item-dur">{locked ? 'Locked' : `${meta.duration}s`}</span>
+                                                <span className="ts-task-item-name">{t(`taskMeta.${id}.name`, { defaultValue: meta.name })}</span>
+                                                <span className="ts-task-item-dur">{locked ? t('taskSelection.locked') : `${meta.duration}s`}</span>
                                             </button>
                                         );
                                     })}
@@ -220,26 +225,28 @@ const TaskSelection = () => {
                             {selectedMeta ? (
                                 <>
                                     <h2 className="ts-detail-name">
-                                        {completedIds.includes(selectedId) && <span className="ts-done-badge"><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 4 }} />Completed</span>}
-                                        {selectedMeta.name}
+                                        {completedIds.includes(selectedId) && <span className="ts-done-badge"><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 4 }} />{t('taskSelection.completed')}</span>}
+                                        {t(`taskMeta.${selectedId}.name`, { defaultValue: selectedMeta.name })}
                                     </h2>
 
                                     <div className="ts-detail-tags">
                                         <span className={`ts-tag${selectedMeta.eyesClosed ? ' tag-ec' : ' tag-eo'}`}>
                                             {selectedMeta.eyesClosed
-                                                ? <><FontAwesomeIcon icon={faMoon} style={{ marginRight: 4 }} />Eyes Closed</>
-                                                : <><FontAwesomeIcon icon={faEye} style={{ marginRight: 4 }} />Eyes Open</>}
+                                                ? <><FontAwesomeIcon icon={faMoon} style={{ marginRight: 4 }} />{t('taskSelection.eyesClosed')}</>
+                                                : <><FontAwesomeIcon icon={faEye} style={{ marginRight: 4 }} />{t('taskSelection.eyesOpen')}</>}
                                         </span>
                                         <span className="ts-tag tag-dur"><FontAwesomeIcon icon={faClock} style={{ marginRight: 4 }} />{selectedMeta.duration}s</span>
-                                        {selectedMeta.advanced && <span className="ts-tag tag-adv"><FontAwesomeIcon icon={faStar} style={{ marginRight: 4 }} />Advanced</span>}
+                                        {selectedMeta.advanced && <span className="ts-tag tag-adv"><FontAwesomeIcon icon={faStar} style={{ marginRight: 4 }} />{t('taskSelection.advanced')}</span>}
                                     </div>
 
-                                    <p className="ts-detail-desc">{selectedMeta.description}</p>
+                                    {completedIds.length >= 4 && (
+                                        <p className="ts-detail-desc">{t(`taskMeta.${selectedId}.description`, { defaultValue: selectedMeta.description })}</p>
+                                    )}
 
                                     {completedIds.includes(selectedId) ? (
                                         <p className="ts-already-done">
                                             <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />
-                                            This task has already been completed. You may run it again or select a different task.
+                                            {t('taskSelection.alreadyDone')}
                                         </p>
                                     ) : null}
 
@@ -248,25 +255,25 @@ const TaskSelection = () => {
                                         onClick={handleStartTask}
                                     >
                                         <FontAwesomeIcon icon={faPlay} style={{ marginRight: 8 }} />
-                                        {completedIds.includes(selectedId) ? 'Run Again' : 'Task Instructions'}
+                                        {completedIds.includes(selectedId) ? t('taskSelection.runAgain') : t('taskSelection.taskInstructions')}
                                     </button>
                                 </>
                             ) : (
-                                <p className="ts-detail-placeholder">Select a task from the list to see details.</p>
+                                <p className="ts-detail-placeholder">{t('taskSelection.selectPlaceholder')}</p>
                             )}
                         </div>
                     </div>
 
                     <div className="navigation-buttons-eeg">
                         <button className="btn-back-eeg" onClick={() => navigate(-1)}>
-                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />Back
+                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
                         </button>
                         <button
                             className="btn-next-eeg"
                             disabled={completedIds.length <= 3}
                             onClick={() => navigate('/upload')}
                         >
-                            Next <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                            {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
                         </button>
                     </div>
                 </div>

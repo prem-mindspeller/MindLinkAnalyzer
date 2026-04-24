@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleCheck, faMinus } from '@fortawesome/free-solid-svg-icons';
 import '../styles/upload.css';
@@ -37,6 +38,7 @@ function BandBar({ label, value, maxVal }) {
  * Accepts the new nested result structure from the backend.
  */
 function TaskResultCard({ taskId, result, taskName }) {
+    const { t } = useTranslation();
     const summary = result.summary || {};
     const analysis = result.analysis || {};
     const fisher = summary.fisher || {};
@@ -61,8 +63,8 @@ function TaskResultCard({ taskId, result, taskName }) {
 
     const sigClass = significant ? 'an-sig-yes' : 'an-sig-no';
     const sigLabel = significant
-        ? <><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 5 }} />Significant</>
-        : <><FontAwesomeIcon icon={faMinus} style={{ marginRight: 5 }} />Not significant</>;
+        ? <><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 5 }} />{t('analysis.significant')}</>
+        : <><FontAwesomeIcon icon={faMinus} style={{ marginRight: 5 }} />{t('analysis.notSignificant')}</>;
 
     const fmtNum = (v) => (v !== null && v !== undefined ? Number(v).toPrecision(4) : 'N/A');
 
@@ -75,15 +77,15 @@ function TaskResultCard({ taskId, result, taskName }) {
 
             <div className="an-task-stats">
                 <div className="an-stat">
-                    <span className="an-stat-label">p-value (SumP)</span>
+                    <span className="an-stat-label">{t('analysis.pValue')}</span>
                     <span className="an-stat-value">{fmtNum(pValue)}</span>
                 </div>
                 <div className="an-stat">
-                    <span className="an-stat-label">Effect size (d)</span>
+                    <span className="an-stat-label">{t('analysis.effectSize')}</span>
                     <span className="an-stat-value">{fmtNum(effectSize)}</span>
                 </div>
                 <div className="an-stat">
-                    <span className="an-stat-label">Samples</span>
+                    <span className="an-stat-label">{t('analysis.samples')}</span>
                     <span className="an-stat-value">{sampleCount}</span>
                 </div>
             </div>
@@ -108,6 +110,7 @@ function TaskResultCard({ taskId, result, taskName }) {
  * Summary bar at the top of the results section.
  */
 function AnalysisSummary({ perTask, baselineKept }) {
+    const { t } = useTranslation();
     const totalTasks = Object.keys(perTask).length;
     const sigCount = Object.values(perTask).filter(r => {
         const fisher = r.summary?.fisher || {};
@@ -119,17 +122,17 @@ function AnalysisSummary({ perTask, baselineKept }) {
         <div className="an-summary">
             <div className="an-summary-stat">
                 <span className="an-summary-num">{totalTasks}</span>
-                <span className="an-summary-label">Tasks analysed</span>
+                <span className="an-summary-label">{t('analysis.tasksAnalysed')}</span>
             </div>
             <div className="an-summary-divider" />
             <div className="an-summary-stat">
                 <span className="an-summary-num an-summary-sig">{sigCount}</span>
-                <span className="an-summary-label">Significant (p &lt; 0.05)</span>
+                <span className="an-summary-label">{t('analysis.significantCount')}</span>
             </div>
             <div className="an-summary-divider" />
             <div className="an-summary-stat">
                 <span className="an-summary-num">{baselineKept ?? 0}</span>
-                <span className="an-summary-label">Baseline samples</span>
+                <span className="an-summary-label">{t('analysis.baselineSamples')}</span>
             </div>
         </div>
     );

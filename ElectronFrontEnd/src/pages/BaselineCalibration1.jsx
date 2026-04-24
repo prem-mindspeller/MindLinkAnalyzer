@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import LoggedInHeader from '../components/LoggedInHeader';
 import Footer from '../components/footer';
 import wsEegService, { CONNECTION_STATUS } from '../service/wsEegService';
@@ -49,14 +50,15 @@ const PHASE = {
     DONE_BOTH: 'done_both',
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+
 const BaselineCalibration1 = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const [phase, setPhase] = useState(PHASE.IDLE);
     const [countdown, setCountdown] = useState(COUNTDOWN_FROM);
     const [recordingProgress, setRecordingProgress] = useState(0);
-    const [signalStatus, setSignalStatus] = useState({ icon: faCircle, text: 'Signal: Waiting...', cls: 'waiting' });
-    const [statusMsg, setStatusMsg] = useState('Ready to start');
+    const [signalStatus, setSignalStatus] = useState({ icon: faCircle, text: t('baseline.signalWaiting'), cls: 'waiting' });
+    const [statusMsg, setStatusMsg] = useState(t('baseline.readyToStart'));
     const [phaseMsg, setPhaseMsg] = useState('');
 
     const bandSamplesRef = useRef([]);
@@ -66,23 +68,22 @@ const BaselineCalibration1 = () => {
     const unsubBpRef = useRef(null);
     const elapsedRef = useRef(0);
 
-    // ── Signal quality polling ────────────────────────────────────────────────
     useEffect(() => {
         const id = setInterval(() => {
             const ps = wsEegService.getPoorSignal();
             const st = wsEegService.getStatus();
             if (st !== CONNECTION_STATUS.CONNECTED) {
-                setSignalStatus({ icon: faCircle, text: 'Signal: Waiting...', cls: 'waiting' });
+                setSignalStatus({ icon: faCircle, text: t('baseline.signalWaiting'), cls: 'waiting' });
             } else if (ps >= 200) {
-                setSignalStatus({ icon: faTriangleExclamation, text: 'Not Worn', cls: 'noisy' });
+                setSignalStatus({ icon: faTriangleExclamation, text: t('baseline.notWorn'), cls: 'noisy' });
             } else if (ps < 25) {
-                setSignalStatus({ icon: faCircleCheck, text: 'Signal: Good', cls: 'good' });
+                setSignalStatus({ icon: faCircleCheck, text: t('baseline.signalGood'), cls: 'good' });
             } else {
-                setSignalStatus({ icon: faTriangleExclamation, text: 'Signal: Noisy', cls: 'noisy' });
+                setSignalStatus({ icon: faTriangleExclamation, text: t('baseline.signalNoisy'), cls: 'noisy' });
             }
         }, 500);
         return () => clearInterval(id);
-    }, []);
+    }, [t]);
 
 
     useEffect(() => () => {
@@ -100,10 +101,8 @@ const BaselineCalibration1 = () => {
         });
 
         setPhase(isEC ? PHASE.RECORDING_EC : PHASE.RECORDING_EO);
-        setStatusMsg(isEC ? 'Recording: Eyes Closed' : 'Recording: Eyes Open');
-        setPhaseMsg(isEC
-            ? 'Close your eyes and relax... (30 seconds)'
-            : 'Keep your eyes open and stay relaxed... (30 seconds)');
+        setStatusMsg(isEC ? t('baseline.recordingEC') : t('baseline.recordingEO'));
+        setPhaseMsg(isEC ? t('baseline.phaseMsgEC') : t('baseline.phaseMsgEO'));
         setRecordingProgress(0);
 
         recordingTimerRef.current = setInterval(() => {
@@ -118,7 +117,6 @@ const BaselineCalibration1 = () => {
                 playCompletionBeeps();
 
                 const samples = bandSamplesRef.current;
-                // avg is unused downstream but kept for legacy baselineCalibration key
                 const avg = samples.length > 0
                     ? { raw_sample_count: samples.length }
                     : null;
@@ -127,41 +125,39 @@ const BaselineCalibration1 = () => {
                     baselineRef.current.eyesClosed = avg;
                     sessionStorage.setItem('calibrationData_eyes_closed', JSON.stringify(samples));
                     setPhase(PHASE.DONE_EC);
-                    setStatusMsg('Eyes Closed Complete!');
-                    setPhaseMsg("Great! Now let's record with eyes open.");
+                    setStatusMsg(t('baseline.ecComplete'));
+                    setPhaseMsg(t('baseline.ecCompleteSub'));
                 } else {
                     baselineRef.current.eyesOpen = avg;
                     sessionStorage.setItem('calibrationData_eyes_open', JSON.stringify(samples));
                     sessionStorage.setItem('baselineCalibration', JSON.stringify(baselineRef.current));
                     setPhase(PHASE.DONE_BOTH);
-                    setStatusMsg('Calibration Complete!');
-                    setPhaseMsg('Both baseline phases recorded successfully!');
+                    setStatusMsg(t('baseline.calibComplete'));
+                    setPhaseMsg(t('baseline.calibCompleteSub'));
                 }
             }
         }, 1000);
-    }, []);
-
-    // ── 5-second countdown then start recording ───────────────────────────────
+    }, [t]);
     const startCountdown = useCallback((isEC) => {
         setPhase(isEC ? PHASE.COUNTDOWN_EC : PHASE.COUNTDOWN_EO);
         let count = COUNTDOWN_FROM;
         setCountdown(count);
-        setStatusMsg(`Countdown: ${count}`);
-        setPhaseMsg('Get ready! Listen for the countdown...');
+        setStatusMsg(t('baseline.countdown', { count }));
+        setPhaseMsg(t('baseline.countdownReady'));
         playBeep(800, 200);
 
         countdownTimerRef.current = setInterval(() => {
             count -= 1;
             if (count > 0) {
                 setCountdown(count);
-                setStatusMsg(`Countdown: ${count}`);
+                setStatusMsg(t('baseline.countdown', { count }));
                 playBeep(800, 200);
             } else {
                 clearInterval(countdownTimerRef.current);
                 startRecording(isEC);
             }
         }, 1000);
-    }, [startRecording]);
+    }, [startRecording, t]);
 
     const isBusy = [
         PHASE.COUNTDOWN_EC, PHASE.RECORDING_EC,
@@ -188,8 +184,8 @@ const BaselineCalibration1 = () => {
 
                     {/* ── Page header ── */}
                     <div className="calibration-header">
-                        <h1 className="calibration-title">Baseline Calibration</h1>
-                        <p className="calibration-subtitle">Step 5 of 7: Establish your baseline brain activity</p>
+                        <h1 className="calibration-title">{t('baseline.title')}</h1>
+                        <p className="calibration-subtitle">{t('baseline.subtitle')}</p>
                     </div>
 
                     {/* ── Signal quality badge ── */}
@@ -227,8 +223,8 @@ const BaselineCalibration1 = () => {
                         <div className={`cal-phase-card${ecDone ? ' phase-done' : ''}`}>
                             <span className="cal-phase-icon"><FontAwesomeIcon icon={faMoon} /></span>
                             <div className="cal-phase-info">
-                                <h3>Eyes Closed Baseline</h3>
-                                <p>Relax with eyes closed for 30 seconds</p>
+                                <h3>{t('baseline.ecCardTitle')}</h3>
+                                <p>{t('baseline.ecCardDesc')}</p>
                             </div>
                             <button
                                 className="cal-phase-btn"
@@ -236,8 +232,8 @@ const BaselineCalibration1 = () => {
                                 onClick={() => setPhase(PHASE.PREP_EC)}
                             >
                                 {ecDone
-                                    ? <><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 6 }} />Complete</>
-                                    : <><FontAwesomeIcon icon={faBullseye} style={{ marginRight: 6 }} />Start</>}
+                                    ? <><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 6 }} />{t('baseline.complete')}</>
+                                    : <><FontAwesomeIcon icon={faBullseye} style={{ marginRight: 6 }} />{t('baseline.start')}</>}
                             </button>
                         </div>
 
@@ -245,8 +241,8 @@ const BaselineCalibration1 = () => {
                         <div className={`cal-phase-card${bothDone ? ' phase-done' : ''}${!ecDone ? ' phase-locked' : ''}`}>
                             <span className="cal-phase-icon"><FontAwesomeIcon icon={faEye} /></span>
                             <div className="cal-phase-info">
-                                <h3>Eyes Open Baseline</h3>
-                                <p>Stay relaxed with eyes open for 30 seconds</p>
+                                <h3>{t('baseline.eoCardTitle')}</h3>
+                                <p>{t('baseline.eoCardDesc')}</p>
                             </div>
                             <button
                                 className="cal-phase-btn"
@@ -254,8 +250,8 @@ const BaselineCalibration1 = () => {
                                 onClick={() => setPhase(PHASE.PREP_EO)}
                             >
                                 {bothDone
-                                    ? <><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 6 }} />Complete</>
-                                    : <><FontAwesomeIcon icon={faBullseye} style={{ marginRight: 6 }} />Start</>}
+                                    ? <><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 6 }} />{t('baseline.complete')}</>
+                                    : <><FontAwesomeIcon icon={faBullseye} style={{ marginRight: 6 }} />{t('baseline.start')}</>}
                             </button>
                         </div>
                     </div>
@@ -263,14 +259,14 @@ const BaselineCalibration1 = () => {
 
                     <div className="navigation-buttons-baseline">
                         <button className="btn-back-eeg" disabled={isBusy} onClick={() => navigate(-1)}>
-                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />Back
+                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
                         </button>
                         <button
                             className="btn-next-eeg"
                             disabled={!bothDone}
                             onClick={handleNext}
                         >
-                            Next <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                            {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
                         </button>
                     </div>
                 </div>
@@ -282,34 +278,34 @@ const BaselineCalibration1 = () => {
                     <div className="cal-modal-card">
                         <h2 className="cal-modal-title">
                             <FontAwesomeIcon icon={prepIsEC ? faMoon : faEye} style={{ marginRight: 8 }} />
-                            {prepIsEC ? 'Eyes Closed Baseline' : 'Eyes Open Baseline'}
+                            {prepIsEC ? t('baseline.modalECTitle') : t('baseline.modalEOTitle')}
                         </h2>
 
                         <div className="cal-modal-instructions">
                             {prepIsEC ? (
                                 <span>
-                                    <b>Get ready to close your eyes and relax.</b><br /><br />
-                                    The sensors will record your baseline brainwave pattern for <b>30 seconds</b>.<br /><br />
-                                    <b>What will happen:</b><br />
-                                    1. Click 'Start Recording' below<br />
-                                    2. You'll hear a countdown: <em>5, 4, 3, 2, 1 beeps</em><br />
-                                    3. Please sit comfortably and relax<br />
-                                    4. Try to let your mind wander naturally without focusing on anything specific<br />
-                                    5. A sound will notify you when recording is complete<br /><br />
-                                    <b style={{ color: '#dc2626' }}><FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />Important: Check your speakers/headphones are ON!</b>
+                                    <b>{t('baseline.modalECIntro')}</b><br /><br />
+                                    {t('baseline.modalECDuration')}<br /><br />
+                                    <b>{t('baseline.modalWhatWillHappen')}</b><br />
+                                    1. {t('baseline.modalStep1')}<br />
+                                    2. {t('baseline.modalStep2')}<br />
+                                    3. {t('baseline.modalECStep3')}<br />
+                                    4. {t('baseline.modalECStep4')}<br />
+                                    5. {t('baseline.modalStep5')}<br /><br />
+                                    <b style={{ color: '#dc2626' }}><FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />{t('baseline.modalECWarning')}</b>
                                 </span>
                             ) : (
                                 <span>
-                                    <b>Get ready to keep your eyes open and stay relaxed.</b><br /><br />
-                                    The sensors will record your eyes-open baseline for <b>30 seconds</b>.<br /><br />
-                                    <b>What will happen:</b><br />
-                                    1. Click 'Start Recording' below<br />
-                                    2. You'll hear a countdown: <em>5, 4, 3, 2, 1 beeps</em><br />
-                                    3. Keep your eyes open and relax for 30 seconds<br />
-                                    4. Stay calm and focus on the single white cross in the middle of the screen<br />
-                                    5. Do not worry about blinking.<br />
-                                    6. A sound will notify you when recording is complete<br /><br />
-                                    <b style={{ color: '#dc2626' }}><FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />Important: Keep eyes open but stay relaxed!</b>
+                                    <b>{t('baseline.modalEOIntro')}</b><br /><br />
+                                    {t('baseline.modalEODuration')}<br /><br />
+                                    <b>{t('baseline.modalWhatWillHappen')}</b><br />
+                                    1. {t('baseline.modalStep1')}<br />
+                                    2. {t('baseline.modalStep2')}<br />
+                                    3. {t('baseline.modalEOStep3')}<br />
+                                    4. {t('baseline.modalEOStep4')}<br />
+                                    5. {t('baseline.modalEOStep5')}<br />
+                                    6. {t('baseline.modalEOStep6')}<br /><br />
+                                    <b style={{ color: '#dc2626' }}><FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />{t('baseline.modalEOWarning')}</b>
                                 </span>
                             )}
                         </div>
@@ -321,10 +317,10 @@ const BaselineCalibration1 = () => {
 
                         <div className="cal-modal-buttons">
                             <button className="cal-btn-cancel" onClick={() => setPhase(PHASE.IDLE)}>
-                                <FontAwesomeIcon icon={faCircleXmark} style={{ marginRight: 6 }} />Cancel
+                                <FontAwesomeIcon icon={faCircleXmark} style={{ marginRight: 6 }} />{t('baseline.cancel')}
                             </button>
                             <button className="cal-btn-start" onClick={() => startCountdown(prepIsEC)}>
-                                <FontAwesomeIcon icon={faPlay} style={{ marginRight: 8 }} />Start Recording
+                                <FontAwesomeIcon icon={faPlay} style={{ marginRight: 8 }} />{t('baseline.startRecording')}
                             </button>
                         </div>
                     </div>

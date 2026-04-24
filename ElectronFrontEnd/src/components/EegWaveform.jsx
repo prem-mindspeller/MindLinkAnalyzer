@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import eegConnectService from '../service/wsEegService';
 
 const DISPLAY_SAMPLES = 2048;   // visible window — ~4 s at 512 Hz
@@ -7,6 +8,7 @@ const FS = 512;
 
 
 const EegWaveform = ({ status }) => {
+    const { t } = useTranslation();
     const canvasRef = useRef(null);
     const rafRef = useRef(null);
     const ringBuf = useRef(new Float32Array(BUF_SIZE));
@@ -14,9 +16,21 @@ const EegWaveform = ({ status }) => {
     const ringCount = useRef(0);
     const sampleRateRef = useRef(0);
     const statusRef = useRef(status);
+    const textsRef = useRef({});
 
     // Keep statusRef in sync with prop so drawChart never reads a stale value
     useEffect(() => { statusRef.current = status; }, [status]);
+
+    // Keep translated strings in a ref so drawChart (stable callback) can read them
+    useEffect(() => {
+        textsRef.current = {
+            time: t('eegWaveform.time'),
+            chartTitle: t('eegWaveform.chartTitle'),
+            waiting: t('eegWaveform.waiting'),
+            scanning: t('eegWaveform.scanning'),
+            noDevice: t('eegWaveform.noDevice'),
+        };
+    }, [t]);
 
     const drawChart = useCallback(() => {
         const canvas = canvasRef.current;
@@ -80,7 +94,7 @@ const EegWaveform = ({ status }) => {
         }
         ctx.fillStyle = '#5aaa5a';
         ctx.font = '12px sans-serif';
-        ctx.fillText('Time', ML + PW / 2, MT + PH + 26);
+        ctx.fillText(textsRef.current.time || 'Time', ML + PW / 2, MT + PH + 26);
 
         // Y-axis label
         ctx.save();
@@ -103,7 +117,7 @@ const EegWaveform = ({ status }) => {
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#44cc44';
         ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('Raw EEG  ·  1–45 Hz bandpass  ·  50 Hz notch', ML + 4, MT / 2);
+        ctx.fillText(textsRef.current.chartTitle || 'Raw EEG  ·  1–45 Hz bandpass  ·  50 Hz notch', ML + 4, MT / 2);
         if (sampleRateRef.current > 10) {
             ctx.textAlign = 'right';
             ctx.fillStyle = '#22aa22';
@@ -115,9 +129,10 @@ const EegWaveform = ({ status }) => {
         if (n < 2) {
             const st = statusRef.current;
             const txt = st === 'connected'
-                ? 'Waiting for EEG data…'
-                : (st === 'searching' || st === 'connecting') ? 'Scanning for device…'
-                    : 'No device — click Scan Again';
+                ? (textsRef.current.waiting || 'Waiting for EEG data…')
+                : (st === 'searching' || st === 'connecting')
+                    ? (textsRef.current.scanning || 'Scanning for device…')
+                    : (textsRef.current.noDevice || 'No device — click Scan Again');
             ctx.fillStyle = '#2a5a2a';
             ctx.font = '14px monospace';
             ctx.textAlign = 'center';

@@ -1,10 +1,12 @@
 import React, { useState } from "react";
+import { useTranslation } from 'react-i18next';
 import loginService from '../service/loginService';
 import wsEegService from '../service/wsEegService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faXmark, faEye, faEyeSlash, faTriangleExclamation, faSpinner } from '@fortawesome/free-solid-svg-icons';
 
 const LoginFormComponent = ({ onLoginSuccess }) => {
+    const { t } = useTranslation();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -26,11 +28,11 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
                 wsEegService.init();
                 onLoginSuccess(email);
             } else {
-                setError(result.error || 'Login failed. Please check your credentials.');
+                setError(result.error || t('loginForm.errorFailed'));
             }
         } catch (err) {
             console.error('Login exception:', err);
-            setError('An error occurred during login. Please try again.');
+            setError(t('loginForm.errorGeneral'));
         } finally {
             setIsLoading(false);
         }
@@ -41,14 +43,14 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
             <form onSubmit={handleSubmit} className="login-form">
                 <div className="form-group">
                     <label className="input-label">
-                        <span className="label-text">Email:</span>
+                        <span className="label-text">{t('loginForm.emailLabel')}</span>
                         <span className="label-required">*</span>
                     </label>
                     <div className="input-wrapper">
                         <input
                             type="email"
                             className="form-input"
-                            placeholder="Enter your email"
+                            placeholder={t('loginForm.emailPlaceholder')}
                             value={email}
                             onChange={(e) => {
                                 setEmail(e.target.value);
@@ -70,14 +72,14 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
 
                 <div className="form-group">
                     <label className="input-label">
-                        <span className="label-text">Password:</span>
+                        <span className="label-text">{t('loginForm.passwordLabel')}</span>
                         <span className="label-required">*</span>
                     </label>
                     <div className="input-wrapper">
                         <input
                             type={showPassword ? 'text' : 'password'}
                             className="form-input"
-                            placeholder="Enter your password"
+                            placeholder={t('loginForm.passwordPlaceholder')}
                             value={password}
                             onChange={(e) => {
                                 setPassword(e.target.value);
@@ -110,10 +112,10 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
                     {isLoading ? (
                         <>
                             <FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />
-                            Signing in...
+                            {t('loginForm.signingIn')}
                         </>
                     ) : (
-                        <span>Sign In</span>
+                        <span>{t('loginForm.signIn')}</span>
                     )}
                 </button>
             </form>

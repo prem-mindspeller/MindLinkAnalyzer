@@ -14,6 +14,7 @@
  */
 
 import React, { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTaskRunner } from '../../hooks/useTaskRunner';
 import '../../styles/taskSelection.css';
 import wsEegService from '../../service/wsEegService';
@@ -22,6 +23,7 @@ import wsEegService from '../../service/wsEegService';
 const RECORD_TYPES = new Set(['task', 'thinking', 'viewing', 'video', 'wait']);
 
 const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBack }) => {
+    const { t } = useTranslation();
     const {
         runState, countdown, currentPhase, elapsedPct,
         start, abort, isIdle, isCountingDown, isRunning, isDone,
@@ -47,7 +49,7 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
                 <div className="task-runner-badges">
                     {eyesClosed !== undefined && (
                         <div className={`task-eyes-badge${eyesClosed ? ' eyes-closed' : ' eyes-open'}`}>
-                            {eyesClosed ? ' Eyes Closed Task' : ' Eyes Open Task'}
+                            {eyesClosed ? t('taskRunner.eyesClosed') : t('taskRunner.eyesOpen')}
                         </div>
                     )}
                     <div className="task-eyes-badge task-duration-badge">
@@ -55,7 +57,7 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
                     </div>
                 </div>
                 <div className="task-runner-sound-notice">
-                    🔊 Make sure your <strong>sound is on</strong> before starting.
+                    🔊 {t('taskRunner.soundNotice')}
                 </div>
                 <div className="task-runner-intro">
                     {Array.isArray(introText)
@@ -63,11 +65,11 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
                         : introText}
                 </div>
                 <p className="task-runner-countdown-hint">
-                    You will hear a <strong>5-second countdown beep</strong> before the task starts, and a <strong>double beep</strong> when it ends.
+                    {t('taskRunner.countdownHint')}
                 </p>
                 <div className="task-runner-actions">
-                    <button className="task-runner-btn-back" onClick={onBack}>Cancel</button>
-                    <button className="task-runner-btn-start" onClick={handleStart}>▶ Start task</button>
+                    <button className="task-runner-btn-back" onClick={onBack}>{t('taskRunner.cancel')}</button>
+                    <button className="task-runner-btn-start" onClick={handleStart}>{t('taskRunner.start')}</button>
                 </div>
             </div>
         );
@@ -76,9 +78,9 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
     if (isCountingDown) {
         return (
             <div className="task-runner-card task-runner-countdown-screen">
-                <p className="task-runner-get-ready">Get ready…</p>
+                <p className="task-runner-get-ready">{t('taskRunner.getReady')}</p>
                 <div className="task-runner-big-countdown">{countdown}</div>
-                <p className="task-runner-countdown-caption">Listen for the beeps</p>
+                <p className="task-runner-countdown-caption">{t('taskRunner.listenBeeps')}</p>
             </div>
         );
     }
@@ -88,8 +90,8 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
             <div className={`task-runner-card task-runner-phase${isRecordingPhase ? ' phase-recording' : ' phase-cue'}`}>
                 <div className="task-runner-phase-badge">
                     {isRecordingPhase
-                        ? 'Recording'
-                        : currentPhase.type === 'get_ready' ? ' Get Ready' : ' Read Instructions'}
+                        ? t('taskRunner.recording')
+                        : currentPhase.type === 'get_ready' ? t('taskRunner.getReadyBadge') : t('taskRunner.readInstructions')}
                 </div>
                 <h3 className="task-runner-phase-instruction">
                     {eyesClosed && isRecordingPhase ? null : (currentPhase.instruction || taskName)}
@@ -102,16 +104,16 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
                     />
                 )}
                 {eyesClosed && isRecordingPhase && (
-                    <p className="task-runner-eyes-hint">Keep your eyes <strong>closed</strong></p>
+                    <p className="task-runner-eyes-hint">{t('taskRunner.eyesClosedHint')}</p>
                 )}
                 {!eyesClosed && isRecordingPhase && (
-                    <p className="task-runner-eyes-hint"> Keep your eyes <strong>open</strong></p>
+                    <p className="task-runner-eyes-hint">{t('taskRunner.eyesOpenHint')}</p>
                 )}
                 <div className="task-runner-progress-wrap">
                     <div className="task-runner-progress-bar" style={{ width: `${elapsedPct}%` }} />
                     <span className="task-runner-progress-text">{elapsedPct}%</span>
                 </div>
-                <button className="task-runner-btn-abort" onClick={handleAbort}>✕ Abort</button>
+                <button className="task-runner-btn-abort" onClick={handleAbort}>{t('taskRunner.abort')}</button>
             </div>
         );
     }
@@ -120,11 +122,11 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
         return (
             <div className="task-runner-card task-runner-done-screen">
                 <div className="task-runner-done-icon">✅</div>
-                <h2 className="task-runner-done-title">{taskName} Complete!</h2>
+                <h2 className="task-runner-done-title">{t('taskRunner.complete', { taskName })}</h2>
                 <p className="task-runner-done-msg">
-                    EEG data has been recorded. You can now return to the task list.
+                    {t('taskRunner.doneMsg')}
                 </p>
-                <button className="task-runner-btn-start" onClick={onBack}>← Back to Tasks</button>
+                <button className="task-runner-btn-start" onClick={onBack}>{t('taskRunner.backToTasks')}</button>
             </div>
         );
     }

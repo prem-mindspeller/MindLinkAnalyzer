@@ -1,24 +1,27 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import TaskRunner from './TaskRunner';
 
-const PHASES = [
-    { type: 'get_ready', duration: 8, record: false, instruction: 'Get ready…' },
-    { type: 'cue', duration: 8, record: false, instruction: 'NUMBERS: On the next screen, look for the numbers. Keep your gaze steady.' },
-    { type: 'viewing', duration: 20, record: true, instruction: 'NUMBERS: Look at the numbers. Keep your gaze steady and minimise movement.' },
-    { type: 'cue', duration: 8, record: false, instruction: 'FORMS: On the next screen, look for the shapes. Keep your gaze steady.' },
-    { type: 'viewing', duration: 20, record: true, instruction: 'FORMS: Look at the shapes. Keep your gaze steady and minimise movement.' },
-    { type: 'rest', duration: 2, record: false, instruction: 'Rest.' },
-];
-
-const NumFormTask = ({ onComplete, onBack }) => (
-    <TaskRunner
-        phases={PHASES}
-        taskName="Numerical Preference"
-        eyesClosed={false}
-        introText="You will look at a stimulus image in two phases: first focus on NUMBERS, then on FORMS (shapes). Keep your gaze steady and minimise movement. Eyes open throughout. Total duration ~60 seconds."
-        onComplete={onComplete}
-        onBack={onBack}
-    />
-);
+const NumFormTask = ({ onComplete, onBack }) => {
+    const { t } = useTranslation();
+    const phases = [
+        { type: 'get_ready', duration: 8, record: false, instruction: t('taskContent.numForm.getReady') },
+        { type: 'cue', duration: 8, record: false, instruction: t('taskContent.numForm.cue1') },
+        { type: 'viewing', duration: 20, record: true, instruction: t('taskContent.numForm.phase1') },
+        { type: 'cue', duration: 8, record: false, instruction: t('taskContent.numForm.cue2') },
+        { type: 'viewing', duration: 20, record: true, instruction: t('taskContent.numForm.phase2') },
+        { type: 'rest', duration: 2, record: false, instruction: t('taskContent.numForm.rest') },
+    ];
+    return (
+        <TaskRunner
+            phases={phases}
+            taskName={t('taskContent.numForm.name')}
+            eyesClosed={false}
+            introText={t('taskContent.numForm.intro')}
+            onComplete={onComplete}
+            onBack={onBack}
+        />
+    );
+};
 
 export default NumFormTask;
