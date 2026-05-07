@@ -74,7 +74,7 @@ class StandaloneAnalyzerConfig:
     """
     alpha: float = 0.05
     mode: str = "aggregate_only"
-    dependence_correction: str = "Kost-McDermott"
+    dependence_correction: str = "independence_approximation"
     use_permutation_for_sumP: bool = True
     n_perm: int = 1000  # Updated from 100 for publication-grade p-value resolution
     n_perm_fast: int = 100  # Fast mode permutation count
@@ -95,8 +95,25 @@ class StandaloneAnalyzerConfig:
     nmin_sessions: int = 2
     min_blocks_per_condition: int = 8
     # Preprocessing config
-    line_noise_freq: float = 60.0  # 50.0 for EU/Asia
+    line_noise_freq: float = 50.0  # 50 Hz (EU/Asia/Africa/Australia); 60 Hz (Americas/Korea)
     apply_notch_filter: bool = True
+    bandpass_low: float = 0.5      # High-pass cutoff (drift removal)
+    bandpass_high: float = 45.0    # Low-pass cutoff (below mains)
+    bandpass_order: int = 4
+    apply_average_reference: bool = True  # Common average reference for surface EEG
+    apply_hf_artifact_rejection: bool = True
+    hf_artifact_low: float = 30.0
+    hf_artifact_high: float = 45.0
+    hf_broadband_low: float = 1.0
+    hf_broadband_high: float = 45.0
+    hf_global_ratio_floor: float = 0.35
+    hf_frontotemporal_ratio_floor: float = 0.30
+    hf_artifact_mad_z: float = 6.0
+    hf_min_retained_windows: int = 3
+    hf_max_reject_fraction: float = 0.80
+    apply_ica_emg_cleaning: bool = False
+    apply_csd_transform: bool = False
+    apply_cca_emg_cleaning: bool = False
     emg_adaptive_threshold: bool = True
     emg_fixed_ratio: float = 1.5
     # Bootstrap CI
@@ -113,7 +130,8 @@ class OfflineEEGAnalyzer:
     """
     
     def __init__(self, csv_file: str, markers_file: Optional[str] = None, 
-                 fast_mode: bool = True, n_permutations: int = 200):
+                 fast_mode: bool = True, n_permutations: int = 200,
+                 force_analysis: bool = False):
         """
         Initialize the analyzer.
         
@@ -122,11 +140,14 @@ class OfflineEEGAnalyzer:
             markers_file: Optional path to JSON file with phase markers
             fast_mode: Use fast parametric mode vs full permutation mode
             n_permutations: Number of permutations for full mode
+            force_analysis: Show results even when data quality flags would
+                normally suppress them (e.g. known high-impedance recordings)
         """
         self.csv_file = Path(csv_file)
         self.markers_file = Path(markers_file) if markers_file else None
         self.fast_mode = fast_mode
         self.n_permutations = n_permutations
+        self.force_analysis = force_analysis
         
         # Validate files exist
         if not self.csv_file.exists():
@@ -252,8 +273,8 @@ class OfflineEEGAnalyzer:
             # Use pre-imported engine
             logger.info("Initializing analysis engine...")
             
-            # Create config
-            config = StandaloneAnalyzerConfig()
+            # Use the analyzer's config (allows CLI overrides set after __init__)
+            config = self.config
             config.fast_mode = self.fast_mode
             config.n_perm = self.n_permutations
             config.use_permutation_for_sumP = not self.fast_mode
@@ -276,7 +297,20 @@ class OfflineEEGAnalyzer:
             logger.info("Converting data to numpy arrays...")
             timestamps = df['timestamp'].values
             channel_data = df[self.session_info['channel_names']].values
-            
+
+            # Auto-detect amplitude scale and normalize to µV.
+            # ANT Neuro SDK may export in nV (median std ~500-5000) or µV (median std ~10-200).
+            # Threshold: if median per-channel std > 200, assume nV and divide by 1000.
+            import numpy as _np
+            _ch_stds = _np.std(channel_data, axis=0)
+            _median_std = float(_np.median(_ch_stds[_ch_stds > 0.1]))  # exclude flat channels
+            if _median_std > 200.0:
+                scale_factor = 1000.0
+                logger.info(f"Amplitude scale auto-detected: median channel std={_median_std:.1f} → likely nV. Normalizing by ÷{scale_factor:.0f} to µV.")
+                channel_data = channel_data / scale_factor
+            else:
+                logger.info(f"Amplitude scale: median channel std={_median_std:.1f} µV — normal range, no normalization needed.")
+
             # Populate engine's raw data
             engine.raw_data = [(t, sample) for t, sample in zip(timestamps, channel_data)]
             engine.recording_start_time = 0  # Already relative in CSV
@@ -514,7 +548,8 @@ class OfflineEEGAnalyzer:
                 results=results_for_report,
                 fast_mode=self.fast_mode,
                 n_permutations=self.n_permutations,
-                config=self.config
+                config=self.config,
+                force_analysis=self.force_analysis
             )
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(lines))
@@ -758,7 +793,7 @@ class OfflineEEGAnalyzer:
 def main():
     """Main entry point for CLI."""
     parser = argparse.ArgumentParser(
-        description='MindLink Offline 64-Channel EEG Analysis Tool',
+        description='BrainLink Offline / MindLink Offline 64-Channel EEG Analysis Tool',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -784,6 +819,22 @@ Examples:
                        help='Output format (default: txt)')
     parser.add_argument('--permutations', type=int, default=200,
                        help='Number of permutations for full mode (default: 200)')
+    parser.add_argument('--force', action='store_true', default=False,
+                       help='Show analysis results even when data quality checks fail '
+                            '(use for known high-impedance or partial-contact recordings)')
+    parser.add_argument('--line-freq', type=float, default=50.0, choices=[50.0, 60.0],
+                       help='Power line frequency in Hz: 50 (EU/Asia/Africa/Australia, default) '
+                            'or 60 (Americas/Korea)')
+    parser.add_argument('--no-car', action='store_true', default=False,
+                       help='Disable common average reference (CAR is on by default)')
+    parser.add_argument('--no-hf-reject', action='store_true', default=False,
+                       help='Disable high-frequency EMG/artifact epoch rejection')
+    parser.add_argument('--ica-emg', action='store_true', default=False,
+                       help='Request ICA-based EMG cleaning when optional dependencies are available')
+    parser.add_argument('--csd', action='store_true', default=False,
+                       help='Request surface Laplacian/CSD transform when optional dependencies are available')
+    parser.add_argument('--cca-emg', action='store_true', default=False,
+                       help='Request CCA-based EMG cleaning when optional dependencies are available')
     parser.add_argument('--version', action='version', version='MindLink Offline Analyzer 1.0.0')
     
     args = parser.parse_args()
@@ -797,8 +848,16 @@ Examples:
             csv_file=args.csv_file,
             markers_file=args.markers,
             fast_mode=fast_mode,
-            n_permutations=args.permutations
+            n_permutations=args.permutations,
+            force_analysis=args.force
         )
+        # Apply preprocessing CLI overrides
+        analyzer.config.line_noise_freq = args.line_freq
+        analyzer.config.apply_average_reference = not args.no_car
+        analyzer.config.apply_hf_artifact_rejection = not args.no_hf_reject
+        analyzer.config.apply_ica_emg_cleaning = args.ica_emg
+        analyzer.config.apply_csd_transform = args.csd
+        analyzer.config.apply_cca_emg_cleaning = args.cca_emg
         
         # Run analysis
         results = analyzer.analyze()

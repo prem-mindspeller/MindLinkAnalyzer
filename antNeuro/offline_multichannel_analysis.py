@@ -139,6 +139,27 @@ class OfflineMultichannelEngine:
             omnibus = 'Friedman'
             posthoc = 'Wilcoxon'
             seed = None
+            # Preprocessing
+            line_noise_freq = 50.0  # Hz; 50 EU/Asia/Africa/Australia, 60 Americas/Korea
+            bandpass_low = 0.5      # Hz; high-pass to remove drift
+            bandpass_high = 45.0    # Hz; low-pass below mains harmonics
+            bandpass_order = 4      # Butterworth order (per direction; doubles with filtfilt)
+            apply_average_reference = True  # CAR for surface EEG
+            block_seconds = 4.0     # Block aggregation window for stats
+            min_blocks_per_condition = 8
+            apply_hf_artifact_rejection = True
+            hf_artifact_low = 30.0
+            hf_artifact_high = 45.0
+            hf_broadband_low = 1.0
+            hf_broadband_high = 45.0
+            hf_global_ratio_floor = 0.35
+            hf_frontotemporal_ratio_floor = 0.30
+            hf_artifact_mad_z = 6.0
+            hf_min_retained_windows = 3
+            hf_max_reject_fraction = 0.80
+            apply_ica_emg_cleaning = False
+            apply_csd_transform = False
+            apply_cca_emg_cleaning = False
         
         self.config = Config()
         
@@ -344,48 +365,73 @@ class OfflineMultichannelEngine:
             'channel_quality': {}  # Quality score per channel (0-1)
         }
         
-        # 1. Detect flat channels (likely disconnected)
+        # 1. Detect flat/noisy channels
+        # Strategy: use session-adaptive thresholds so recordings at different
+        # amplitude scales (e.g. different ANT SDK gain settings) are treated
+        # consistently.  A truly disconnected channel (flat) is still caught by
+        # an absolute floor; a truly noisy channel is one that is an outlier
+        # relative to the session's own median amplitude, not a hardcoded µV limit.
+
+        # --- Pass 1: compute per-channel statistics ---
+        ch_stds = np.array([float(np.std(data[:, i])) for i in range(n_channels)])
+        ch_p99s = np.array([float(np.percentile(np.abs(data[:, i]), 99))
+                            for i in range(n_channels)])
+
+        # Session reference: median across non-flat channels (std >= 0.5 µV).
+        # Falls back to 800 µV if almost all channels are flat (pathological).
+        non_flat = ch_stds >= 0.5
+        if non_flat.sum() >= 4:
+            session_median_p99 = float(np.median(ch_p99s[non_flat]))
+        else:
+            session_median_p99 = 800.0
+
+        # Noisy threshold: 5× session median (catches genuine outlier channels)
+        # with a hard floor of 800 µV so we never accept extreme absolute values.
+        noisy_threshold = max(session_median_p99 * 5.0, 800.0)
+
+        # --- Pass 2: classify each channel ---
         for ch_idx in range(n_channels):
-            ch_data = data[:, ch_idx]
-            std = np.std(ch_data)
-            
-            # Flat signal detection (<0.1 µV std)
-            if std < 0.1:
+            std = ch_stds[ch_idx]
+            amp_p99 = ch_p99s[ch_idx]
+
+            # Flat signal (< 0.5 µV std — disconnected or shorted electrode)
+            if std < 0.5:
                 artifact_info['flat_channels'].append(ch_idx)
                 artifact_info['bad_channels'].append(ch_idx)
                 artifact_info['channel_quality'][ch_idx] = 0.0
                 continue
-            
-            # Check for excessive amplitude (>200 µV)
-            max_amp = np.max(np.abs(ch_data))
-            if max_amp > 200:
+
+            # Noisy channel: p99 more than 5× the session median
+            if amp_p99 > noisy_threshold:
                 artifact_info['noisy_channels'].append(ch_idx)
                 artifact_info['bad_channels'].append(ch_idx)
                 artifact_info['channel_quality'][ch_idx] = 0.3
                 continue
-            
-            # Compute quality score based on std and amplitude
-            # Good EEG typically has 5-50 µV std
-            if 5 <= std <= 50 and max_amp <= 150:
+
+            # Quality score: how close is this channel to the session median?
+            # ratio = 1.0 means exactly median; >3 or <0.3 means outlier.
+            ratio = amp_p99 / max(session_median_p99, 1.0)
+            if 0.3 <= ratio <= 3.0:
                 quality = 1.0
-            elif 2 <= std <= 80 and max_amp <= 200:
+            elif 0.1 <= ratio <= 5.0:
                 quality = 0.7
             else:
                 quality = 0.5
-            
+
             artifact_info['channel_quality'][ch_idx] = quality
-        
-        # 2. Detect high-amplitude artifact windows
+
+        # 2. Detect high-amplitude artifact windows using 95th percentile per window.
+        # Use the same adaptive threshold so high-amplitude sessions are not
+        # swamped with false-positive artifact windows.
+        window_threshold = noisy_threshold
         window_size = int(0.5 * self.fs)  # 0.5 second windows
         for start_idx in range(0, n_samples - window_size, window_size // 2):
             end_idx = start_idx + window_size
             window = data[start_idx:end_idx, :]
-            
-            # Check for sudden amplitude spikes across channels
-            max_per_channel = np.max(np.abs(window), axis=0)
-            if np.mean(max_per_channel) > 150:  # Average across channels exceeds threshold
+            p95_per_channel = np.percentile(np.abs(window), 95, axis=0)
+            if np.mean(p95_per_channel) > window_threshold:
                 artifact_info['artifact_windows'].append((start_idx, end_idx))
-        
+
         return artifact_info
     
     def remove_artifacts(self, data: np.ndarray, artifact_info: Dict[str, Any] = None) -> np.ndarray:
@@ -405,18 +451,17 @@ class OfflineMultichannelEngine:
         cleaned_data = data.copy()
         n_samples, n_channels = data.shape
         
-        # 1. Remove bad channels by interpolating from neighbors
+        # 1. Replace bad channels with NaN so downstream feature extraction can
+        #    drop them and the report can mark them as excluded. The previous
+        #    array-index-neighbor "interpolation" was not spatially meaningful
+        #    (e.g. O2 ended up averaged with O1 and AF7 because of layout order)
+        #    and produced fabricated features for bad channels.
         bad_channels = artifact_info.get('bad_channels', [])
         if bad_channels:
-            print(f"[ARTIFACT REMOVAL] Interpolating {len(bad_channels)} bad channels")
+            print(f"[ARTIFACT REMOVAL] Excluding {len(bad_channels)} bad channels (NaN-marked)")
             for bad_ch in bad_channels:
-                if 0 < bad_ch < n_channels - 1:
-                    # Simple average of neighbors
-                    cleaned_data[:, bad_ch] = (cleaned_data[:, bad_ch - 1] + cleaned_data[:, bad_ch + 1]) / 2
-                elif bad_ch == 0 and n_channels > 1:
-                    cleaned_data[:, bad_ch] = cleaned_data[:, bad_ch + 1]
-                elif bad_ch == n_channels - 1 and n_channels > 1:
-                    cleaned_data[:, bad_ch] = cleaned_data[:, bad_ch - 1]
+                if 0 <= bad_ch < n_channels:
+                    cleaned_data[:, bad_ch] = np.nan
         
         # 2. Remove high-amplitude artifact windows by linear interpolation
         artifact_windows = artifact_info.get('artifact_windows', [])
@@ -603,6 +648,18 @@ class OfflineMultichannelEngine:
             'noisy_channels': set(),
             'artifact_windows': [],
             'channel_quality': {},
+            'channel_quality_scores': {},
+            'channel_bad_count': {},
+            'channel_phase_count': {},
+            'hf_artifact_windows': [],
+            'hf_artifact_rejection': {
+                'enabled': bool(getattr(self.config, 'apply_hf_artifact_rejection', True)),
+                'method': 'adaptive_hf_ratio',
+                'windows_tested': 0,
+                'windows_rejected': 0,
+                'forced_retained_windows': 0,
+                'phase_metrics': [],
+            },
         }
         
         # Reset calibration data buckets before accumulation
@@ -686,6 +743,148 @@ class OfflineMultichannelEngine:
             print(f"  Task '{task_name}' windows: {len(task_data.get('features', []))}")
         
         return self.calibration_data
+
+    def _compute_high_frequency_artifact_mask(
+        self, data: np.ndarray, window_samples: int, step_samples: int
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Detect windows dominated by broadband high-frequency muscle activity."""
+        n_samples = len(data)
+        n_windows = max(0, (n_samples - window_samples) // step_samples + 1)
+        disabled_metrics = {
+            'enabled': bool(getattr(self.config, 'apply_hf_artifact_rejection', True)),
+            'method': 'adaptive_hf_ratio',
+            'n_windows': n_windows,
+            'n_rejected': 0,
+            'forced_retained_windows': 0,
+            'saturated': False,
+            'reason': '',
+            'global_ratio_threshold': 1.0,
+            'frontotemporal_ratio_threshold': 1.0,
+            'max_global_ratio': 0.0,
+            'max_frontotemporal_ratio': 0.0,
+        }
+        if (not getattr(self.config, 'apply_hf_artifact_rejection', True)
+                or n_windows <= 0):
+            return np.zeros(n_windows, dtype=bool), disabled_metrics
+
+        hf_low = float(getattr(self.config, 'hf_artifact_low', 30.0))
+        hf_high = float(getattr(self.config, 'hf_artifact_high', 45.0))
+        broad_low = float(getattr(self.config, 'hf_broadband_low', 1.0))
+        broad_high = float(getattr(self.config, 'hf_broadband_high', 45.0))
+        mad_z = float(getattr(self.config, 'hf_artifact_mad_z', 6.0))
+        global_floor = float(getattr(self.config, 'hf_global_ratio_floor', 0.35))
+        ft_floor = float(getattr(self.config, 'hf_frontotemporal_ratio_floor', 0.30))
+        min_retained = int(getattr(self.config, 'hf_min_retained_windows', 3))
+
+        frontotemporal_names = set(CHANNEL_REGIONS.get('frontal', [])) | set(CHANNEL_REGIONS.get('temporal', []))
+        frontotemporal_idx = [
+            i for i, name in enumerate(self.channel_names[:data.shape[1]])
+            if name in frontotemporal_names
+        ]
+        if not frontotemporal_idx:
+            frontotemporal_idx = list(range(data.shape[1]))
+
+        global_ratios = []
+        ft_ratios = []
+        starts = range(0, n_samples - window_samples + 1, step_samples)
+        for start_idx in starts:
+            window = data[start_idx:start_idx + window_samples]
+            window = np.asarray(window, dtype=float)
+            valid_ch = np.all(np.isfinite(window), axis=0)
+            if valid_ch.sum() < 2:
+                global_ratios.append(1.0)
+                ft_ratios.append(1.0)
+                continue
+
+            freqs, psd = signal.welch(
+                np.where(np.isfinite(window), window, 0.0),
+                self.fs,
+                nperseg=min(window_samples, 256),
+                axis=0,
+            )
+            psd[:, ~valid_ch] = np.nan
+            hf_mask = (freqs >= hf_low) & (freqs <= hf_high)
+            broad_mask = (freqs >= broad_low) & (freqs <= broad_high)
+            if not np.any(hf_mask) or not np.any(broad_mask):
+                global_ratios.append(0.0)
+                ft_ratios.append(0.0)
+                continue
+
+            broad_power = np.nansum(psd[broad_mask, :], axis=0) + 1e-12
+            hf_power = np.nansum(psd[hf_mask, :], axis=0)
+            ratios = hf_power / broad_power
+            global_ratios.append(float(np.nanpercentile(ratios[valid_ch], 75)))
+
+            ft_valid = np.array([idx for idx in frontotemporal_idx if idx < len(valid_ch) and valid_ch[idx]], dtype=int)
+            if ft_valid.size:
+                ft_ratios.append(float(np.nanpercentile(ratios[ft_valid], 75)))
+            else:
+                ft_ratios.append(float(global_ratios[-1]))
+
+        global_arr = np.asarray(global_ratios, dtype=float)
+        ft_arr = np.asarray(ft_ratios, dtype=float)
+
+        def robust_threshold(values: np.ndarray, floor: float) -> float:
+            median = float(np.nanmedian(values))
+            mad = float(np.nanmedian(np.abs(values - median)))
+            adaptive = median + mad_z * 1.4826 * mad
+            return min(max(floor, adaptive), floor * 2.0)
+
+        global_threshold = robust_threshold(global_arr, global_floor)
+        ft_threshold = robust_threshold(ft_arr, ft_floor)
+        rejected = (global_arr > global_threshold) | (ft_arr > ft_threshold)
+
+        max_reject_fraction = float(getattr(self.config, 'hf_max_reject_fraction', 0.50))
+        initial_reject_fraction = float(np.mean(rejected)) if n_windows else 0.0
+        if n_windows > 0 and initial_reject_fraction > max_reject_fraction:
+            metrics = {
+                'enabled': True,
+                'method': 'adaptive_hf_ratio',
+                'n_windows': int(n_windows),
+                'n_rejected': 0,
+                'forced_retained_windows': 0,
+                'saturated': True,
+                'reason': (
+                    f"candidate rejection fraction {initial_reject_fraction:.3f} "
+                    f"exceeds max rejection fraction {max_reject_fraction:.3f}; "
+                    "phase treated as tonically contaminated and epoch rejection disabled"
+                ),
+                'candidate_rejected': int(np.sum(rejected)),
+                'hf_band': [hf_low, hf_high],
+                'broadband': [broad_low, broad_high],
+                'global_ratio_threshold': float(global_threshold),
+                'frontotemporal_ratio_threshold': float(ft_threshold),
+                'max_global_ratio': float(np.nanmax(global_arr)) if global_arr.size else 0.0,
+                'max_frontotemporal_ratio': float(np.nanmax(ft_arr)) if ft_arr.size else 0.0,
+            }
+            return np.zeros(n_windows, dtype=bool), metrics
+
+        forced_retained = 0
+        retained = int((~rejected).sum())
+        if n_windows > 0 and retained < min_retained:
+            keep_n = min(min_retained, n_windows)
+            risk = np.maximum(global_arr / max(global_threshold, 1e-12),
+                              ft_arr / max(ft_threshold, 1e-12))
+            keep_idx = np.argsort(risk)[:keep_n]
+            forced_retained = int(np.sum(rejected[keep_idx]))
+            rejected[keep_idx] = False
+
+        metrics = {
+            'enabled': True,
+            'method': 'adaptive_hf_ratio',
+            'n_windows': int(n_windows),
+            'n_rejected': int(np.sum(rejected)),
+            'forced_retained_windows': forced_retained,
+            'saturated': False,
+            'reason': '',
+            'hf_band': [hf_low, hf_high],
+            'broadband': [broad_low, broad_high],
+            'global_ratio_threshold': float(global_threshold),
+            'frontotemporal_ratio_threshold': float(ft_threshold),
+            'max_global_ratio': float(np.nanmax(global_arr)) if global_arr.size else 0.0,
+            'max_frontotemporal_ratio': float(np.nanmax(ft_arr)) if ft_arr.size else 0.0,
+        }
+        return rejected.astype(bool), metrics
     
     def _extract_windowed_features(self, data: np.ndarray, progress_callback=None, base_progress=0) -> List[Dict]:
         """
@@ -705,7 +904,8 @@ class OfflineMultichannelEngine:
         
         # Perform artifact detection on full data
         artifact_info = self.detect_artifacts(data)
-        print(f"[ARTIFACT DETECTION] Bad channels: {len(artifact_info['bad_channels'])}")
+        print(f"[ARTIFACT DETECTION] Bad channels: {len(artifact_info['bad_channels'])}"
+              f" (session median p99 used for adaptive threshold)")
         print(f"[ARTIFACT DETECTION] Artifact windows: {len(artifact_info['artifact_windows'])}")
         
         # Apply artifact removal
@@ -724,31 +924,76 @@ class OfflineMultichannelEngine:
                 'noisy_channels': set(),
                 'artifact_windows': [],
                 'channel_quality': {},
+                'channel_quality_scores': {},  # list of scores per channel for averaging
+                'channel_bad_count': {},        # how many phases flagged each channel bad
+                'channel_phase_count': {},      # how many phases touched each channel
+                'hf_artifact_windows': [],
+                'hf_artifact_rejection': {
+                    'enabled': bool(getattr(self.config, 'apply_hf_artifact_rejection', True)),
+                    'method': 'adaptive_hf_ratio',
+                    'windows_tested': 0,
+                    'windows_rejected': 0,
+                    'forced_retained_windows': 0,
+                    'phase_metrics': [],
+                },
             }
         
         idx_to_name = lambda idx: (self.channel_names[idx]
                                    if idx < len(self.channel_names) else f'Ch{idx}')
         
-        # Accumulate bad/flat/noisy channels (union across phases)
-        for i in artifact_info.get('bad_channels', []):
-            self._accumulated_artifact_info['bad_channels'].add(idx_to_name(i))
+        # Accumulate flat channels (always bad regardless of phase count)
         for i in artifact_info.get('flat_channels', []):
             self._accumulated_artifact_info['flat_channels'].add(idx_to_name(i))
+            self._accumulated_artifact_info['bad_channels'].add(idx_to_name(i))
         for i in artifact_info.get('noisy_channels', []):
             self._accumulated_artifact_info['noisy_channels'].add(idx_to_name(i))
         self._accumulated_artifact_info['artifact_windows'].extend(
             artifact_info.get('artifact_windows', []))
-        # For channel_quality, keep worst (lowest) quality score per channel
+
+        # Accumulate quality scores per channel to compute a mean later.
+        # Track how many phases flagged each channel bad (not flat) — a channel
+        # is only marked globally bad if it is bad in the MAJORITY of phases.
+        bad_set = set(artifact_info.get('bad_channels', []))
+        flat_set = set(artifact_info.get('flat_channels', []))
         for ch_idx, quality in artifact_info.get('channel_quality', {}).items():
             ch_name = idx_to_name(ch_idx)
-            existing = self._accumulated_artifact_info['channel_quality'].get(ch_name, 1.0)
-            self._accumulated_artifact_info['channel_quality'][ch_name] = min(existing, quality)
+            scores = self._accumulated_artifact_info['channel_quality_scores']
+            scores.setdefault(ch_name, []).append(quality)
+            counts = self._accumulated_artifact_info['channel_phase_count']
+            counts[ch_name] = counts.get(ch_name, 0) + 1
+            if ch_idx in bad_set and ch_idx not in flat_set:
+                bc = self._accumulated_artifact_info['channel_bad_count']
+                bc[ch_name] = bc.get(ch_name, 0) + 1
         
+        hf_rejected, hf_metrics = self._compute_high_frequency_artifact_mask(
+            cleaned_data, window_samples, step_samples)
+        hf_acc = self._accumulated_artifact_info.setdefault('hf_artifact_rejection', {
+            'enabled': bool(getattr(self.config, 'apply_hf_artifact_rejection', True)),
+            'method': 'adaptive_hf_ratio',
+            'windows_tested': 0,
+            'windows_rejected': 0,
+            'forced_retained_windows': 0,
+            'phase_metrics': [],
+        })
+        hf_acc['windows_tested'] += int(hf_metrics.get('n_windows', 0))
+        hf_acc['windows_rejected'] += int(hf_metrics.get('n_rejected', 0))
+        hf_acc['forced_retained_windows'] += int(hf_metrics.get('forced_retained_windows', 0))
+        hf_acc['saturated_phases'] = int(hf_acc.get('saturated_phases', 0)) + int(bool(hf_metrics.get('saturated', False)))
+        hf_acc['candidate_rejected'] = int(hf_acc.get('candidate_rejected', 0)) + int(hf_metrics.get('candidate_rejected', hf_metrics.get('n_rejected', 0)))
+        hf_acc['phase_metrics'].append(hf_metrics)
+        print("[HF ARTIFACT REJECTION] "
+              f"{hf_metrics.get('n_rejected', 0)}/{hf_metrics.get('n_windows', 0)} windows rejected "
+              f"(global>{hf_metrics.get('global_ratio_threshold', 0):.3f}, "
+              f"frontotemporal>{hf_metrics.get('frontotemporal_ratio_threshold', 0):.3f})")
+
         features_list = []
         n_windows = (n_samples - window_samples) // step_samples + 1
         
         for i, start_idx in enumerate(range(0, n_samples - window_samples + 1, step_samples)):
             end_idx = start_idx + window_samples
+            if i < len(hf_rejected) and bool(hf_rejected[i]):
+                self._accumulated_artifact_info['hf_artifact_windows'].append((start_idx, end_idx))
+                continue
             window_data = cleaned_data[start_idx:end_idx]
             
             features = self._extract_multichannel_features(window_data)
@@ -766,21 +1011,70 @@ class OfflineMultichannelEngine:
         acc = getattr(self, '_accumulated_artifact_info', None)
         if not acc:
             return
-        
+
+        # Compute mean quality per channel across all phases
+        mean_quality = {}
+        for ch_name, scores in acc.get('channel_quality_scores', {}).items():
+            mean_quality[ch_name] = float(np.mean(scores))
+
+        # A non-flat channel is globally bad only if it was noisy in the
+        # MAJORITY (>50%) of phases it appeared in.
+        majority_bad = set()
+        for ch_name, bad_count in acc.get('channel_bad_count', {}).items():
+            total_phases = acc['channel_phase_count'].get(ch_name, 1)
+            if bad_count / total_phases > 0.5:
+                majority_bad.add(ch_name)
+
+        # Flat channels are always bad regardless of phase count
+        all_bad = acc['flat_channels'] | majority_bad
+
         self.artifact_summary = {
-            'bad_channels': sorted(acc['bad_channels']),
+            'bad_channels': sorted(all_bad),
             'flat_channels': sorted(acc['flat_channels']),
-            'noisy_channels': sorted(acc['noisy_channels']),
+            'noisy_channels': sorted(majority_bad),
             'artifact_windows': acc['artifact_windows'],
-            'channel_quality': acc['channel_quality'],
+            'hf_artifact_windows': acc.get('hf_artifact_windows', []),
+            'hf_artifact_rejection': acc.get('hf_artifact_rejection', {}),
+            'advanced_emg_cleaning': self._advanced_emg_cleaning_status(),
+            'channel_quality': mean_quality,
         }
-        
+
         n_bad = len(self.artifact_summary['bad_channels'])
         n_total = self.channel_count
         print(f"[ARTIFACT SUMMARY] Final: {n_bad}/{n_total} bad channels across all phases")
         if n_bad > 0:
             print(f"[ARTIFACT SUMMARY] Bad channels: {', '.join(self.artifact_summary['bad_channels'][:10])}"
                   f"{'...' if n_bad > 10 else ''}")
+
+    def _advanced_emg_cleaning_status(self) -> Dict[str, Any]:
+        """Report availability of advanced EMG cleaning hooks without pretending they ran."""
+        try:
+            import importlib.util
+            mne_available = importlib.util.find_spec('mne') is not None
+            sklearn_available = importlib.util.find_spec('sklearn') is not None
+        except Exception:
+            mne_available = False
+            sklearn_available = False
+
+        ica_requested = bool(getattr(self.config, 'apply_ica_emg_cleaning', False))
+        csd_requested = bool(getattr(self.config, 'apply_csd_transform', False))
+        cca_requested = bool(getattr(self.config, 'apply_cca_emg_cleaning', False))
+        return {
+            'ica_requested': ica_requested,
+            'ica_applied': False,
+            'ica_available': mne_available,
+            'csd_requested': csd_requested,
+            'csd_applied': False,
+            'csd_available': mne_available,
+            'cca_requested': cca_requested,
+            'cca_applied': False,
+            'cca_available': sklearn_available,
+            'reason': (
+                'Advanced ICA/CSD/CCA cleaning requires optional validated dependencies '
+                '(mne for ICA/CSD, sklearn for CCA). Dependency-free high-frequency epoch '
+                'rejection was applied instead.'
+            ),
+        }
     
     def _extract_multichannel_features(self, mc_data: np.ndarray) -> Dict[str, float]:
         """
@@ -798,22 +1092,85 @@ class OfflineMultichannelEngine:
         if n_samples < 256 or n_channels < 1:
             return None
         
-        # Remove DC offset
-        mc_data = mc_data - np.mean(mc_data, axis=0, keepdims=True)
+        # Identify bad channels (NaN-marked by remove_artifacts) once.
+        # We carry this mask through preprocessing so bad channels don't
+        # NaN-poison the filters or the average reference.
+        bad_ch_mask = np.any(~np.isfinite(mc_data), axis=0)  # (n_channels,)
+        good_ch = ~bad_ch_mask
         
-        # Apply notch filter for line noise
-        try:
-            b_notch, a_notch = signal.iirnotch(60.0, 30.0, self.fs)
-            mc_data = signal.filtfilt(b_notch, a_notch, mc_data, axis=0)
-        except:
-            pass
+        # Operate on a copy of valid channels only; bad channels stay NaN
+        # and are re-injected at the end so PSD detects them as such.
+        mc_work = mc_data.copy()
+        if np.any(bad_ch_mask):
+            # Replace NaN with 0 in bad channels so filters don't error,
+            # then re-NaN them after filtering.
+            mc_work[:, bad_ch_mask] = 0.0
         
-        # Compute PSD for all channels
+        # Remove DC offset (per-channel)
+        mc_work = mc_work - np.mean(mc_work, axis=0, keepdims=True)
+        
+        # Common Average Reference (CAR): subtract instantaneous mean across
+        # GOOD channels at each sample. Standard for surface EEG; reduces
+        # shared noise and centers the montage. Bad channels are excluded
+        # from the reference so they don't inject zero/garbage into it.
+        if getattr(self.config, 'apply_average_reference', True) and good_ch.sum() > 1:
+            ref = np.mean(mc_work[:, good_ch], axis=1, keepdims=True)
+            mc_work = mc_work - ref
+        
+        # 0.5-45 Hz bandpass: removes electrode drift / sweat artifact (HP)
+        # and content above the gamma band (LP). Applied with filtfilt for
+        # zero phase distortion. nyq = fs/2.
+        bp_lo = float(getattr(self.config, 'bandpass_low', 0.5))
+        bp_hi = float(getattr(self.config, 'bandpass_high', 45.0))
+        bp_order = int(getattr(self.config, 'bandpass_order', 4))
+        nyq = 0.5 * self.fs
+        if 0 < bp_lo < bp_hi < nyq:
+            try:
+                sos = signal.butter(bp_order, [bp_lo / nyq, bp_hi / nyq],
+                                    btype='band', output='sos')
+                mc_work = signal.sosfiltfilt(sos, mc_work, axis=0)
+            except Exception:
+                pass
+        
+        # Notch filter for line noise (region-dependent: 50 Hz EU/Asia, 60 Hz Americas).
+        # Note: when bandpass_high < line_noise_freq the notch is mostly redundant,
+        # but kept for robustness against filter ringing at the edge.
+        line_freq = float(getattr(self.config, 'line_noise_freq', 50.0))
+        if 0 < line_freq < nyq:
+            try:
+                b_notch, a_notch = signal.iirnotch(line_freq, 30.0, self.fs)
+                mc_work = signal.filtfilt(b_notch, a_notch, mc_work, axis=0)
+            except Exception:
+                pass
+        
+        # Re-NaN bad channels so downstream feature extraction skips them.
+        if np.any(bad_ch_mask):
+            mc_work[:, bad_ch_mask] = np.nan
+        mc_data = mc_work
+        
+        # Compute PSD for all channels.
+        # Welch propagates NaN: any channel that contains NaN (bad/excluded)
+        # will yield NaN PSD, which we detect with np.isfinite() below to skip
+        # per-channel features and use nanmean for regional/global aggregations.
         nperseg = min(n_samples, 256)
         try:
-            freqs, psd_all = signal.welch(mc_data, self.fs, nperseg=nperseg, axis=0)
-        except:
+            # Replace NaN with 0 only for the Welch call so it doesn't error;
+            # we re-mark bad channels as NaN in the PSD afterwards.
+            valid_ch_mask = np.all(np.isfinite(mc_data), axis=0)
+            mc_data_for_psd = np.where(np.isfinite(mc_data), mc_data, 0.0)
+            freqs, psd_all = signal.welch(mc_data_for_psd, self.fs,
+                                          nperseg=nperseg, axis=0)
+            psd_all[:, ~valid_ch_mask] = np.nan
+        except Exception:
             return None
+        
+        # Neural band mask: restrict total_power to 0.5–45 Hz (matching band definitions).
+        # Summing the full 0–250 Hz spectrum would be dominated by broadband noise/EMG above 45 Hz,
+        # inflating total_power and producing artificially large effect sizes vs baseline.
+        band_freqs = sorted(set([lo for lo, _ in self.bands.values()] + [hi for _, hi in self.bands.values()]))
+        neural_lo = min(lo for lo, _ in self.bands.values())
+        neural_hi = max(hi for _, hi in self.bands.values())
+        neural_mask = (freqs >= neural_lo) & (freqs <= neural_hi)
         
         # ==================================================================
         # 1. PER-CHANNEL FEATURES
@@ -821,7 +1178,12 @@ class OfflineMultichannelEngine:
         for ch_idx in range(min(n_channels, self.channel_count)):
             ch_name = self.channel_names[ch_idx] if ch_idx < len(self.channel_names) else f'Ch{ch_idx}'
             psd = psd_all[:, ch_idx]
-            total_power = np.sum(psd) + 1e-12
+            # Skip bad channels (NaN-marked by remove_artifacts).
+            # Their per-channel features would be meaningless and would
+            # bias regional/global aggregations if forced to a value.
+            if not np.all(np.isfinite(psd)):
+                continue
+            total_power = np.sum(psd[neural_mask]) + 1e-12
             
             for band_name, (low, high) in self.bands.items():
                 mask = (freqs >= low) & (freqs <= high)
@@ -853,8 +1215,12 @@ class OfflineMultichannelEngine:
             if not ch_indices:
                 continue
             
-            region_psd = np.mean(psd_all[:, ch_indices], axis=1)
-            total_power = np.sum(region_psd) + 1e-12
+            # Use nanmean so bad (NaN) channels are silently dropped from the
+            # regional average rather than poisoning it.
+            region_psd = np.nanmean(psd_all[:, ch_indices], axis=1)
+            if not np.all(np.isfinite(region_psd)):
+                continue
+            total_power = np.sum(region_psd[neural_mask]) + 1e-12
             
             for band_name, (low, high) in self.bands.items():
                 mask = (freqs >= low) & (freqs <= high)
@@ -878,6 +1244,11 @@ class OfflineMultichannelEngine:
         for left_name, right_name, left_idx, right_idx in self.asymmetry_indices:
             left_psd = psd_all[:, left_idx]
             right_psd = psd_all[:, right_idx]
+            # Skip pairs where either channel is bad (NaN) — asymmetry is
+            # only meaningful when both hemispheres have valid data.
+            if (not np.all(np.isfinite(left_psd))
+                    or not np.all(np.isfinite(right_psd))):
+                continue
             
             for band_name, (low, high) in self.bands.items():
                 mask = (freqs >= low) & (freqs <= high)
@@ -891,10 +1262,12 @@ class OfflineMultichannelEngine:
         if 'F3' in self.channel_index and 'F4' in self.channel_index:
             f3_idx = self.channel_index['F3']
             f4_idx = self.channel_index['F4']
-            alpha_mask = (freqs >= 8) & (freqs <= 13)
-            f3_alpha = np.sum(psd_all[alpha_mask, f3_idx]) + 1e-12
-            f4_alpha = np.sum(psd_all[alpha_mask, f4_idx]) + 1e-12
-            features['frontal_alpha_asymmetry'] = float(np.log(f4_alpha) - np.log(f3_alpha))
+            if (np.all(np.isfinite(psd_all[:, f3_idx]))
+                    and np.all(np.isfinite(psd_all[:, f4_idx]))):
+                alpha_mask = (freqs >= 8) & (freqs <= 13)
+                f3_alpha = np.sum(psd_all[alpha_mask, f3_idx]) + 1e-12
+                f4_alpha = np.sum(psd_all[alpha_mask, f4_idx]) + 1e-12
+                features['frontal_alpha_asymmetry'] = float(np.log(f4_alpha) - np.log(f3_alpha))
         
         # Inter-regional coherence
         region_pairs = [
@@ -907,8 +1280,14 @@ class OfflineMultichannelEngine:
         
         for region1, region2 in region_pairs:
             if region1 in self.region_indices and region2 in self.region_indices:
-                idx1 = self.region_indices[region1][0]
-                idx2 = self.region_indices[region2][0]
+                # Pick first GOOD channel in each region rather than blindly [0],
+                # so a bad first-listed channel doesn't kill the whole pair.
+                idx1 = next((i for i in self.region_indices[region1]
+                             if np.all(np.isfinite(mc_data[:, i]))), None)
+                idx2 = next((i for i in self.region_indices[region2]
+                             if np.all(np.isfinite(mc_data[:, i]))), None)
+                if idx1 is None or idx2 is None:
+                    continue
                 
                 try:
                     f_coh, coh = signal.coherence(
@@ -924,17 +1303,19 @@ class OfflineMultichannelEngine:
                 except:
                     pass
         
-        # Global Field Power
-        gfp = np.std(mc_data, axis=1)
-        features['gfp_mean'] = float(np.mean(gfp))
-        features['gfp_std'] = float(np.std(gfp))
-        features['gfp_max'] = float(np.max(gfp))
+        # Global Field Power (NaN-aware to ignore excluded channels)
+        gfp = np.nanstd(mc_data, axis=1)
+        gfp = gfp[np.isfinite(gfp)]
+        if gfp.size > 0:
+            features['gfp_mean'] = float(np.mean(gfp))
+            features['gfp_std'] = float(np.std(gfp))
+            features['gfp_max'] = float(np.max(gfp))
         
         # ==================================================================
         # 4. GLOBAL FEATURES
         # ==================================================================
-        global_psd = np.mean(psd_all, axis=1)
-        global_total = np.sum(global_psd) + 1e-12
+        global_psd = np.nanmean(psd_all, axis=1)
+        global_total = np.sum(global_psd[neural_mask]) + 1e-12
         
         for band_name, (low, high) in self.bands.items():
             mask = (freqs >= low) & (freqs <= high)
@@ -1184,7 +1565,29 @@ class OfflineMultichannelEngine:
             print(f"[OFFLINE ENGINE] Insufficient data (baseline: {len(baseline_features)}, task: {len(task_features)})")
             return None
         
-        print(f"[OFFLINE ENGINE] Analyzing {len(task_features)} task windows vs {len(baseline_features)} baseline windows")
+        # === BLOCK AGGREGATION =============================================
+        # Window-level features are autocorrelated (50% overlap, 2 s windows).
+        # Treating them as iid inflates effect sizes and deflates p-values.
+        # Aggregate into block_seconds blocks (mean over windows in each block).
+        # With window_size=2 s, overlap=0.5 -> step=1 s, so 4 s blocks ≈ 4 windows.
+        block_seconds = float(getattr(self.config, 'block_seconds', 4.0))
+        step_seconds = self.window_size * (1.0 - self.window_overlap)
+        windows_per_block = max(1, int(round(block_seconds / max(step_seconds, 1e-6))))
+        
+        if windows_per_block > 1:
+            n_b_pre = len(baseline_features)
+            n_t_pre = len(task_features)
+            baseline_features = self._aggregate_blocks(baseline_features, windows_per_block)
+            task_features = self._aggregate_blocks(task_features, windows_per_block)
+            print(f"[OFFLINE ENGINE] Block aggregation: {windows_per_block} windows/block "
+                  f"({block_seconds:.1f}s) -> baseline {n_b_pre}->{len(baseline_features)}, "
+                  f"task {n_t_pre}->{len(task_features)}")
+            if len(baseline_features) < 3 or len(task_features) < 3:
+                print("[OFFLINE ENGINE] Insufficient blocks after aggregation; falling back to windows")
+                baseline_features = self.calibration_data.get('eyes_closed', {}).get('features', [])
+                task_features = self.calibration_data.get('task', {}).get('features', [])
+        
+        print(f"[OFFLINE ENGINE] Analyzing {len(task_features)} task blocks vs {len(baseline_features)} baseline blocks")
         print(f"[OFFLINE ENGINE] Computing Hedges' g effect sizes with {self.config.n_perm} permutations...")
         
         # Get all feature names
@@ -1195,8 +1598,17 @@ class OfflineMultichannelEngine:
         significant_count = 0
         
         for feat_name in tqdm(feature_names, desc="Computing effect sizes", unit="features"):
-            baseline_values = np.array([f.get(feat_name, 0) for f in baseline_features])
-            task_values = np.array([f.get(feat_name, 0) for f in task_features])
+            baseline_values = np.array(
+                [f[feat_name] for f in baseline_features
+                 if feat_name in f and np.isfinite(f[feat_name])],
+                dtype=float)
+            task_values = np.array(
+                [f[feat_name] for f in task_features
+                 if feat_name in f and np.isfinite(f[feat_name])],
+                dtype=float)
+            min_blocks = 3
+            if len(baseline_values) < min_blocks or len(task_values) < min_blocks:
+                continue
             
             # Skip if no variance
             if np.std(baseline_values) < 1e-10:
@@ -1247,12 +1659,19 @@ class OfflineMultichannelEngine:
         # 2. Fisher combined test: T = -2 * sum(log(p_i)), df = 2k
         p_arr = np.array(all_p_values, dtype=np.float64)
         p_arr = np.clip(p_arr, 1e-300, 1.0)
-        fisher_stat = float(-2.0 * np.sum(np.log(p_arr)))
-        fisher_df = 2.0 * k_features
-        fisher_p = self._chi2_sf(fisher_stat, int(fisher_df))
+        if k_features > 0:
+            fisher_stat = float(-2.0 * np.sum(np.log(p_arr)))
+            fisher_df = 2.0 * k_features
+            fisher_p = self._chi2_sf(fisher_stat, int(fisher_df))
+        else:
+            fisher_stat = 0.0
+            fisher_df = 0.0
+            fisher_p = 1.0
         fisher_sig = fisher_p < self.config.alpha
         
-        # KM correlation adjustment (simplified - full matrix too expensive for 1300+ features)
+        # Dependence handling: this is Fisher's standard chi-square
+        # independence approximation. The features are correlated, so reports
+        # must not describe this as a Kost-McDermott/Brown correction.
         km_mean_r = 0.0
         km_df = fisher_df
         km_df_ratio = km_df / (2.0 * max(k_features, 1))
@@ -1278,15 +1697,119 @@ class OfflineMultichannelEngine:
                 composite_score += float(-np.log10(max(p_adjusted[i], 1e-300)))
         
         # 5. Effect size statistics (significant features)
-        abs_d_values = [abs(per_feature[fn]['hedges_g'])
-                        for fn in feature_names_in_results
-                        if per_feature[fn].get('significant', False)]
+        # |d|>10 is physiologically implausible for scalp EEG and almost always
+        # indicates movement artifact or electrode instability in that channel.
+        # Mark such features artifact_suspect and Winsorise them out of Mean|d|
+        # (raw values are preserved in per_feature for the feature listing).
+        _D_CAP = 10.0
+        abs_d_values_raw = [abs(per_feature[fn]['hedges_g'])
+                            for fn in feature_names_in_results
+                            if per_feature[fn].get('significant', False)]
+        for fn in feature_names_in_results:
+            if per_feature[fn].get('significant', False) and abs(per_feature[fn]['hedges_g']) > _D_CAP:
+                per_feature[fn]['artifact_suspect'] = True
+        abs_d_values = [min(v, _D_CAP) for v in abs_d_values_raw]  # Winsorised
         mean_abs_d = float(np.mean(abs_d_values)) if abs_d_values else 0.0
         median_abs_d = float(np.median(abs_d_values)) if abs_d_values else 0.0
         # Fraction of significant features with |d| > 5 (noise indicator)
-        extreme_d_frac = (sum(1 for v in abs_d_values if v > 5.0) / max(len(abs_d_values), 1)) if abs_d_values else 0.0
+        extreme_d_frac = (sum(1 for v in abs_d_values_raw if v > 5.0) / max(len(abs_d_values_raw), 1)) if abs_d_values_raw else 0.0
+        artifact_suspect_count = sum(1 for v in abs_d_values_raw if v > _D_CAP)
         
-        # 6. Data quality validation (cap-not-worn / noise detection)
+        # 6. GAMMA FLOOD DETECTION — EMG contamination guard
+        # EMG (muscle artifact) produces broadband noise that elevates gamma
+        # (30-45 Hz) uniformly across the scalp. When >50% of gamma features
+        # are significant, the pattern is consistent with EMG rather than
+        # cortical gamma oscillations.  Mark gamma features as EMG-excluded
+        # and recompute omnibus stats without them so that the composite
+        # score, Mean|d|, SumP, and Fisher reflect only trustworthy bands.
+        gamma_flood_threshold = 0.25
+        gamma_feature_names = [fn for fn in feature_names_in_results
+                               if 'gamma' in fn.lower()]
+        gamma_sig_names = [fn for fn in gamma_feature_names
+                           if per_feature[fn].get('significant', False)]
+        gamma_flood = False
+        gamma_flood_info = {
+            'detected': False,
+            'total_gamma': len(gamma_feature_names),
+            'sig_gamma': len(gamma_sig_names),
+            'threshold': gamma_flood_threshold,
+        }
+        
+        if gamma_feature_names:
+            gamma_sig_frac = len(gamma_sig_names) / len(gamma_feature_names)
+            gamma_flood_info['sig_fraction'] = gamma_sig_frac
+            print(f"[OFFLINE ENGINE] Gamma check: {len(gamma_sig_names)}/{len(gamma_feature_names)} "
+                  f"significant ({gamma_sig_frac*100:.1f}%), threshold={gamma_flood_threshold*100:.0f}%")
+            
+            if gamma_sig_frac > gamma_flood_threshold:
+                gamma_flood = True
+                gamma_flood_info['detected'] = True
+                
+                # Mark gamma features
+                for fn in gamma_feature_names:
+                    per_feature[fn]['emg_excluded'] = True
+                
+                # Recompute summary stats excluding gamma
+                non_gamma_names = [fn for fn in feature_names_in_results
+                                   if 'gamma' not in fn.lower()]
+                non_gamma_p = np.array([per_feature[fn]['p_value']
+                                        for fn in non_gamma_names], dtype=np.float64)
+                non_gamma_p = np.clip(non_gamma_p, 1e-300, 1.0)
+                k_ng = len(non_gamma_p)
+                
+                # Fisher (excluding gamma)
+                fisher_stat_ng = float(-2.0 * np.sum(np.log(non_gamma_p)))
+                fisher_df_ng = 2.0 * k_ng
+                fisher_p = self._chi2_sf(fisher_stat_ng, int(fisher_df_ng))
+                fisher_sig = fisher_p < self.config.alpha
+                fisher_df = fisher_df_ng
+                k_features = k_ng
+                km_df = fisher_df_ng
+                km_df_ratio = km_df / (2.0 * max(k_ng, 1))
+                
+                # SumP (excluding gamma)
+                sum_p_observed = float(np.sum(non_gamma_p))
+                sum_p_mean = k_ng * 0.5
+                sum_p_var = k_ng / 12.0
+                sum_p_z = (sum_p_observed - sum_p_mean) / np.sqrt(max(sum_p_var, 1e-18))
+                try:
+                    sum_p_pval = float(stats.norm.cdf(sum_p_z))
+                except Exception:
+                    sum_p_pval = 1.0
+                sum_p_sig = sum_p_pval < self.config.alpha
+                
+                # Composite score (excluding gamma)
+                # Run FDR on non-gamma subset
+                ng_rejected, ng_p_adj = self._bh_fdr(
+                    [per_feature[fn]['p_value'] for fn in non_gamma_names],
+                    self.config.fdr_alpha)
+                composite_score = 0.0
+                for i, fn in enumerate(non_gamma_names):
+                    if ng_rejected[i]:
+                        composite_score += float(-np.log10(max(ng_p_adj[i], 1e-300)))
+                
+                # Effect sizes (excluding gamma; Winsorised at _D_CAP)
+                significant_count = sum(
+                    1 for fn in non_gamma_names
+                    if per_feature[fn].get('significant', False))
+                abs_d_values_raw_ng = [abs(per_feature[fn]['hedges_g'])
+                                       for fn in non_gamma_names
+                                       if per_feature[fn].get('significant', False)]
+                abs_d_values = [min(v, _D_CAP) for v in abs_d_values_raw_ng]
+                mean_abs_d = float(np.mean(abs_d_values)) if abs_d_values else 0.0
+                median_abs_d = float(np.median(abs_d_values)) if abs_d_values else 0.0
+                extreme_d_frac = (
+                    sum(1 for v in abs_d_values_raw_ng if v > 5.0) / max(len(abs_d_values_raw_ng), 1)
+                ) if abs_d_values_raw_ng else 0.0
+                artifact_suspect_count = sum(1 for v in abs_d_values_raw_ng if v > _D_CAP)
+                
+                print(f"[OFFLINE ENGINE] GAMMA FLOOD: {len(gamma_sig_names)}/{len(gamma_feature_names)} "
+                      f"gamma features significant ({gamma_sig_frac*100:.0f}% > {gamma_flood_threshold*100:.0f}% threshold)")
+                print(f"[OFFLINE ENGINE]   -> {len(gamma_feature_names)} gamma features excluded from omnibus stats")
+                print(f"[OFFLINE ENGINE]   -> Recalculated: CompositeScore={composite_score:.3f}, "
+                      f"Mean|d|={mean_abs_d:.4f}, Median|d|={median_abs_d:.4f}")
+        
+        # 7. Data quality validation (cap-not-worn / noise detection)
         # Use MEDIAN |d| instead of mean — robust to outlier total_power features
         # that legitimately spike during cognitive tasks like mental_math.
         # Cap-not-worn: noise affects ALL features → median stays high (>5)
@@ -1326,10 +1849,12 @@ class OfflineMultichannelEngine:
         print(f"[OFFLINE ENGINE] Omnibus p-value: {omnibus_result.get('p_value', 1.0):.4f}")
         print(f"[OFFLINE ENGINE] Fisher combined p = {fisher_p:.6g}, SumP = {sum_p_observed:.4f} (p={sum_p_pval:.6g})")
         print(f"[OFFLINE ENGINE] CompositeScore = {composite_score:.3f}, Mean|d| = {mean_abs_d:.4f}, Median|d| = {median_abs_d:.4f}")
-        print(f"[OFFLINE ENGINE] Extreme features (|d|>5): {sum(1 for v in abs_d_values if v > 5.0)}/{len(abs_d_values)} ({extreme_d_frac*100:.1f}%)")
+        print(f"[OFFLINE ENGINE] Extreme features (|d|>5): {sum(1 for v in abs_d_values_raw if v > 5.0)}/{len(abs_d_values_raw)} ({extreme_d_frac*100:.1f}%)")
+        if artifact_suspect_count > 0:
+            print(f"[OFFLINE ENGINE] Artifact-suspect features (|d|>10, Winsorised in Mean|d|): {artifact_suspect_count}")
         if not data_quality_reliable:
             for w in data_quality_warnings:
-                print(f"[OFFLINE ENGINE] ⚠ {w}")
+                print(f"[OFFLINE ENGINE] WARNING: {w}")
         
         return {
             'per_feature': per_feature,
@@ -1350,6 +1875,8 @@ class OfflineMultichannelEngine:
                     'k_features': k_features,
                     'km_mean_r': km_mean_r,
                     'km_df_ratio': km_df_ratio,
+                    'method': 'Fisher chi-square independence approximation',
+                    'dependence_correction_applied': False,
                     'alpha': self.config.alpha,
                 },
                 'sum_p': {
@@ -1364,6 +1891,7 @@ class OfflineMultichannelEngine:
                 'effect_size_mean': mean_abs_d,
                 'effect_size_median': median_abs_d,
                 'extreme_d_fraction': extreme_d_frac,
+                'artifact_suspect_count': artifact_suspect_count,
                 'feature_selection': {
                     'total_features': len(per_feature),
                     'fdr_alpha': self.config.fdr_alpha,
@@ -1375,6 +1903,7 @@ class OfflineMultichannelEngine:
                     'sig_count': significant_count,
                     'total_features': len(per_feature),
                 },
+                'gamma_flood': gamma_flood_info,
             }
         }
     
@@ -1424,6 +1953,40 @@ class OfflineMultichannelEngine:
             p_adj[orig_idx] = min(q[pos], 1.0)
         rejected = [pa <= alpha for pa in p_adj]
         return rejected, p_adj
+    
+    @staticmethod
+    def _aggregate_blocks(features_list: List[Dict], windows_per_block: int) -> List[Dict]:
+        """Aggregate consecutive feature windows into block means.
+        
+        Reduces autocorrelation between adjacent overlapping windows so that
+        downstream Wilcoxon / Hedges' g treat blocks as approximately iid.
+        Trailing windows that don't fill a full block are dropped to keep
+        block size constant (the alternative — averaging fewer windows in
+        the last block — biases its variance).
+        
+        Args:
+            features_list: List of per-window feature dicts (all share keys).
+            windows_per_block: Number of consecutive windows averaged per block.
+        
+        Returns:
+            List of block-mean feature dicts; length = len(features_list) // windows_per_block.
+        """
+        if windows_per_block <= 1 or not features_list:
+            return list(features_list)
+        n_blocks = len(features_list) // windows_per_block
+        if n_blocks == 0:
+            return list(features_list)
+        keys = list(features_list[0].keys())
+        blocks: List[Dict[str, float]] = []
+        for b in range(n_blocks):
+            chunk = features_list[b * windows_per_block:(b + 1) * windows_per_block]
+            block: Dict[str, float] = {}
+            for k in keys:
+                vals = [w.get(k) for w in chunk if isinstance(w.get(k), (int, float))]
+                if vals:
+                    block[k] = float(np.mean(vals))
+            blocks.append(block)
+        return blocks
     
     @staticmethod
     def _holm_bonferroni(p_values, alpha=0.05):
@@ -1620,7 +2183,7 @@ class OfflineMultichannelEngine:
         
         if min_sessions < self.nmin_sessions:
             # Ranking-only mode: insufficient sessions for significance testing
-            msg = (f"⚠ Across-task significance testing disabled: N={min_sessions} sessions < Nmin={self.nmin_sessions}. "
+            msg = (f"WARNING: Across-task significance testing disabled: N={min_sessions} sessions < Nmin={self.nmin_sessions}. "
                    f"Showing descriptive rankings only (median effect per task).")
             print(f"[OFFLINE ENGINE] {msg}")
             

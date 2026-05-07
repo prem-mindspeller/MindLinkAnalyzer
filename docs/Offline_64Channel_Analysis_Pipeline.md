@@ -1,821 +1,566 @@
 # Offline 64-Channel EEG Analysis Pipeline
 ## Technical Documentation
 
-**System**: BrainLink Companion - ANT Neuro Integration  
-**Version**: 2.0 (Offline Analysis)  
-**Date**: February 2026  
-**Author**: BrainLink Companion Development Team
+**System:** MindLink / BrainLink Companion - ANT Neuro Integration  
+**Version:** 2.4, offline analysis pipeline  
+**Updated:** April 2026  
+**Primary files:** `BrainLink_Offline_Analyzer.py`, `antNeuro/offline_multichannel_analysis.py`, `utils/enhanced_report_generator.py`
 
 ---
 
-## Table of Contents
+## 1. Purpose
 
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Phase 1: Real-Time Data Recording](#phase-1-real-time-data-recording)
-4. [Phase 2: Offline Feature Extraction](#phase-2-offline-feature-extraction)
-5. [Feature Types and Calculations](#feature-types-and-calculations)
-6. [Statistical Analysis Pipeline](#statistical-analysis-pipeline)
-7. [File Formats and Storage](#file-formats-and-storage)
-8. [Performance Characteristics](#performance-characteristics)
-9. [Advantages Over Live Processing](#advantages-over-live-processing)
+The offline 64-channel analyzer separates EEG recording from analysis. During the experiment, the system records raw 64-channel EEG and phase markers. After the session, the offline pipeline reloads the raw data, segments it by phase, preprocesses it, extracts features, compares task windows against baseline windows, and generates a quality-gated report.
 
----
+The pipeline is currently suitable for:
 
-## Overview
+- Session-level quality control.
+- Exploratory physiological response analysis.
+- Method development for 64-channel EEG feature extraction.
+- Identifying whether a recording is potentially profile-ready.
 
-### Purpose
-The Offline 64-Channel EEG Analysis Pipeline is designed to separate **data acquisition** from **feature extraction and analysis**. This approach eliminates computational overhead during EEG streaming, preserves raw data for reanalysis, and allows for comprehensive multi-channel feature extraction without time pressure.
-
-### Key Principle
-**Record Everything, Process Later**
-
-During streaming sessions, the system records all 64 channels of raw EEG data to disk with precise timestamps. Feature extraction and statistical analysis are performed offline when the user clicks "Analyze," allowing for sophisticated processing without risking data loss or streaming interruptions.
+The pipeline is not allowed to produce cognitive profiles, trait scores, diagnostic labels, or subject-level conclusions unless the report gate says `PROFILE-READY`.
 
 ---
 
-## Architecture
+## 2. Current Profile-Safety Principle
 
-### Two-Phase Design
+The report is intentionally conservative. It separates:
 
+- **Profile-facing sections:** only features that pass artifact filters and are not EMG-excluded gamma.
+- **Diagnostic/QC sections:** artifact-suspect features, gamma flood diagnostics, saturation guard details, bad-channel information, and baseline limitations.
+
+When the report says `RESEARCH-ONLY`, lower sections suppress interpretive language such as cognitive, emotional, or trait explanations. Spatial and connectivity distributions may still be shown for QC review, but not for profile inference.
+
+Example current gate from `analysis_report_fast_20260427_165750.txt`:
+
+```text
+PROFILE SUITABILITY: RESEARCH-ONLY
+
+Blocking reasons:
+  - Gamma EMG flood in 4 task(s)
+  - Artifact-suspect features: 243 unique feature names / 332 task-feature instances with |d| > 10
+  - High-frequency saturation guard activated in 20 phase(s): 574 candidate windows left in place to avoid biased tiny-sample analysis
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    PHASE 1: RECORDING                       │
-│                    (During Streaming)                       │
-├─────────────────────────────────────────────────────────────┤
-│  EEG Stream (500 Hz) → Raw Data Buffer → CSV File          │
-│                                                             │
-│  User Actions → Phase Markers → Timestamp Recording        │
-│                                                             │
-│  Computational Load: MINIMAL (file I/O only)               │
-└─────────────────────────────────────────────────────────────┘
 
-                            ↓
+Interpretation for that report: the session can be discussed as a contaminated physiological/QC example, but it should not be used to create a user profile.
 
-┌─────────────────────────────────────────────────────────────┐
-│                    PHASE 2: ANALYSIS                        │
-│                    (When "Analyze" Clicked)                 │
-├─────────────────────────────────────────────────────────────┤
-│  Load Raw Data → Segment by Phase → Extract Features       │
-│                                                             │
-│  1,400+ Features/Window → Statistical Analysis             │
-│                                                             │
-│  Computational Load: HIGH (but not time-critical)          │
-└─────────────────────────────────────────────────────────────┘
+---
+
+## 3. High-Level Flow
+
+```text
+Raw 64-channel EEG CSV
+        +
+Phase marker JSON
+        |
+        v
+Load and align timestamps
+        |
+        v
+Segment into eyes-closed, eyes-open, and task phases
+        |
+        v
+Per-phase artifact detection and bad-channel handling
+        |
+        v
+High-frequency artifact gate before feature extraction
+        |
+        v
+Notch filtering, average reference, PSD computation
+        |
+        v
+Window-level feature extraction
+        |
+        v
+Task-vs-baseline statistics
+        |
+        v
+Artifact/gamma/profile-suitability guards
+        |
+        v
+Report generation
 ```
 
 ---
 
-## Phase 1: Real-Time Data Recording
+## 4. Recording Inputs
 
-### 1.1 Data Acquisition
+### 4.1 EEG Data
 
-**Hardware**: ANT Neuro eego™ amplifier (64 channels, 500 Hz sampling rate)
+- Hardware target: ANT Neuro eego / 64-channel cap.
+- Sampling rate: 500 Hz.
+- Expected data shape after loading: `n_samples x 64`.
+- CSV columns: timestamp, sample index, and channel voltages.
+- Channel montage: extended 10-20 / 10-10 style labels such as `Fp1`, `Fp2`, `F3`, `F4`, `C3`, `Pz`, `O1`, `POz`.
 
-**Transmission**: 
-- EDI2 gRPC API streams data in batches (typically 50-100 samples per callback)
-- Data arrives in Volts, converted to microvolts (µV) immediately
-- Original precision: 24-bit ADC resolution
+### 4.2 Phase Markers
 
-**Buffer Management**:
-- In-memory circular buffer: 10 seconds (5,000 samples × 64 channels)
-- Continuous write to disk via CSV file handle
-- Thread-safe writing with mutex locks
+The analyzer uses a marker JSON to map time ranges to recording phases. Typical phases:
 
-### 1.2 Channel Configuration
+- `eyes_closed`: resting baseline currently used as the main statistical reference.
+- `eyes_open`: retained for reference and provenance, but not pooled with eyes-closed baseline.
+- `task`: task-specific segments, for example `attention_focus`, `mental_math`, `visual_imagery`, `emotion_face`.
+- Protocol/data-collection tasks such as 40 Hz stimulation may be recorded but excluded from multi-task statistical comparison.
 
-**64-Channel Layout** (NA-265 waveguard cap):
+The report now distinguishes:
 
-- **Connector 1** (Channels 0-31):
-  - Frontal: Fp1, Fp2, F9, F7, F3, Fz, F4, F8, F10
-  - Fronto-Central: FC5, FC1, FC2, FC6
-  - Temporal: T9, T7, T10
-  - Central: C3, C4
-  - Centro-Parietal: CP5, CP1, CP2, CP6
-  - Parietal: P9, P7, P3, Pz, P4, P8, P10
-  - Occipital: O1, O2
-
-- **Connector 2** (Channels 32-63):
-  - Anterior Frontal: AF7, AF3, AF4, AF8
-  - Frontal: F5, F1, F2, F6
-  - Fronto-Central: FC3, FCz, FC4
-  - Central: C5, C1, C2, C6
-  - Centro-Parietal: CP3, CP4
-  - Parietal: P5, P1, P2, P6
-  - Parieto-Occipital: PO5, PO3, PO4, PO6, PO7, PO8, POz
-  - Fronto-Temporal: FT7, FT8
-  - Temporo-Parietal: TP7, TP8
-
-### 1.3 Phase Marking System
-
-**Purpose**: Mark specific time intervals for different experimental conditions
-
-**Phases Tracked**:
-1. **Eyes-Closed Baseline** (typically 30 seconds)
-   - Purpose: Establish resting-state baseline with minimal visual input
-   - Used for: Baseline normalization, alpha rhythm assessment
-
-2. **Eyes-Open Baseline** (typically 30 seconds)
-   - Purpose: Assess alpha suppression, active resting state
-   - Used for: Comparative baseline, arousal assessment
-
-3. **Task Execution** (typically 60 seconds per task)
-   - Purpose: Record task-specific brain activity
-   - Task types: Visual imagery, attention focus, motor imagery, etc.
-   - Multiple tasks supported in single session
-
-**Marker Data Structure**:
-- Phase name (string): "eyes_closed", "eyes_open", "task"
-- Task type (string or null): Task identifier for task phases
-- Start timestamp (float): Seconds from recording start
-- End timestamp (float): Seconds from recording start
-
-**Timing Precision**: 
-- Timestamps accurate to ±1ms
-- Synchronized with sample indices for exact sample-level alignment
-
-### 1.4 File Writing
-
-**CSV Structure**:
-- **Header Row**: `timestamp,sample_index,Fp1,Fp2,...,POz`
-- **Data Rows**: One row per sample (500 rows/second)
-- **Format**: Comma-separated values, 6 decimal places for precision
-
-**Write Strategy**:
-- Batch writes (50-100 samples at once) for efficiency
-- Immediate flush to disk for data safety
-- Mutex-protected for thread safety
-
-**Storage Location**: 
-- Default: `~/BrainLink_Recordings/` (user home directory)
-- Configurable via engine initialization
-
-**File Naming**: 
-- Pattern: `session_YYYYMMDD_HHMMSS.csv`
-- Example: `session_20260206_150540.csv`
+```text
+Tasks executed: 5
+Tasks analyzed statistically: 4
+Excluded from statistical comparison:
+  - 1 data collection/protocol task(s), for example 40 Hz stimulation if present in the protocol
+```
 
 ---
 
-## Phase 2: Offline Feature Extraction
+## 5. Windowing
 
-### 2.1 Data Loading and Segmentation
+The pipeline extracts features from overlapping windows.
 
-**Loading Process**:
-1. Read phase markers from JSON file
-2. Load raw data from CSV (or use in-memory buffer if available)
-3. Convert to NumPy array: shape (n_samples, 64)
-4. Extract timestamp column for temporal alignment
+| Parameter | Current value | Reason |
+|---|---:|---|
+| Window length | 2.0 s | Provides spectral information while keeping task dynamics local. |
+| Step size | 1.0 s | 50% overlap improves coverage. |
+| Block aggregation | 4.0 s blocks | Reduces dependence between adjacent overlapped windows. |
+| Minimum blocks | 8 per condition where possible | Avoids unstable tiny-sample comparisons. |
 
-**Segmentation**:
-- For each phase marker:
-  - Extract samples where `timestamp >= start AND timestamp <= end`
-  - Validate minimum data length (at least 256 samples for FFT)
-  - Store as separate phase-specific dataset
+Effective sample size is reported per task, for example:
 
-**Example Segmentation**:
-```
-Full Recording: 90,033 samples (180.07 seconds @ 500 Hz)
-
-Segment 1 (eyes_closed): samples 0-14,824 (29.65 seconds)
-Segment 2 (eyes_open): samples 21,667-36,664 (30.00 seconds)
-Segment 3 (task - visual_imagery): samples 39,890-69,921 (60.06 seconds)
-Segment 4 (task - attention_focus): samples 84,047-114,086 (60.08 seconds)
+```text
+ESS: baseline=7, task=12, n_blocks=12
 ```
 
-### 2.2 Windowing Strategy
-
-**Window Parameters**:
-- **Window Size**: 2.0 seconds (1,000 samples @ 500 Hz)
-- **Overlap**: 50% (500 samples)
-- **Step Size**: 1.0 second (500 samples)
-
-**Rationale**:
-- 2 seconds provides adequate frequency resolution (0.5 Hz bins)
-- 50% overlap captures transient events more reliably
-- Balances temporal resolution with statistical power
-
-**Window Count Calculation**:
-```
-Number of Windows = floor((n_samples - window_size) / step_size) + 1
-
-Example for 30-second baseline:
-n_samples = 15,000 (30s × 500 Hz)
-window_size = 1,000
-step_size = 500
-Number of Windows = floor((15,000 - 1,000) / 500) + 1 = 29 windows
-```
-
-### 2.3 Preprocessing Per Window
-
-**Step 1: DC Offset Removal**
-- Compute mean across time dimension for each channel
-- Subtract channel-wise mean from all samples
-- Purpose: Remove baseline drift and amplifier offset
-
-**Step 2: Notch Filtering**
-- **Filter Type**: IIR Notch Filter (Butterworth)
-- **Target Frequency**: 60 Hz (50 Hz for European systems)
-- **Bandwidth (Q factor)**: 30
-- **Purpose**: Remove electrical line noise
-- **Implementation**: Applied independently to all 64 channels using vectorized operations
-
-**Step 3: Power Spectral Density (PSD) Computation**
-- **Method**: Welch's method (scipy.signal.welch)
-- **Segment Length**: 256 samples (nperseg parameter)
-- **Window Function**: Hann window (default)
-- **Overlap**: 50% (128 samples)
-- **Output**: Frequency bins from 0-250 Hz, power in µV²/Hz
-- **Efficiency**: Computed for all 64 channels simultaneously
+This means the statistical test is not pretending every overlapping 2 s window is independent.
 
 ---
 
-## Feature Types and Calculations
+## 6. Preprocessing and Artifact Handling
 
-### 3.1 Frequency Band Definitions
+### 6.1 Channel Quality and Bad Channels
 
-**Standard EEG Bands**:
-| Band | Frequency Range | Associated States |
-|------|-----------------|-------------------|
-| Delta (δ) | 0.5 - 4 Hz | Deep sleep, unconscious processes |
-| Theta (θ) | 4 - 8 Hz | Drowsiness, meditation, memory encoding |
-| Alpha (α) | 8 - 13 Hz | Relaxed wakefulness, eyes closed |
-| Beta (β) | 13 - 30 Hz | Active thinking, focus, anxiety |
-| Gamma (γ) | 30 - 45 Hz | Cognitive processing, binding |
+Each phase is screened for channel quality. The report separates two concepts that should not be confused:
 
-**Implementation Note**: Band edges chosen to avoid overlap, enabling independent power calculations.
+- **Quality bin:** mean per-channel quality across phases.
+- **Global exclusion:** channels removed from feature extraction because they were flat or majority-noisy.
 
-### 3.2 Per-Channel Features (64 channels × 17 features = 1,088 features)
+Quality bins:
 
-For **each of 64 channels**, the following features are extracted:
+- Good: quality >= 0.70.
+- Fair: 0.40 <= quality < 0.70.
+- Poor: quality < 0.40.
 
-#### 3.2.1 Band Power Features (5 bands × 3 metrics = 15)
+Global exclusion:
 
-**Absolute Power** (5 features):
-- Sum of PSD values within each frequency band
-- Units: µV²
-- Interpretation: Total energy in that frequency range
-- Calculation: `power = sum(PSD[freq >= low & freq <= high])`
+- Flat channels are excluded.
+- Noisy channels are excluded only if noisy in the majority of phases.
 
-**Relative Power** (5 features):
-- Band power normalized by total power across all frequencies
-- Units: Ratio (0-1)
-- Interpretation: Proportion of total energy in that band
-- Calculation: `relative = band_power / (sum(PSD) + epsilon)`
-- Purpose: Compensates for individual differences in overall EEG amplitude
+This is why the number of globally excluded channels can differ from the number of channels in the "poor" bin.
 
-**Peak Frequency** (5 features):
-- Frequency with maximum power within each band
-- Units: Hz
-- Interpretation: Dominant oscillation frequency in that band
-- Example: Individual alpha frequency (IAF) typically 9-11 Hz
-- Calculation: `peak_freq = freq[argmax(PSD[band_mask])]`
+### 6.2 Average Reference
 
-#### 3.2.2 Cross-Band Ratio Features (2 features)
+Average reference is applied by default unless disabled by configuration. Bad/invalid channels are handled before feature extraction so they do not dominate spatial summaries.
 
-**Alpha/Theta Ratio**:
-- Ratio of alpha power to theta power
-- Interpretation: 
-  - High ratio: Alert, focused state
-  - Low ratio: Drowsy, unfocused state
-- Clinical relevance: ADHD biomarker, meditation depth
+### 6.3 Notch Filter
 
-**Beta/Alpha Ratio**:
-- Ratio of beta power to alpha power
-- Interpretation:
-  - High ratio: Active cognitive processing, potential anxiety
-  - Low ratio: Relaxed mental state
-- Clinical relevance: Stress, anxiety assessment
+Line-noise filtering is applied at the configured line frequency and harmonics. In the current report example:
 
-**Total Channel Power** (1 feature):
-- Sum of PSD across all frequencies
-- Units: µV²
-- Purpose: Overall signal strength per channel
-
-### 3.3 Regional Features (5 regions × 12 features = 60 features)
-
-**Brain Regions Defined**:
-
-1. **Frontal Region** (17 channels):
-   - Channels: Fp1, Fp2, F7, F3, Fz, F4, F8, F9, F10, AF7, AF3, AF4, AF8, F5, F1, F2, F6
-   - Functions: Executive control, decision making, working memory
-
-2. **Central Region** (13 channels):
-   - Channels: FC5, FC1, FC2, FC6, C3, C4, FC3, FCz, FC4, C5, C1, C2, C6
-   - Functions: Motor control, sensorimotor integration
-
-3. **Temporal Region** (8 channels):
-   - Channels: T7, T8, T9, T10, FT7, FT8, TP7, TP8
-   - Functions: Auditory processing, language, memory
-
-4. **Parietal Region** (17 channels):
-   - Channels: CP5, CP1, CP2, CP6, P7, P3, Pz, P4, P8, P9, P10, CP3, CP4, P5, P1, P2, P6
-   - Functions: Spatial processing, attention, sensory integration
-
-5. **Occipital Region** (9 channels):
-   - Channels: O1, O2, PO5, PO3, PO4, PO6, PO7, PO8, POz
-   - Functions: Visual processing, visual imagery
-
-**Regional Feature Calculation**:
-- Average PSD computed across all channels in region
-- Same 12 features extracted as per-channel (5 band powers, 5 relative powers, 2 ratios)
-- Reduces noise by spatial averaging
-- Provides region-level functional assessment
-
-### 3.4 Spatial Features (135-165 features)
-
-#### 3.4.1 Hemispheric Asymmetry (27 pairs × 5 bands = 135 features)
-
-**Electrode Pairs**:
-- Frontal: Fp1-Fp2, F7-F8, F3-F4, F5-F6, F1-F2, AF7-AF8, AF3-AF4
-- Central: FC5-FC6, FC1-FC2, FC3-FC4, C5-C6, C1-C2, C3-C4
-- Temporal: T7-T8, FT7-FT8, TP7-TP8
-- Parietal: CP5-CP6, CP1-CP2, CP3-CP4, P7-P8, P3-P4, P5-P6, P1-P2
-- Occipital: O1-O2, PO7-PO8, PO5-PO6, PO3-PO4
-
-**Asymmetry Index Calculation** (Davidson Method):
-```
-Asymmetry Index = ln(Right Power) - ln(Left Power)
-```
-- **Positive values**: Right hemisphere dominance
-- **Negative values**: Left hemisphere dominance
-- **Zero**: Balanced bilateral activity
-
-**Per Pair, Per Band**:
-- Computed for all 5 frequency bands
-- Total: 27 pairs × 5 bands = 135 asymmetry indices
-
-**Clinical Significance**:
-- **Frontal Alpha Asymmetry (F3-F4)**:
-  - Right > Left: Approach motivation, positive affect
-  - Left > Right: Withdrawal motivation, negative affect
-  - Key biomarker for depression, emotional processing
-
-- **Parietal Asymmetry**:
-  - Relates to spatial attention, hemispatial neglect
-
-#### 3.4.2 Frontal Alpha Asymmetry (FAA) (1 feature)
-
-**Special Feature**:
-- Specifically computed for F3-F4 electrode pair in alpha band (8-13 Hz)
-- Most extensively studied EEG asymmetry measure
-- Calculation: `FAA = ln(F4_alpha) - ln(F3_alpha)`
-
-**Interpretation**:
-- FAA > 0: Right frontal dominance → withdrawal, negative emotion
-- FAA < 0: Left frontal dominance → approach, positive emotion
-
-**Research Applications**:
-- Depression screening
-- Emotion regulation assessment
-- Therapeutic response prediction
-
-#### 3.4.3 Inter-Regional Coherence (5 pairs × 5 bands = 25 features)
-
-**Region Pairs Analyzed**:
-1. Frontal ↔ Parietal (working memory, attention networks)
-2. Frontal ↔ Occipital (top-down visual control)
-3. Central ↔ Parietal (sensorimotor integration)
-4. Temporal ↔ Parietal (language-spatial integration)
-5. Frontal ↔ Temporal (executive-memory networks)
-
-**Coherence Calculation**:
-- Method: Magnitude-squared coherence (scipy.signal.coherence)
-- Segment length: 128 samples (0.256 seconds)
-- Output: Coherence values 0-1 per frequency bin
-- Per band: Average coherence across frequencies in that band
-
-**Interpretation**:
-- **High Coherence (0.7-1.0)**: Strong functional connectivity, synchronized activity
-- **Medium Coherence (0.3-0.7)**: Moderate coupling
-- **Low Coherence (0-0.3)**: Independent activity, poor communication
-
-**Functional Significance**:
-- Frontal-Parietal coherence: Attention network integrity
-- Frontal-Occipital coherence: Visual attention control
-- Inter-hemispheric coherence: Corpus callosum integrity
-
-#### 3.4.4 Global Field Power (GFP) (3 features)
-
-**Definition**: 
-Standard deviation of voltage across all channels at each time point
-
-**Calculation**:
-```
-For each time point t:
-  GFP(t) = std(voltages across 64 channels at time t)
+```text
+Notch filter: 50.0 Hz + harmonics (Q=30)
 ```
 
-**Features Extracted**:
-1. **Mean GFP**: Average spatial voltage variation over the window
-2. **Std GFP**: Variability of spatial patterns over time
-3. **Max GFP**: Peak spatial voltage difference (event detection)
+### 6.4 High-Frequency Artifact Gate
 
-**Interpretation**:
-- High GFP: Strong, spatially distributed brain activity (e.g., evoked potentials)
-- Low GFP: Weak or spatially localized activity
-- GFP peaks: Microstate transitions, event-related activity
+This is a pre-feature extraction gate for broadband high-frequency contamination, especially muscle artifact.
 
-**Applications**:
-- Microstate analysis
-- Global brain state assessment
-- Event detection without channel selection bias
+For each candidate feature window:
 
-### 3.5 Global Summary Features (15 features)
+- High-frequency band: 30-45 Hz.
+- Broadband reference: 1-45 Hz.
+- Global metric: 75th percentile HF/broadband ratio across valid channels.
+- Frontotemporal metric: 75th percentile HF/broadband ratio across frontal and temporal channels.
 
-**Global Band Powers** (5 features):
-- Average PSD across all 64 channels
-- Then compute band power from averaged PSD
-- Represents whole-brain activity in each band
+Thresholds are robust/adaptive using median/MAD logic with fixed lower floors:
 
-**Global Relative Powers** (5 features):
-- Global band power / global total power
-- Overall spectral distribution
+- Global floor: 0.35.
+- Frontotemporal floor: 0.30.
 
-**Global Ratios** (2 features):
-- Global alpha/theta ratio
-- Global beta/alpha ratio
+If a window exceeds either threshold, it is rejected before features are extracted.
 
-**Quality Metrics** (3 features):
-1. **Number of Good Channels**: Channels with power above 10th percentile
-   - Identifies channels with poor contact or artifacts
-   - Typically expect 60-64 good channels
+### 6.5 Saturation Guard
 
-2. **Number of Features Extracted**: Total feature count for this window
-   - Varies slightly based on NaN/invalid values
-   - Typically 1,400-1,500 features
+If too many windows in a phase would be rejected, the pipeline does not keep only a tiny clean-looking remainder. That would bias the phase and make the task comparison unstable.
 
-3. **Global Total Power**: Sum of all frequencies, all channels
-   - Overall signal strength metric
+Current rule:
+
+- If candidate rejection fraction exceeds `hf_max_reject_fraction` (currently 0.80), the phase is treated as tonically contaminated.
+- Epoch rejection is disabled for that phase.
+- The number of candidate rejected windows is reported.
+- The profile gate treats this as a blocking reason.
+
+Current report example:
+
+```text
+High-frequency epoch rejection: 0/574 windows rejected
+Saturation guard: 20 phase(s) treated as tonically contaminated;
+574 candidate windows were not dropped to avoid biased tiny-sample analysis.
+```
+
+Interpretation: the gate detected contamination everywhere. It could not safely "clean" the data by dropping windows because that would over-prune the session.
+
+### 6.6 ICA, CSD, and CCA Hooks
+
+The command-line/configuration layer exposes hooks for:
+
+- ICA-based EMG component removal.
+- Surface Laplacian / current source density (CSD).
+- CCA-based muscle artifact removal.
+
+The report states whether these were requested and whether they were applied. The pipeline must not imply these methods were applied unless the optional dependencies and implementation path actually ran.
+
+Current report example:
+
+```text
+ICA EMG cleaning: not requested
+CSD transform: not requested
+CCA EMG cleaning: not requested
+```
 
 ---
 
-## Statistical Analysis Pipeline
+## 7. Feature Extraction
 
-### 4.1 Baseline Computation
+The analyzer extracts per-window features from valid channels and regions.
 
-**Purpose**: Establish individual-specific reference values for feature normalization
+### 7.1 Frequency Bands
 
-**Baseline Source**: Eyes-closed resting state (typically 28-30 windows)
+| Band | Range |
+|---|---|
+| Delta | 0.5-4 Hz |
+| Theta | 4-8 Hz |
+| Alpha | 8-13 Hz |
+| Beta | 13-30 Hz |
+| Gamma | 30-45 Hz |
 
-**Statistics Computed Per Feature**:
-1. **Mean**: Central tendency
-2. **Standard Deviation**: Variability (with epsilon = 1e-12 to prevent division by zero)
-3. **Median**: Robust central tendency
+Gamma is always treated cautiously because scalp gamma overlaps strongly with EMG.
 
-**Storage**: Dictionary mapping feature names to statistics
+### 7.2 Feature Families
 
-**Usage**: Z-score normalization during task analysis
+Main feature families:
 
-### 4.2 Task Feature Collection
+- Per-channel absolute band power.
+- Per-channel relative band power.
+- Per-channel peak frequency.
+- Cross-band ratios such as alpha/theta and beta/alpha.
+- Regional average powers and ratios.
+- Hemispheric asymmetry features.
+- Frontal alpha asymmetry.
+- Inter-regional coherence features.
+- Global field power.
+- Global summary features.
 
-**Process**:
-- Features extracted from task windows (typically 58 windows per 60s task)
-- Stored separately per task type
-- No normalization applied during extraction (raw values preserved)
-
-**Data Structure**:
-- Task name → List of feature dictionaries
-- Each dictionary: 1,400+ key-value pairs (feature name: value)
-
-### 4.3 Multi-Task Comparison Analysis
-
-**Objective**: Determine which features significantly differ between tasks
-
-**Analysis Steps**:
-
-#### Step 1: Feature Alignment
-- Collect all feature names from all tasks
-- Create feature matrix: rows = windows, columns = features
-- Handle missing features (rare) with NaN imputation
-
-#### Step 2: Z-Score Normalization
-```
-For each feature:
-  z_score = (task_value - baseline_mean) / (baseline_std + epsilon)
-```
-- Removes individual differences
-- Makes features comparable across different scales
-- Enables cross-feature statistical testing
-
-#### Step 3: Fisher's Method for P-Value Combination
-
-**Purpose**: Combine evidence across multiple permutation blocks
-
-**Formula**:
-```
-χ² = -2 × Σ ln(p_i)
-Degrees of freedom = 2k (where k = number of p-values)
-```
-
-**Application**:
-- Combines p-values from block-wise permutation tests
-- More sensitive to weak but consistent effects
-- Chi-squared distribution for significance testing
-
-#### Step 4: Kost-McDermott Correction
-
-**Purpose**: Adjust for correlation between features
-
-**Problem**: 
-- Traditional Bonferroni correction assumes independent tests
-- EEG features are highly correlated (e.g., adjacent channels, related bands)
-- Bonferroni is overly conservative
-
-**Solution**:
-- Estimate effective number of independent tests
-- Based on correlation matrix of features
-- Adjusted degrees of freedom: `df_KM = df_original / (1 + mean_correlation)`
-
-**Benefits**:
-- More powerful than Bonferroni
-- Still controls family-wise error rate
-- Accounts for feature dependency structure
-
-#### Step 5: Statistical Testing (Fast Mode vs Full Mode)
-
-The system supports two analysis modes to balance speed and rigor:
-
-**Fast Mode (Default for 64-Channel)**:
-- Uses Welch's t-test for per-feature significance
-- Uses Fisher's method with chi-square approximation for combined p-values
-- FDR (Benjamini-Hochberg) correction for multiple comparisons
-- **Speed**: ~30 seconds for full 1,400-feature analysis
-- **Use case**: Interactive analysis, immediate feedback
-
-**Full Mode (Research-Grade)**:
-- Block permutation testing with 500-1000 permutations
-- Kost-McDermott correction for feature correlation
-- More conservative, better for publication
-- **Speed**: 10-20 minutes for full analysis
-- **Use case**: Final analysis, publication-ready results
-
-**Fast Mode Details**:
-1. For each feature: Welch's t-test (task vs baseline)
-2. Collect all p-values across features
-3. Apply FDR correction (controls false discovery rate)
-4. For omnibus testing: Fisher's method with chi-square approximation
-   ```
-   χ² = -2 × Σ ln(p_i)
-   p_combined = 1 - CDF_chi2(χ², df=2k)
-   ```
-
-**Why Fast Mode is Statistically Valid**:
-- Welch's t-test is robust to unequal variances
-- FDR correction is widely accepted in neuroscience
-- Chi-square approximation of Fisher's method is accurate for k > 20 features
-- With 1,400+ features, approximation error is negligible
-
-**Output**:
-- List of significant features ranked by p-value
-- Effect sizes (mean difference between tasks)
-- Confidence intervals
+The exact feature count can change when channels are excluded or when a feature cannot be computed. Missing features are not zero-filled.
 
 ---
 
-## File Formats and Storage
+## 8. Statistical Analysis
 
-### 5.1 Raw Data CSV
+### 8.1 Baseline Policy
 
-**File**: `session_YYYYMMDD_HHMMSS.csv`
+Current implementation:
 
-**Structure**:
-```
-timestamp,sample_index,Fp1,Fp2,F9,F7,...,POz
-0.000998,0,-54.587880,-27.007840,...,-55.503400
-0.002998,1,-51.040240,-24.032400,...,-57.220000
-...
-```
+- Eyes-closed baseline is the primary statistical baseline.
+- Eyes-open baseline is retained for reference and provenance.
+- Eyes-open and eyes-closed are not pooled.
 
-**Specifications**:
-- **Delimiter**: Comma
-- **Precision**: 6 decimal places
-- **Timestamp**: Seconds from recording start (float)
-- **Sample Index**: Integer counter (0-based)
-- **Voltage Columns**: 64 channels in µV (float)
+Important limitation:
 
-**File Size Estimates**:
-- 60 seconds: ~20 MB
-- 180 seconds (full session): ~60 MB
-- Compression potential: ~80% with gzip
+- For eyes-open cognitive/visual tasks, an eyes-open or task-specific pre-task baseline would be more appropriate for profiling.
+- If only eyes-closed is used against eyes-open tasks, task interpretation is lower confidence.
 
-### 5.2 Phase Markers JSON
+The report states this explicitly:
 
-**File**: `markers_YYYYMMDD_HHMMSS.json`
-
-**Structure**:
-```json
-{
-  "session_id": "20260206_150540",
-  "sample_rate": 500,
-  "channel_count": 64,
-  "channel_names": ["Fp1", "Fp2", ..., "POz"],
-  "recording_file": "C:\\Users\\...\\session_20260206_150540.csv",
-  "phase_markers": [
-    {
-      "phase": "eyes_closed",
-      "task": null,
-      "start": -0.366,
-      "end": 29.648
-    },
-    ...
-  ]
-}
+```text
+Baseline: eyes-closed only (eyes-open retained for reference, not pooled).
+Profile limitation: eyes-open cognitive/visual tasks should prefer eyes-open or task-specific pre-task baselines.
 ```
 
-**Fields**:
-- **session_id**: Unique identifier matching CSV filename
-- **sample_rate**: Sampling frequency (Hz)
-- **channel_count**: Number of channels recorded
-- **channel_names**: Ordered list of electrode names
-- **recording_file**: Absolute path to associated CSV file
-- **phase_markers**: Array of phase objects
-  - **phase**: Phase type string
-  - **task**: Task identifier (null for baselines)
-  - **start**: Start timestamp (seconds, float)
-  - **end**: End timestamp (seconds, float)
+### 8.2 Per-Feature Tests
 
-### 5.3 Feature Export (Optional)
+Current implementation:
 
-**File**: `features_YYYYMMDD_HHMMSS.xlsx`
+- Baseline and task values are aggregated into blocks.
+- A feature is tested only when both baseline and task have at least 3 finite values.
+- Missing features are not imputed or zero-filled.
+- Per-feature task-vs-baseline comparison uses Mann-Whitney U.
+- Per-feature p-values are corrected with Benjamini-Hochberg FDR.
+- Effect sizes are reported as Hedges' g, with bootstrap confidence intervals when enabled.
 
-**Structure**: Multi-sheet Excel workbook
+### 8.3 Fisher Omnibus
 
-**Sheets**:
-1. **Eyes_Closed**: Baseline features (28+ rows × 1,400+ columns)
-2. **Eyes_Open**: Eyes-open baseline features
-3. **Task**: Combined task features
-4. **Baseline_Stats**: Mean, std, median per feature
+The report shows Fisher combined p-values as an independence approximation:
 
-**Format**:
-- One row per window
-- One column per feature
-- Feature names as column headers
+```text
+Fisher_p=... method=independence_approximation
+```
 
-**Use Cases**:
-- External analysis (MATLAB, R, Python)
-- Archival storage
-- Publication supplementary materials
+This is intentionally not described as Kost-McDermott corrected. EEG features are correlated, so the Fisher omnibus should be interpreted cautiously and mainly as an aggregate signal indicator rather than a publication-ready inferential claim.
 
----
+### 8.4 SumP
 
-## Performance Characteristics
+SumP is the sum of raw per-feature p-values. In fast mode it uses a parametric Irwin-Hall approximation; in full/permutation paths it can use permutation-derived nulls where implemented.
 
-### 6.1 Computational Complexity
+### 8.5 Composite Score
 
-**Recording Phase** (Real-Time):
-- **CPU**: <5% on modern processors
-- **Memory**: ~500 MB RAM (buffer + file handles)
-- **Disk I/O**: ~10 MB/minute write speed
-- **Latency**: <10ms per batch write
+CompositeScore is:
 
-**Feature Extraction Phase** (Offline):
-- **PSD Computation**: O(n log n) per channel via FFT
-- **64 Channels**: Parallelized, ~1-2 seconds for 1,000-sample window
-- **Total for 180s recording**: 5-15 seconds
-- **Memory**: ~1-2 GB peak (full dataset in memory)
+```text
+sum(-log10(q)) across significant features
+```
 
-**Statistical Analysis Phase**:
-- **Permutation Testing**: O(n_permutations × n_features × n_windows)
-- **1,000 permutations × 1,400 features × 100 windows**: 3-5 minutes
-- **Bottleneck**: Permutation testing, not feature extraction
-- **Parallelization potential**: Can reduce to 30-60 seconds with multiprocessing
+It is an aggregate strength indicator, not a cognitive score and not a normative profile metric.
 
-### 6.2 Timing Breakdown (Example 180s Session)
+### 8.6 Cross-Task Family-Wise Correction
 
-**Fast Mode (Default)**:
-| Phase | Duration | Percentage |
-|-------|----------|------------|
-| Recording | 180s (real-time) | N/A |
-| Data loading | 1-2s | 3% |
-| Feature extraction | 5-15s | 30% |
-| Baseline computation | <1s | 2% |
-| Statistical testing | 15-30s | 60% |
-| Report generation | 1-2s | 5% |
-| **Total offline time** | **~30 seconds** | **100%** |
+Task-level omnibus p-values are corrected across tasks with Holm-Bonferroni. If no task survives correction, the report states:
 
-**Full Mode (Research-Grade)**:
-| Phase | Duration | Percentage |
-|-------|----------|------------|
-| Recording | 180s (real-time) | N/A |
-| Data loading | 1-2s | <1% |
-| Feature extraction | 5-15s | 3-5% |
-| Baseline computation | <1s | <1% |
-| Permutation testing | 600-1200s | 90-95% |
-| Report generation | 1-2s | <1% |
-| **Total offline time** | **10-20 minutes** | **100%** |
+```text
+No task-level omnibus effects survived Holm-Bonferroni family-wise correction.
+No reliable between-task differentiation was detected.
+```
 
-### 6.3 Storage Requirements
+For profiling, this matters because a pipeline that cannot reliably separate task signatures should not produce task-specific cognitive interpretations.
 
-**Per Session** (180 seconds):
-- Raw CSV: ~60 MB
-- Markers JSON: ~2 KB
-- Features Excel: ~10 MB (optional)
-- **Total**: ~70 MB per session
+### 8.7 Across-Task Omnibus Feature Stability
 
-**Retention Recommendations**:
-- Raw CSV: Indefinite (enables reanalysis)
-- Markers JSON: Indefinite (essential metadata)
-- Features Excel: Optional (can regenerate from raw)
+The across-task feature stability section is QC/exploratory. It now excludes artifact-suspect and EMG-excluded gamma features from profile-facing lists.
+
+If the displayed q-values are mathematically inconsistent with raw p-values, the report suppresses the top-feature omnibus ranking:
+
+```text
+Top Feature Omnibus Stats suppressed: omnibus q-values are smaller than their raw p-values...
+Treat omnibus output as QC-only until fixed.
+```
+
+This prevents invalid-looking omnibus rankings from being treated as meaningful profile features.
 
 ---
 
-## Advantages Over Live Processing
+## 9. Artifact-Suspect Guard
 
-### 7.1 Data Integrity
+Features with very large effect sizes are flagged:
 
-**Live Processing Risks**:
-- Buffer overflow if processing lags behind streaming
-- Lost samples during CPU spikes
-- No recovery from processing errors
+```text
+artifact_suspect = True when |d| > 10
+```
 
-**Offline Advantages**:
-- All raw data preserved to disk
-- Can restart analysis if interrupted
-- Multiple reanalysis attempts with different parameters
-- No data loss even with system instability
+Rationale:
 
-### 7.2 Processing Flexibility
+- Hedges' g above 10 is generally implausible for scalp EEG task effects.
+- Such values usually reflect movement, electrode instability, clipping, or bad-channel contamination.
 
-**Live Processing Limitations**:
-- Must complete feature extraction within ~500ms to avoid buffer overflow
-- Limited to computationally light features
-- Cannot apply sophisticated artifact rejection
-- Difficult to implement adaptive algorithms
+Behavior:
 
-**Offline Advantages**:
-- No time pressure - can take minutes per window if needed
-- Full 1,400+ feature set extractable
-- Can apply iterative artifact detection and removal
-- Can experiment with different frequency bands, window sizes
-- Can implement machine learning feature selection
+- Excluded from profile-facing top-feature lists.
+- Shown separately in an artifact-suspect diagnostic list.
+- Winsorized/capped at 10 for Mean|d| summary.
+- Excluded from regional, asymmetry, topographic, connectivity, and across-task interpretive summaries.
+- Counted in the profile suitability gate as both unique feature names and task-feature instances.
 
-### 7.3 Reanalysis Capabilities
+Example:
 
-**What Can Be Reanalyzed**:
-1. **Different Window Sizes**: Test 1s, 2s, 4s windows
-2. **Different Overlaps**: Compare 0%, 50%, 75% overlap
-3. **Different Frequency Bands**: Alpha sub-bands (low alpha 8-10 Hz, high alpha 10-13 Hz)
-4. **Different Filters**: Compare different notch filter Q factors, bandpass ranges
-5. **Different Features**: Add new feature types without re-recording
-6. **Different Baselines**: Try eyes-open vs eyes-closed as baseline
-7. **Artifact Rejection**: Apply automated or manual artifact removal post-hoc
-
-**Research Applications**:
-- Parameter optimization studies
-- Method comparison (e.g., Welch vs multitaper PSD)
-- Feature engineering experiments
-- Validation studies (compare manual vs automated processing)
-
-### 7.4 Debugging and Quality Control
-
-**Live Processing**:
-- Difficult to identify source of errors
-- Cannot inspect intermediate processing steps
-- Hard to validate feature calculations
-
-**Offline Processing**:
-- Can inspect raw data at any time point
-- Can visualize intermediate processing stages
-- Can validate each feature calculation step-by-step
-- Can compare outputs across different analysis pipelines
-- Enables comprehensive quality control reports
-
-### 7.5 Scalability
-
-**Live Processing**:
-- Limited by real-time constraint (500 Hz × 64 channels = 32,000 values/second)
-- Feature count ceiling (~100-200 features maximum)
-- Difficult to add new features without performance testing
-
-**Offline Processing**:
-- No hard limit on feature count
-- Can process 1,400+ features comfortably
-- Can add features without impacting data acquisition
-- Enables exploratory analysis with 10,000+ features if desired
+```text
+Artifact-suspect features: 243 unique feature names / 332 task-feature instances with |d| > 10
+```
 
 ---
 
-## Summary
+## 10. Gamma EMG Flood Guard
 
-The Offline 64-Channel EEG Analysis Pipeline represents a paradigm shift from real-time feature extraction to a two-phase architecture that prioritizes **data preservation** and **analytical flexibility**. By separating acquisition from processing, the system achieves:
+### 10.1 Why This Exists
 
-1. **Robustness**: No data loss even under computational stress
-2. **Comprehensiveness**: 1,400+ features per window vs ~70 in live mode
-3. **Reproducibility**: Raw data enables exact replication of analyses
-4. **Flexibility**: Same dataset can be analyzed with different parameters
-5. **Research-Grade Quality**: Meets standards for publication-quality EEG research
+Scalp gamma, especially 30-45 Hz, is highly vulnerable to muscle activity from jaw, face, neck, and scalp muscles. EMG often appears as broadband high-frequency activity and can create apparently significant gamma changes across many channels at once.
 
-The system successfully records 64-channel EEG at 500 Hz with <5% CPU usage, stores complete raw data to disk, and performs comprehensive offline feature extraction in seconds. Statistical analysis via permutation testing provides robust, correction-adjusted p-values for multi-task comparisons.
+### 10.2 Detection Rule
 
-This architecture is particularly well-suited for:
-- Research studies requiring archival data
-- Clinical applications needing reanalysis capabilities
-- Multi-task paradigms with complex statistical requirements
-- High-density EEG systems (64+ channels)
-- Exploratory analysis and method development
+For each task:
+
+```text
+gamma_sig_fraction = significant_gamma_features / total_gamma_features
+```
+
+If:
+
+```text
+gamma_sig_fraction > 0.25
+```
+
+then the task is flagged as an EMG flood.
+
+### 10.3 Behavior When Flood Is Active
+
+When gamma flood is detected:
+
+- All gamma features are marked `emg_excluded`.
+- Gamma is removed from Fisher, SumP, CompositeScore, and Mean|d|.
+- Gamma is removed from top-feature lists.
+- Gamma is removed from regional, asymmetry, topographic, connectivity, and across-task interpretive summaries.
+- Gamma remains visible only in an `EMG-excluded gamma diagnostics` section.
+- The profile suitability gate marks the session as `RESEARCH-ONLY` when floods affect analyzed tasks.
+
+Example:
+
+```text
+EMG FLOOD DETECTED: 65/130 gamma features significant (50% > 25% threshold).
+All gamma features EXCLUDED from omnibus statistics.
+EMG-excluded gamma diagnostics (not profile-facing; top 5 by p-value):
+```
+
+Interpretation: gamma can be inspected as contamination evidence but not interpreted as cortical gamma activation.
 
 ---
 
-**End of Documentation**
+## 11. Spatial and Connectivity Report Sections
 
-For technical support or feature requests, contact the BrainLink Companion development team.
+The report includes:
+
+- Regional activity summary.
+- Hemispheric asymmetry analysis.
+- Inter-channel coherence/connectivity.
+- Channel quality and spatial coverage.
+- Topographic distribution summary.
+
+Current profile-facing rule:
+
+```text
+Artifact-suspect features and EMG-excluded gamma features are excluded from interpretive summaries.
+```
+
+When profile suitability is `RESEARCH-ONLY`, interpretive statements are disabled:
+
+```text
+Interpretation disabled: session is RESEARCH-ONLY; distribution is shown for QC review only.
+```
+
+This avoids saying "do not profile" at the top while implying cognitive meaning later in the report.
+
+---
+
+## 12. Profile Suitability Gate
+
+The profile gate is the most important downstream safeguard.
+
+### 12.1 Possible Status Values
+
+| Status | Meaning |
+|---|---|
+| `PROFILE-READY` | Minimum safeguards passed; cautious profile-level interpretation may be possible. |
+| `RESEARCH-ONLY` | Data can be reviewed for QC/physiology but should not be used for subject profiling. |
+| `INVALID` | Recording quality is too poor; results should be discarded/recollected. |
+
+### 12.2 Current Blocking Reasons
+
+The gate can block profiling for:
+
+- Gamma EMG flood across analyzed tasks.
+- Artifact-suspect feature burden.
+- High-frequency saturation guard activation.
+- Expectation-alignment failure when available.
+- Across-task feature saturation.
+- Poor channel quality or insufficient good-channel coverage.
+
+### 12.3 Interpretation Scope
+
+If `RESEARCH-ONLY`:
+
+- OK: discuss artifact patterns, QC failures, physiological response candidates, and pipeline behavior.
+- Not OK: subject profiles, cognitive scores, emotional traits, diagnostic labels, or personality-style inferences.
+
+---
+
+## 13. Current Known Limitations
+
+1. **Baseline limitation**
+
+   Eyes-closed baseline is not ideal for eyes-open cognitive or visual tasks. Future profile-ready reports should compare eyes-open tasks primarily to eyes-open or task-specific baselines.
+
+2. **Fisher independence approximation**
+
+   The Fisher omnibus is useful as an aggregate indicator, but it does not fully model correlation among EEG features.
+
+3. **Gamma cannot be rescued by report filtering**
+
+   Gamma flood exclusion prevents misinterpretation, but it does not clean the original data. Cleaner acquisition and/or validated ICA/CSD/CCA preprocessing are needed.
+
+4. **HF saturation means contamination is tonic**
+
+   If the saturation guard activates, the problem is not a few bad windows. The phase is broadly contaminated.
+
+5. **Current output is not normative**
+
+   The report compares this subject's task windows to their own baseline. It does not compare against age-matched or population norms.
+
+6. **Q-value inconsistency in across-task omnibus rankings**
+
+   If q-values are smaller than raw p-values in that section, the ranking is suppressed and should be treated as QC-only until the omnibus family alignment is fixed.
+
+---
+
+## 14. Recommended Path Toward Profile-Ready Use
+
+To move from research-only exploratory analysis toward profile-compatible analysis:
+
+1. Improve acquisition quality:
+   - Lower impedances.
+   - Stabilize cap fit.
+   - Reduce jaw/face/neck movement.
+   - Add explicit participant instructions for relaxed jaw and minimal facial movement.
+
+2. Strengthen baselines:
+   - Keep eyes-closed baseline for resting profile.
+   - Use eyes-open baseline for eyes-open tasks.
+   - Prefer task-specific pre-task baseline when possible.
+
+3. Validate advanced cleaning:
+   - Add/test ICA-based EMG component rejection.
+   - Add/test surface Laplacian/CSD.
+   - Add/test CCA-based muscle artifact suppression.
+   - Report exactly which steps were applied.
+
+4. Fix or remove unstable omnibus rankings:
+   - Ensure p/q arrays remain aligned.
+   - Do not show feature omnibus rankings unless adjusted q-values are mathematically valid.
+
+5. Establish validation data:
+   - Repeat clean sessions.
+   - Test reliability across sessions.
+   - Compare expected task signatures against literature and controlled paradigms.
+   - Build normative or within-subject reliability criteria before any profiling claims.
+
+---
+
+## 15. Report Reading Checklist
+
+Before interpreting any report, check:
+
+1. `PROFILE SUITABILITY`.
+2. Gamma EMG flood count and affected tasks.
+3. Artifact-suspect feature counts.
+4. HF saturation guard count.
+5. Tasks executed versus tasks analyzed statistically.
+6. Cross-task FWER result.
+7. Baseline policy warning.
+8. Channel quality and globally excluded channels.
+9. Whether spatial/connectivity sections say interpretation is disabled.
+10. Whether omnibus top-feature stats were suppressed.
+
+If any of the first four items are severe, the report should remain research-only.
+
+---
+
+## 16. Summary
+
+The current offline 64-channel pipeline is scientifically more conservative than earlier versions. It now blocks profiling when high-frequency contamination, gamma EMG flood, extreme effect sizes, or unstable task-level statistics are present. It also structurally prevents artifact-suspect and EMG-excluded gamma features from leaking into profile-facing feature lists or spatial interpretations.
+
+The current example report is therefore not a failed profiling report; it is a correctly gated research-only/QC report showing that the session is too contaminated for profiling.
+
