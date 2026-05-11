@@ -72,8 +72,8 @@
         "readyToStart": "Ready to start",
         "recordingEC": "Recording: Eyes Closed",
         "recordingEO": "Recording: Eyes Open",
-        "phaseMsgEC": "Close your eyes and relax... (30 seconds)",
-        "phaseMsgEO": "Keep your eyes open and stay relaxed... (30 seconds)",
+        "phaseMsgEC": "Close your eyes and relax... (60 seconds)",
+        "phaseMsgEO": "Keep your eyes open and stay relaxed... (60 seconds)",
         "ecComplete": "Eyes Closed Complete!",
         "ecCompleteSub": "Great! Now let's record with eyes open.",
         "calibComplete": "Calibration Complete!",
@@ -81,9 +81,9 @@
         "countdownReady": "Get ready! Listen for the countdown...",
         "countdown": "Countdown: {{count}}",
         "ecCardTitle": "Eyes Closed Baseline",
-        "ecCardDesc": "Relax with eyes closed for 30 seconds",
+        "ecCardDesc": "Relax with eyes closed for 60 seconds",
         "eoCardTitle": "Eyes Open Baseline",
-        "eoCardDesc": "Stay relaxed with eyes open for 30 seconds",
+        "eoCardDesc": "Stay relaxed with eyes open for 60 seconds",
         "complete": "Complete",
         "start": "Start",
         "cancel": "Cancel",
@@ -91,9 +91,9 @@
         "modalECTitle": "Eyes Closed Baseline",
         "modalEOTitle": "Eyes Open Baseline",
         "modalECIntro": "Get ready to close your eyes and relax.",
-        "modalECDuration": "The sensors will record your baseline brainwave pattern for 30 seconds.",
+        "modalECDuration": "The sensors will record your baseline brainwave pattern for 60 seconds.",
         "modalEOIntro": "Get ready to keep your eyes open and stay relaxed.",
-        "modalEODuration": "The sensors will record your eyes-open baseline for 30 seconds.",
+        "modalEODuration": "The sensors will record your eyes-open baseline for 60 seconds.",
         "modalWhatWillHappen": "What will happen:",
         "modalStep1": "Click 'Start Recording' below",
         "modalStep2": "You'll hear a countdown: 5, 4, 3, 2, 1 beeps",
@@ -101,7 +101,7 @@
         "modalECStep4": "Try to let your mind wander naturally without focusing on anything specific",
         "modalStep5": "A sound will notify you when recording is complete",
         "modalECWarning": "Important: Check your speakers/headphones are ON!",
-        "modalEOStep3": "Keep your eyes open and relax for 30 seconds",
+        "modalEOStep3": "Keep your eyes open and relax for 60 seconds",
         "modalEOStep4": "Stay calm and focus on the single white cross in the middle of the screen",
         "modalEOStep5": "Do not worry about blinking.",
         "modalEOStep6": "A sound will notify you when recording is complete",
@@ -339,6 +339,36 @@
             "cue2": "SURPRISE: Count non-symmetrical / abnormal shapes in the upcoming image. Keep your gaze steady.",
             "phase2": "SURPRISE: Count non-symmetrical / abnormal shapes. Keep your gaze steady and minimise movement.",
             "rest": "Rest."
+        },
+        "semanticMemory": {
+            "name": "Semantic Memory Retrieval",
+            "intro1": "This is a structured memory retrieval task with 5 alternating segments of 10 seconds each.",
+            "intro2": "Segment 1 (10s): Think of names of people you know — friends, teachers, relatives.",
+            "intro3": "Segment 2 (10s): Rest. Relax and let your mind go blank.",
+            "intro4": "Segment 3 (10s): Think of names of cities you know.",
+            "intro5": "Segment 4 (10s): Rest. Relax.",
+            "intro6": "Segment 5 (10s): Think of common objects around you — laptop, chair, bottle.",
+            "phase1": "PEOPLE: Think of names of people you know — friends, teachers, relatives. Eyes closed.",
+            "rest1": "REST: Relax. Do not think intentionally. Eyes closed.",
+            "phase2": "CITIES: Think of names of cities you know. Eyes closed.",
+            "rest2": "REST: Relax. Eyes closed.",
+            "phase3": "OBJECTS: Think of common objects around you — laptop, chair, bottle. Eyes closed."
+        },
+        "bodyScan": {
+            "name": "Body Scan",
+            "intro1": "Close your eyes and slowly move your attention through your body from head to toes.",
+            "intro2": "Internal sequence: Head → Forehead → Eyes → Neck → Shoulders → Chest → Abdomen → Legs → Feet.",
+            "intro3": "Perform the scan silently — no physical movement, muscle contraction, or verbalization.",
+            "intro4": "Sustain your attention gently on each region for the full 60 seconds.",
+            "phaseInstruction": "BODY SCAN: Slowly move your attention from head to toes. Head → Forehead → Eyes → Neck → Shoulders → Chest → Abdomen → Legs → Feet. Eyes closed."
+        },
+        "colorPerception": {
+            "name": "Color Perception",
+            "intro1": "You will see 5 solid colors presented one at a time, each for 12 seconds (60 seconds total).",
+            "intro2": "Keep your eyes open and softly focused on the color. Do not look away.",
+            "intro3": "Mentally analyze the color — notice its tone, brightness, and how it affects you.",
+            "intro4": "Do not verbalize or make any physical response during the task.",
+            "phaseInstruction": "Focus your gaze on this color. Mentally analyze it — tone, brightness, and your reaction."
         }
     },
     "taskMeta": {
@@ -393,13 +423,25 @@
         "order_surprise": {
             "name": "Order & Surprise",
             "description": "Count symmetrical (ORDER) vs non-symmetrical (SURPRISE) shapes."
+        },
+        "semantic_memory": {
+            "name": "Semantic Memory Retrieval",
+            "description": "Assesses semantic memory through alternating thinking and rest segments — names of people, cities, and objects. Evaluates retrieval efficiency, verbal fluency, and information access speed."
+        },
+        "body_scan": {
+            "name": "Body Scan",
+            "description": "Evaluates interoceptive awareness and attention regulation through a slow head-to-toes internal attention scan. Helps assess mind-body awareness, stress perception, and emotional self-control."
+        },
+        "color_perception": {
+            "name": "Color Perception",
+            "description": "Evaluates visual perception and attentional processing under active viewing conditions. Five solid colors are shown sequentially to capture frontal-visual integration and perceptual discrimination."
         }
     },
     "taskSelection": {
         "subtitle": "Step 6 of 7 · Pathway: {{pathway}}",
         "taskSubtitle": "Step 6 of 7: Cognitive Task Recording",
-        "generalTasks": "General Tasks",
-        "advancedTasks": "{{pathway}} — Advanced Tasks",
+        "generalTasks": "Session 1 -General Tasks",
+        "advancedTasks": "Session 2 - Advanced Tasks",
         "completed": "Completed",
         "eyesClosed": "Eyes Closed",
         "eyesOpen": "Eyes Open",
@@ -409,6 +451,8 @@
         "runAgain": "Run Again",
         "taskInstructions": "Task Instructions",
         "selectPlaceholder": "Select a task from the list to see details.",
+        "sessionThreeTasks": "Session 3 — Deepening Assessment",
+        "sessionThreeLock": "Requires 2nd partner booking to unlock",
         "pathwayPersonal": "Personal Pathway",
         "pathwayConnection": "Connection",
         "pathwayLifestyle": "Lifestyle"

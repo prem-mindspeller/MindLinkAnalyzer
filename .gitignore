@@ -6,3 +6,9 @@ npm-debug.log*
 .venv/
 build
 venv
+.github/
+.git/
+newBackend/mindlink/
+__pycache__/
+reports/
+.playwright-cli/

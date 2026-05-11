@@ -23,6 +23,9 @@ import ReappraisalTask from '../components/tasks/ReappraisalTask';
 import CuriosityTask from '../components/tasks/CuriosityTask';
 import NumFormTask from '../components/tasks/NumFormTask';
 import OrderSurpriseTask from '../components/tasks/OrderSurpriseTask';
+import SemanticMemoryTask from '../components/tasks/SemanticMemoryTask';
+import BodyScanTask from '../components/tasks/BodyScanTask';
+import ColorPerceptionTask from '../components/tasks/ColorPerceptionTask';
 
 import '../styles/liveEegReading.css';
 import '../styles/taskSelection.css';
@@ -41,7 +44,11 @@ const TASK_META = {
     reappraisal: { name: 'Perspective Shift', duration: 96, eyesClosed: false, description: 'Deliberately shift perspective on two contrasting scenarios.', advanced: true },
     curiosity: { name: 'Curiosity Reveal', duration: 45, eyesClosed: false, description: 'Watch a short reveal video with full attention and genuine curiosity.', advanced: true },
     num_form: { name: 'Numerical Preference', duration: 60, eyesClosed: false, description: 'Evaluate aesthetic preference between numbers and forms.', advanced: true },
-    order_surprise: { name: 'Order & Surprise', duration: 60, eyesClosed: false, description: 'Count symmetrical (ORDER) vs non-symmetrical (SURPRISE) shapes.', advanced: true },
+    order_surprise:    { name: 'Order & Surprise',              duration: 60, eyesClosed: false, description: 'Count symmetrical (ORDER) vs non-symmetrical (SURPRISE) shapes.',                                                                                                                                                              advanced: true  },
+    // Session 3 — unlocked with 2 partner bookings
+    semantic_memory:  { name: 'Semantic Memory Retrieval',      duration: 50, eyesClosed: true,  description: 'Assesses semantic memory through alternating thinking and rest segments — names of people, cities, and objects.',                                                                                                              advanced: false },
+    body_scan:        { name: 'Body Scan',                      duration: 60, eyesClosed: true,  description: 'Evaluates interoceptive awareness and attention regulation through a slow head-to-toes internal attention scan.',                                                                                                             advanced: false },
+    color_perception: { name: 'Color Perception',               duration: 60, eyesClosed: false, description: 'Evaluates visual perception and attentional processing under active viewing. Five solid colors are shown sequentially to capture frontal–visual integration.',                                                                  advanced: false },
 };
 
 
@@ -55,6 +62,9 @@ const PATHWAY_TASKS = {
 const COGNITIVE_TASKS = [
     'visual_imagery', 'attention_focus', 'mental_math', 'emotion_face',
 ];
+
+// Session 3 — requires 2 partner bookings
+const SESSION_THREE_TASKS = ['semantic_memory', 'body_scan', 'color_perception'];
 
 // Task id → component
 const TASK_COMPONENTS = {
@@ -70,7 +80,10 @@ const TASK_COMPONENTS = {
     reappraisal: ReappraisalTask,
     curiosity: CuriosityTask,
     num_form: NumFormTask,
-    order_surprise: OrderSurpriseTask,
+    order_surprise:    OrderSurpriseTask,
+    semantic_memory:  SemanticMemoryTask,
+    body_scan:        BodyScanTask,
+    color_perception: ColorPerceptionTask,
 };
 
 
@@ -79,6 +92,7 @@ const TaskSelection = () => {
     const { t } = useTranslation();
     const pathway = sessionStorage.getItem('selectedPathway') || 'personal';
     const hasAdvancedBooking = sessionStorage.getItem('hasAdvancedBooking') === 'true';
+    const hasSessionThree    = sessionStorage.getItem('hasSessionThree')    === 'true';
 
     // Build visible task list: cognitive + pathway-specific advanced
     const advancedTaskIds = PATHWAY_TASKS[pathway] || [];
@@ -218,6 +232,48 @@ const TaskSelection = () => {
                                     })}
                                 </>
                             )}
+
+                            {/* Session 3 tasks — requires 2 partner bookings */}
+                            <>
+                                <p className="ts-group-label" style={{ marginTop: 16 }}>
+                                    {t('taskSelection.sessionThreeTasks')}
+                                    {!hasSessionThree && (
+                                        <span className="ts-group-lock-hint">
+                                            &nbsp;· {t('taskSelection.sessionThreeLock')}
+                                        </span>
+                                    )}
+                                    {hasSessionThree && (
+                                        <span className="ts-group-progress">
+                                            {SESSION_THREE_TASKS.filter(id => completedIds.includes(id)).length}/{SESSION_THREE_TASKS.length}
+                                        </span>
+                                    )}
+                                </p>
+                                {SESSION_THREE_TASKS.map(id => {
+                                    const meta   = TASK_META[id];
+                                    const done   = completedIds.includes(id);
+                                    const locked = !hasSessionThree;
+                                    return (
+                                        <button
+                                            key={id}
+                                            className={`ts-task-item ts-task-item-advanced${selectedId === id ? ' selected' : ''}${done ? ' done' : ''}${locked ? ' locked' : ''}`}
+                                            onClick={() => !locked && setSelectedId(id)}
+                                            disabled={locked}
+                                        >
+                                            <span className="ts-task-item-icon">
+                                                {locked
+                                                    ? <FontAwesomeIcon icon={faLock} />
+                                                    : done
+                                                        ? <FontAwesomeIcon icon={faCircleCheck} />
+                                                        : meta.eyesClosed
+                                                            ? <FontAwesomeIcon icon={faMoon} />
+                                                            : <FontAwesomeIcon icon={faEye} />}
+                                            </span>
+                                            <span className="ts-task-item-name">{t(`taskMeta.${id}.name`, { defaultValue: meta.name })}</span>
+                                            <span className="ts-task-item-dur">{locked ? t('taskSelection.locked') : `${meta.duration}s`}</span>
+                                        </button>
+                                    );
+                                })}
+                            </>
                         </div>
 
                         {/* ── Task detail panel ── */}

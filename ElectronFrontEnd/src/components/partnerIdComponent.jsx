@@ -35,6 +35,7 @@ const PartnerIdComponent = () => {
         sessionStorage.setItem('partnerId', trimmedId);
         localStorage.setItem('partnerId', trimmedId);
         sessionStorage.setItem('hasAdvancedBooking', result.hasAdvancedBooking ? 'true' : 'false');
+        sessionStorage.setItem('hasSessionThree',    result.hasTwoBookings     ? 'true' : 'false');
 
         setIsLoading(false);
         navigate('/liveReading');

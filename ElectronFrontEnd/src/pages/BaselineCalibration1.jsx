@@ -35,7 +35,7 @@ function playCompletionBeeps() {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const PHASE_DURATION_S = 30;
+const PHASE_DURATION_S = 60;
 const COUNTDOWN_FROM = 5;
 
 const PHASE = {
@@ -96,6 +96,11 @@ const BaselineCalibration1 = () => {
         bandSamplesRef.current = [];
         elapsedRef.current = 0;
 
+        wsEegService.logEvent('baseline_start', {
+            phase: isEC ? 'eyes_closed' : 'eyes_open',
+            duration_s: PHASE_DURATION_S,
+        });
+
         unsubBpRef.current = wsEegService.on('raw', (sample) => {
             bandSamplesRef.current.push(sample);
         });
@@ -120,6 +125,12 @@ const BaselineCalibration1 = () => {
                 const avg = samples.length > 0
                     ? { raw_sample_count: samples.length }
                     : null;
+
+                wsEegService.logEvent('baseline_done', {
+                    phase:      isEC ? 'eyes_closed' : 'eyes_open',
+                    samples:    samples.length,
+                    duration_s: PHASE_DURATION_S,
+                });
 
                 if (isEC) {
                     baselineRef.current.eyesClosed = avg;

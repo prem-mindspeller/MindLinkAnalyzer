@@ -280,6 +280,18 @@ class WsEegServiceClass {
         // State will be updated when the backend sends a 'status: disconnected' message
     }
 
+    // ── Structured event log → backend terminal ────────────────────────────
+    // Call this at every recording start / stop / abort so the backend
+    // terminal shows the full session timeline alongside EEG logs.
+
+    logEvent(event, payload = {}) {
+        fetch(`${BACKEND_HTTP}/event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event, ...payload }),
+        }).catch(() => { /* fire-and-forget */ });
+    }
+
     // ── Fetch current status + battery from backend (REST) ─────────────────
 
     async fetchStatus() {

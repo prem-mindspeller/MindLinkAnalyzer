@@ -30,13 +30,26 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
     } = useTaskRunner(phases);
 
     const handleStart = useCallback(() => {
-        start(onComplete);
-    }, [start, onComplete]);
+        const totalSamples = phases.reduce((s, p) => s + (p.record ? (p.duration || 0) * 512 : 0), 0);
+        wsEegService.logEvent('task_start', {
+            label:       taskName,
+            phases:      phases.length,
+            expected_samples: totalSamples,
+        });
+        start((samples) => {
+            wsEegService.logEvent('task_done', {
+                label:   taskName,
+                samples: samples.length,
+            });
+            onComplete(samples);
+        });
+    }, [start, onComplete, taskName, phases]);
 
     const handleAbort = useCallback(() => {
+        wsEegService.logEvent('task_abort', { label: taskName });
         abort();
         onBack();
-    }, [abort, onBack]);
+    }, [abort, onBack, taskName]);
 
 
     const isRecordingPhase = currentPhase && RECORD_TYPES.has(currentPhase.type);

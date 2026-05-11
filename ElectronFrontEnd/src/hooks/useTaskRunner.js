@@ -68,6 +68,14 @@ export function useTaskRunner(phases) {
 
     // ── Advance to next phase (called at end of each phase) ───────────────
     const advancePhase = useCallback(() => {
+        const finishedPhase = phasesRef.current[phaseIdxRef.current];
+        if (finishedPhase?.record) {
+            wsEegService.logEvent('phase_done', {
+                type:    finishedPhase.type,
+                samples: samplesRef.current.length,
+                index:   phaseIdxRef.current,
+            });
+        }
         stopRecording();
         const nextIdx = phaseIdxRef.current + 1;
         if (nextIdx >= phasesRef.current.length) {
@@ -96,6 +104,11 @@ export function useTaskRunner(phases) {
         playBeep(800, 200);
 
         if (phase.record) {
+            wsEegService.logEvent('phase_start', {
+                type:     phase.type,
+                duration: phase.duration,
+                index:    idx,
+            });
             unsubRef.current = wsEegService.on('raw', (sample) => {
                 samplesRef.current.push(sample);
             });

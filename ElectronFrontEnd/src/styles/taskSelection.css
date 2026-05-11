@@ -6,7 +6,16 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
+    /* Fill the app-main area so the layout can use remaining height */
     flex: 1;
+    min-height: 0;
+}
+
+/* Stop app-main from scrolling when the task-selection page is mounted.
+   The two inner columns (sidebar + detail) each scroll independently,
+   so the Start button is always visible without scrolling the outer page. */
+.app-main:has(.task-selection-page) {
+    overflow: hidden;
 }
 
 
@@ -40,7 +49,10 @@
 .ts-layout {
     display: flex;
     gap: 20px;
+    /* Grow to fill remaining space and never overflow the page */
     flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 
@@ -50,6 +62,9 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    /* Sidebar scrolls independently — task list never pushes the detail panel off-screen */
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .ts-group-label {
@@ -76,6 +91,15 @@
     letter-spacing: 0.03em;
     text-transform: none;
     flex-shrink: 0;
+}
+
+.ts-group-lock-hint {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: #64748b;
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0;
 }
 
 .ts-task-item {
@@ -151,6 +175,9 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    /* Detail panel scrolls independently — Start button always reachable */
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .ts-detail-name {

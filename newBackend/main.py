@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import math
 import os
 import sys
@@ -8,6 +9,22 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Set
+
+# ---------------------------------------------------------------------------
+# Logging configuration
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s.%(msecs)03d  %(levelname)-8s  %(name)s  %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+)
+log = logging.getLogger("mindlink")
+
+# Silence noisy third-party loggers
+for _noisy in ("uvicorn.access", "uvicorn.error",
+               "fastapi", "asyncio", "multipart"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 try:
     from scipy import stats as _scipy_stats
@@ -38,14 +55,25 @@ _WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, _WORKSPACE_ROOT)
 
+# On Python 3.8+ (Windows) the DLL search path no longer includes the package
+# directory automatically.  The .pyd was compiled against Python 3.11 and its
+# companion DLLs live in the BrainLinkParser/ folder, so we must register it
+# before the import.
+_BRAINLINK_PYD_DIR = os.path.join(_WORKSPACE_ROOT, "BrainLinkParser")
+if hasattr(os, "add_dll_directory") and os.path.isdir(_BRAINLINK_PYD_DIR):
+    try:
+        os.add_dll_directory(_BRAINLINK_PYD_DIR)
+    except Exception:
+        pass
+
 try:
     from BrainLinkParser.BrainLinkParser import BrainLinkParser as _BrainLinkParser
     _USE_SDK = True
-    print("[Backend] Using BrainLinkParser SDK", flush=True)
+    log.info("[INIT] Using BrainLinkParser SDK")
 except Exception as _e:
     _USE_SDK = False
     _BrainLinkParser = None
-    print(f"[Backend] BrainLinkParser SDK unavailable ({_e}), falling back to TGAM parser", flush=True)
+    log.info("[INIT] BrainLinkParser SDK unavailable (%s) -- using TGAM parser", _e)
 
 from eeg_processor import TGAMParser, create_eeg_filter
 
@@ -154,7 +182,7 @@ def _reader_worker(port_path: str) -> None:
         bp_attrs = ['delta', 'theta', 'lowAlpha', 'highAlpha', 'lowBeta', 'highBeta', 'lowGamma', 'midGamma']
         bp = {k: getattr(data, k, 0) for k in bp_attrs}
         band_power = bp if any(bp.values()) else None
-        print(f"[EEG] poorSignal={poor}  attention={attn}  meditation={med}", flush=True)
+        log.debug("[EEG] poorSignal=%-3s  attention=%-3s  meditation=%-3s", poor, attn, med)
         _enqueue({
             "type":       "eeg_data",
             "poorSignal": poor,
@@ -169,7 +197,7 @@ def _reader_worker(port_path: str) -> None:
         bat = getattr(data, 'battery', None)
         if bat is not None:
             _battery_level = int(bat)
-            print(f"[BATTERY] {_battery_level}%", flush=True)
+            log.info("[BATTERY] %s%%", _battery_level)
             _enqueue({"type": "battery", "level": _battery_level})
 
     def _noop(*args): pass
@@ -182,6 +210,7 @@ def _reader_worker(port_path: str) -> None:
             _serial_port = serial.Serial(port_path, baudrate=115200, timeout=0.02)
             _status = "connected"
             _enqueue({"type": "status", "value": "connected"})
+            log.info("[CONNECT] Port %s opened (SDK path) at 115200 baud", port_path)
 
             while not _stop_event.is_set():
                 chunk = _serial_port.read(64)
@@ -195,9 +224,11 @@ def _reader_worker(port_path: str) -> None:
 
                 if time.monotonic() - last_data_time > SILENCE_TIMEOUT:
                     _enqueue({"type": "error", "message": "Device silent for 3 s — disconnecting."})
+                    log.warning("[DISCONNECT] Device silent >%.0fs -- stopping SDK reader", SILENCE_TIMEOUT)
                     break
 
         except (serial.SerialException, OSError) as exc:
+            log.error("[CONNECT] Serial error on %s (SDK): %s", port_path, exc)
             _enqueue({"type": "error", "message": str(exc)})
         finally:
             if _serial_port and _serial_port.is_open:
@@ -217,10 +248,10 @@ def _reader_worker(port_path: str) -> None:
         data = TGAMParser.parse_payload(payload)
 
         if "raw" in data:
-            raw_val = data["raw"]
-            print(f"[RAW] {raw_val}", flush=True)
+            raw_val      = data["raw"]
+            filtered_val = round(eeg_filter(raw_val))
             _enqueue({"type": "raw_unfiltered_batch", "samples": [raw_val]})
-            raw_batch.append(round(eeg_filter(raw_val)))
+            raw_batch.append(filtered_val)
 
         now = time.monotonic()
         if now - last_flush >= FLUSH_INTERVAL and raw_batch:
@@ -230,7 +261,7 @@ def _reader_worker(port_path: str) -> None:
 
         if "battery" in data:
             _battery_level = data["battery"]
-            print(f"[BATTERY] {_battery_level}%", flush=True)
+            log.info("[BATTERY] %s%%", _battery_level)
             _enqueue({"type": "battery", "level": _battery_level})
 
         if "poorSignal" in data or "attention" in data:
@@ -249,6 +280,9 @@ def _reader_worker(port_path: str) -> None:
         _serial_port = serial.Serial(port_path, baudrate=115200, timeout=0.02)
         _status = "connected"
         _enqueue({"type": "status", "value": "connected"})
+        log.info("[CONNECT] Port %s opened at 115200 baud | FLUSH_INTERVAL=%.0fms | "
+                 "SILENCE_TIMEOUT=%.0fs",
+                 port_path, FLUSH_INTERVAL * 1000, SILENCE_TIMEOUT)
 
         while not _stop_event.is_set():
             chunk = _serial_port.read(64)
@@ -266,9 +300,11 @@ def _reader_worker(port_path: str) -> None:
 
             if time.monotonic() - last_data_time > SILENCE_TIMEOUT:
                 _enqueue({"type": "error", "message": "Device silent for 3 s — disconnecting."})
+                log.warning("[DISCONNECT] Device silent >%.0fs -- stopping reader", SILENCE_TIMEOUT)
                 break
 
     except (serial.SerialException, OSError) as exc:
+        log.error("[CONNECT] Serial error on %s: %s", port_path, exc)
         _enqueue({"type": "error", "message": str(exc)})
 
     finally:
@@ -334,7 +370,7 @@ def list_ports() -> Dict:
             })
         return {"ports": ports}
     except Exception as exc:
-        print(f"[Ports] list error: {exc}", flush=True)
+        log.warning("[PORTS] list error: %s", exc)
         return {"ports": []}
 
 
@@ -346,6 +382,52 @@ def status() -> Dict:
         "status":  _status,
         "battery": _battery_level,
     }
+
+
+# ── Structured event logging from the frontend ────────────────────────────────
+# The frontend calls POST /event whenever a recording phase starts or ends so
+# that the backend terminal shows the complete picture alongside the EEG logs.
+
+_EVENT_ICONS = {
+    "baseline_start":   "[BASELINE]",
+    "baseline_done":    "[BASELINE]",
+    "task_start":       "[TASK]    ",
+    "task_done":        "[TASK]    ",
+    "task_abort":       "[TASK]    ",
+    "phase_start":      "[PHASE]   ",
+    "phase_done":       "[PHASE]   ",
+}
+
+@app.post("/event")
+def frontend_event(body: Dict) -> Dict:
+    """
+    Receive structured log events from the Electron frontend.
+
+    Expected payload:
+      { "event": "task_start",  "label": "Mental Math",  "extra": {...} }
+      { "event": "task_done",   "label": "Mental Math",  "samples": 30720 }
+      { "event": "baseline_start", "phase": "eyes_closed" }
+      { "event": "baseline_done",  "phase": "eyes_closed", "samples": 15360,
+                                   "duration_s": 30 }
+    """
+    event   = body.get("event",  "unknown")
+    label   = body.get("label",  "")
+    icon    = _EVENT_ICONS.get(event, "[EVENT]   ")
+    samples = body.get("samples")
+    phase   = body.get("phase",  "")
+    dur     = body.get("duration_s")
+    extra   = {k: v for k, v in body.items()
+               if k not in ("event", "label", "phase", "samples", "duration_s")}
+
+    parts = [f"{icon} {event.upper()}"]
+    if label:  parts.append(f"'{label}'")
+    if phase:  parts.append(f"phase={phase}")
+    if dur is not None:    parts.append(f"duration={dur}s")
+    if samples is not None: parts.append(f"samples={samples}")
+    if extra:  parts.append(" ".join(f"{k}={v}" for k, v in extra.items()))
+
+    log.info("  ".join(parts))
+    return {"ok": True}
 
 
 @app.post("/connect")
@@ -398,13 +480,12 @@ def disconnect() -> Dict:
 
 _BANDS = ["delta", "theta", "lowAlpha", "highAlpha", "lowBeta", "highBeta", "lowGamma", "midGamma"]
 
-# Raw EEG → band-power conversion (used when frontend sends raw 512 Hz samples
-# instead of TGAM-chip band-power dicts)
-_RAW_EEG_FS      = 512    # BrainLink sample rate (Hz)
-_RAW_WINDOW      = 256    # samples per FFT window (0.5 sec → 2 Hz resolution)
-_RAW_STEP        = 8      # slide step in samples (~15 ms → ~64 windows/sec)
-_MT_TAPERS       = 3      # DPSS multitaper count (matches legacy mt_tapers=3)
-_MT_NW           = 2.5    # time-bandwidth product (matches legacy NW=2.5)
+# Raw EEG processing constants
+_RAW_EEG_FS      = 512     # BrainLink sample rate (Hz)
+_RAW_WINDOW      = 1024    # 2.0 s windows to align with enhanced single-channel engine
+_RAW_STEP        = 1024    # offline analyze path uses non-overlapping feature windows
+_MT_TAPERS       = 3       # DPSS multitaper count (matches legacy mt_tapers=3)
+_MT_NW           = 2.5     # time-bandwidth product (matches legacy NW=2.5)
 
 # TGAM frequency band ranges (Hz) for raw EEG conversion
 _TGAM_BAND_HZ: Dict[str, tuple] = {
@@ -420,6 +501,19 @@ _TGAM_BAND_HZ: Dict[str, tuple] = {
 
 # TGAM gamma bands (suppressed when EMG guard fires)
 _GAMMA_TGAM_BANDS = {"lowGamma", "midGamma"}
+
+# Direct raw-processing bands used by the enhanced single-channel pipeline
+_RAW_FEATURE_BANDS: Dict[str, tuple] = {
+    "delta":  (0.5, 4.0),
+    "theta":  (4.0, 8.0),
+    "alpha":  (8.0, 13.0),
+    "beta":   (13.0, 30.0),
+    "gamma":  (30.0, 45.0),
+    "theta1": (4.0, 6.0),
+    "theta2": (6.0, 8.0),
+    "beta1":  (13.0, 20.0),
+    "beta2":  (20.0, 30.0),
+}
 
 
 def _raw_to_bp_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Dict]:
@@ -546,7 +640,249 @@ def _raw_to_bp_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Dict]:
                 bp[f"{band}_entropy"] = 0.0
 
         result.append(bp)
+    log.debug("[BANDS] _raw_to_bp_windows: %d windows -> %d TGAM-style band-power dicts",
+              n_win, len(result))
     return result
+
+
+def _window_psd_batch(raw_samples: List, fs: int = _RAW_EEG_FS):
+    """Return (segs, freqs, psd_batch, snr_batch, emg_flags) for raw EEG windows."""
+    if not _NP_AVAILABLE or len(raw_samples) < _RAW_WINDOW:
+        return None
+
+    arr = _np.asarray(raw_samples, dtype=_np.float64)
+    n = len(arr)
+    freqs = _np.fft.rfftfreq(_RAW_WINDOW, d=1.0 / fs)
+    n_win = max(0, (n - _RAW_WINDOW) // _RAW_STEP + 1)
+    if n_win == 0:
+        return None
+
+    idx = (_np.arange(n_win)[:, None] * _RAW_STEP +
+           _np.arange(_RAW_WINDOW)[None, :])
+    segs = arr[idx]
+    segs = segs - segs.mean(axis=1, keepdims=True)
+
+    hann = _np.hanning(_RAW_WINDOW)
+    psd_batch = None
+
+    if _DPSS_AVAILABLE:
+        try:
+            tapers = _dpss(_RAW_WINDOW, NW=_MT_NW, Kmax=_MT_TAPERS, sym=False)
+            for k in range(_MT_TAPERS):
+                tapered = segs * tapers[k]
+                Xk = _np.fft.rfft(tapered, axis=1)
+                Pk = (_np.abs(Xk) ** 2) / (fs * _RAW_WINDOW + 1e-12)
+                psd_batch = Pk if psd_batch is None else psd_batch + Pk
+            psd_batch = psd_batch / float(_MT_TAPERS)
+        except Exception:
+            psd_batch = None
+
+    if psd_batch is None:
+        tapered = segs * hann
+        Xk = _np.fft.rfft(tapered, axis=1)
+        psd_batch = (_np.abs(Xk) ** 2) / (_RAW_WINDOW * fs + 1e-12)
+
+    noise_floor = _np.percentile(psd_batch, 10, axis=1, keepdims=True)
+    snr_batch = _np.maximum(psd_batch - noise_floor, 0.0)
+
+    hf_mask = (freqs >= 35) & (freqs <= 45)
+    mid_mask = (freqs >= 20) & (freqs <= 30)
+    use_mask = (freqs >= 20) & (freqs <= 45)
+    emg_flags = _np.zeros(n_win, dtype=bool)
+    if _np.any(hf_mask) and _np.any(mid_mask):
+        hf_pwr = psd_batch[:, hf_mask].sum(axis=1)
+        mid_pwr = psd_batch[:, mid_mask].sum(axis=1)
+        ratio_hf_mid = hf_pwr / (mid_pwr + 1e-12)
+        f_sel = freqs[use_mask]
+        if f_sel.size >= 3:
+            logf = _np.log(f_sel + 1e-12)
+            logp = _np.log(psd_batch[:, use_mask] + 1e-18)
+            n_f = float(f_sel.size)
+            sf = float(logf.sum())
+            sf2 = float((logf ** 2).sum())
+            denom_ols = n_f * sf2 - sf ** 2
+            if abs(denom_ols) > 1e-12:
+                sp = logp.sum(axis=1)
+                sfp = (logp * logf).sum(axis=1)
+                slopes = (n_f * sfp - sf * sp) / denom_ols
+                emg_flags = (ratio_hf_mid > 1.2) | (slopes > -0.6)
+            else:
+                emg_flags = ratio_hf_mid > 1.2
+        else:
+            emg_flags = _np.ones(n_win, dtype=bool)
+
+    return segs, freqs, psd_batch, snr_batch, emg_flags
+
+
+def _raw_to_feature_rows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Dict[str, float]]:
+    """Convert raw EEG samples directly to enhanced-style feature rows."""
+    batch = _window_psd_batch(raw_samples, fs=fs)
+    if batch is None:
+        return []
+
+    segs, freqs, psd_batch, snr_batch, emg_flags = batch
+    band_masks = {
+        band: (freqs >= lo) & (freqs < hi)
+        for band, (lo, hi) in _RAW_FEATURE_BANDS.items()
+    }
+
+    rows: List[Dict[str, float]] = []
+    for wi in range(segs.shape[0]):
+        x = segs[wi]
+        psd = psd_batch[wi]
+        snr_psd = snr_batch[wi]
+        total_power = float(_np.var(x))
+        total_snr_power = float(snr_psd.sum()) if snr_psd.size else 0.0
+        row: Dict[str, float] = {}
+
+        for band, (lo, hi) in _RAW_FEATURE_BANDS.items():
+            mask = band_masks[band]
+            raw_band_psd = psd[mask]
+            snr_band_psd = snr_psd[mask]
+            band_freqs = freqs[mask]
+
+            raw_power = float(raw_band_psd.sum() * 1e12) if raw_band_psd.size else 0.0
+            snr_power = float(snr_band_psd.sum() * 1e12) if snr_band_psd.size else 0.0
+            row[f"{band}_power_raw"] = raw_power
+            row[f"{band}_power"] = snr_power
+            row[f"{band}_relative"] = (
+                snr_power / (total_snr_power * 1e12 + 1e-12)
+                if total_snr_power > 0 else 0.0
+            )
+
+            if raw_band_psd.size:
+                pk_idx = int(raw_band_psd.argmax())
+                peak_freq = float(band_freqs[pk_idx])
+                peak_amp = float(raw_band_psd[pk_idx] * 1e12)
+                mean_amp = float(raw_band_psd.mean() * 1e12)
+            else:
+                peak_freq = (lo + hi) / 2.0
+                peak_amp = 0.0
+                mean_amp = 0.0
+            row[f"{band}_peak_freq"] = peak_freq
+            row[f"{band}_peak_amp"] = peak_amp
+            row[f"{band}_peak_rel_amp"] = peak_amp / (mean_amp + 1e-9) if mean_amp > 0 else 0.0
+
+            s = float(snr_band_psd.sum())
+            if snr_band_psd.size > 0 and s > 1e-24:
+                p_bins = snr_band_psd / (s + 1e-12)
+                p_bins = p_bins / (p_bins.sum() + 1e-12)
+                p_bins = _np.clip(p_bins, 1e-12, 1.0)
+                row[f"{band}_entropy"] = float(-(p_bins * _np.log2(p_bins)).sum())
+            else:
+                row[f"{band}_entropy"] = 0.0
+
+        if bool(emg_flags[wi]):
+            for suffix in ("_power", "_power_raw", "_relative", "_peak_freq", "_peak_amp", "_peak_rel_amp", "_entropy"):
+                row[f"gamma{suffix}"] = 0.0
+
+        row["alpha_theta_ratio"] = row["alpha_power"] / (row["theta_power"] + 1e-9)
+        row["beta_alpha_ratio"] = row["beta_power"] / (row["alpha_power"] + 1e-9)
+        row["beta2_beta1_ratio"] = row["beta2_power"] / (row["beta1_power"] + 1e-9)
+        row["theta2_theta1_ratio"] = row["theta2_power"] / (row["theta1_power"] + 1e-9)
+        row["total_power"] = total_power
+        row["_emg_guard"] = float(bool(emg_flags[wi]))
+        row["_gamma_evaluated"] = float(not bool(emg_flags[wi]))
+        rows.append(row)
+    return rows
+
+
+def _qc_raw_baseline_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> Dict[str, Any]:
+    """Apply baseline QC to raw eyes-closed windows before computing stats."""
+    log.info("[QC] Baseline QC: %d raw samples (%.1f s @ %d Hz)",
+             len(raw_samples), len(raw_samples) / fs, fs)
+    batch = _window_psd_batch(raw_samples, fs=fs)
+    empty = {
+        "rows": [],
+        "kept": 0,
+        "rejected": 0,
+        "rejected_not_worn": 0,
+        "rejected_artifact": 0,
+        "rejected_flatline": 0,
+    }
+    if batch is None:
+        return empty
+
+    segs, freqs, psd_batch, snr_batch, emg_flags = batch
+    feature_rows = _raw_to_feature_rows(raw_samples, fs=fs)
+    kept_rows: List[Dict[str, float]] = []
+    rejected = rejected_not_worn = rejected_artifact = rejected_flatline = 0
+
+    total_windows = min(segs.shape[0], len(feature_rows))
+    log.debug("[QC] Evaluating %d baseline windows for not-worn / artifact / flatline",
+              total_windows)
+    for wi in range(total_windows):
+        x = segs[wi]
+        psd = psd_batch[wi]
+        med = float(_np.median(x))
+        mad = float(_np.median(_np.abs(x - med))) + 1e-12
+        scale = 1.4826 * mad
+
+        if scale < 0.5:
+            rejected += 1
+            rejected_flatline += 1
+            continue
+
+        total = float(psd.sum()) + 1e-12
+        lf_ratio = float(psd[(freqs >= 0.5) & (freqs <= 8.0)].sum() / total)
+        alpha_ratio = float(psd[(freqs >= 8.0) & (freqs <= 13.0)].sum() / total)
+        hf_ratio = float(psd[freqs >= 30.0].sum() / total)
+        valid = (freqs >= 1.0) & (freqs <= 40.0) & (psd > 0)
+        if int(valid.sum()) > 10:
+            slope, _ = _np.polyfit(_np.log10(freqs[valid]), _np.log10(psd[valid]), 1)
+            slope = float(slope)
+        else:
+            slope = -1.0
+        hf_threshold = 0.70 if slope < -0.5 else 0.50
+        lacks_neural_low_bands = (lf_ratio < 0.10) and (alpha_ratio < 0.05)
+        is_not_worn = (
+            (lacks_neural_low_bands and slope > -0.1) or
+            (lacks_neural_low_bands and hf_ratio > hf_threshold)
+        )
+        if is_not_worn:
+            rejected += 1
+            rejected_not_worn += 1
+            continue
+
+        extreme_outliers = _np.abs(x - med) > (20.0 * scale)
+        is_artifact = bool(_np.sum(extreme_outliers) > (len(x) * 0.05) and scale > 10.0)
+        if is_artifact:
+            rejected += 1
+            rejected_artifact += 1
+            continue
+
+        kept_rows.append(feature_rows[wi])
+
+    log.info("[QC] Baseline windows: %d kept  |  %d rejected  "
+             "(flatline=%d, not-worn=%d, artifact=%d)",
+             len(kept_rows), rejected,
+             rejected_flatline, rejected_not_worn, rejected_artifact)
+    return {
+        "rows": kept_rows,
+        "kept": len(kept_rows),
+        "rejected": rejected,
+        "rejected_not_worn": rejected_not_worn,
+        "rejected_artifact": rejected_artifact,
+        "rejected_flatline": rejected_flatline,
+    }
+
+
+def _rows_from_samples(samples: List) -> List[Dict[str, float]]:
+    """Normalize incoming samples to analysis-ready feature rows."""
+    if not samples:
+        return []
+    first = samples[0]
+    if isinstance(first, (int, float)):
+        rows = _raw_to_feature_rows(samples)
+        log.info("[FEATURES] raw EEG: %d samples -> %d feature windows (multitaper PSD path)",
+                 len(samples), len(rows))
+        return rows
+    if isinstance(first, dict) and "alpha_power" in first:
+        log.info("[FEATURES] %d pre-built feature rows passed through", len(samples))
+        return list(samples)
+    rows = _extract_features(samples)
+    log.info("[FEATURES] TGAM band-power: %d packets -> %d feature rows", len(samples), len(rows))
+    return rows
 
 
 
@@ -556,7 +892,7 @@ def _maybe_convert_raw(samples: List) -> List[Dict]:
     if not samples:
         return samples
     if isinstance(samples[0], (int, float)):
-        return _raw_to_bp_windows(samples)
+        return _raw_to_feature_rows(samples)
     return samples
 _ALPHA              = 0.05
 _FDR_ALPHA          = 0.05
@@ -1116,7 +1452,7 @@ def _build_blocks(rows: List[Dict], windows_per_block: int = _WINDOWS_PER_BLOCK)
     Args:
         rows:              List of per-window feature dicts.
         windows_per_block: How many consecutive windows to average into one block.
-                           Default _WINDOWS_PER_BLOCK = 16  (= 8 s at 0.5 s/window).
+                           Default _WINDOWS_PER_BLOCK = 4  (= 8 s at 2.0 s/window).
 
     Returns:
         List of per-block mean dicts.  Length ≈ len(rows) // windows_per_block.
@@ -1152,6 +1488,29 @@ def _equalize_windows(rows_a: List[Dict], rows_b: List[Dict],
         idx    = sorted(rng.sample(range(nb), n))
         rows_b = [rows_b[i] for i in idx]
     return rows_a, rows_b
+
+
+def _holm_bonferroni(p_values: List[float], alpha: float = _ALPHA) -> tuple:
+    """Holm-Bonferroni step-down correction."""
+    if not p_values:
+        return [], []
+    m = len(p_values)
+    pairs = sorted(
+        [(max(min(float(p), 1.0), 1e-300), i) for i, p in enumerate(p_values)],
+        key=lambda item: item[0],
+    )
+    p_adj_sorted = [0.0] * m
+    for i, (p_val, _orig_idx) in enumerate(pairs):
+        adjusted = p_val * (m - i)
+        if i > 0:
+            adjusted = max(adjusted, p_adj_sorted[i - 1])
+        p_adj_sorted[i] = min(adjusted, 1.0)
+
+    p_adj = [1.0] * m
+    for pos, (_p_val, orig_idx) in enumerate(pairs):
+        p_adj[orig_idx] = p_adj_sorted[pos]
+    rejected = [adj <= alpha for adj in p_adj]
+    return rejected, p_adj
 
 
 def _correlation_guard_factor(all_rows: List[Dict], features: List[str]) -> float:
@@ -1194,6 +1553,8 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     Pass windows_per_block=1 to disable blocking (individual windows, NOT recommended
     for overlapping EEG windows — produces spuriously low p-values).
     """
+    log.info("[ANALYZE] Task='%s'  task_windows=%d  baseline_windows=%d",
+             task_id, len(task_rows), len(baseline_rows))
     if not task_rows or not baseline_rows:
         return {}, {}
 
@@ -1210,18 +1571,33 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     # samples inflates n ×16 and pushes p-values near 0 on random noise.
     task_blocks     = _build_blocks(task_rows,     windows_per_block)
     baseline_blocks = _build_blocks(baseline_rows, windows_per_block)
+    log.debug("[BUCKET] Block aggregation: %d win/block  |  task %d win -> %d blocks  |  "
+              "baseline %d win -> %d blocks",
+              windows_per_block,
+              len(task_rows), len(task_blocks),
+              len(baseline_rows), len(baseline_blocks))
 
-    # ── Equalize block counts (mirrors legacy _equalize_blocks) ───────────────
-    task_eq, baseline_eq = _equalize_windows(task_blocks, baseline_blocks)
-    ess_task = len(task_eq)
-    ess_base = len(baseline_eq)
+    # ── Use all blocks — Welch t-test and permutation test both handle unequal n ─
+    # The old equalization reduced every task to min(task, baseline) blocks, which
+    # threw away the majority of task data (e.g. emotion_face: 14 → 3 blocks) and
+    # left the permutation test with C(6,3)=20 unique permutations regardless of
+    # how much EEG was recorded.  Removed: use all blocks on both sides.
+    task_eq     = task_blocks
+    baseline_eq = baseline_blocks
+    ess_task    = len(task_eq)
+    ess_base    = len(baseline_eq)
+    log.debug("[BUCKET] Using all blocks: task=%d  baseline=%d  (unequal-n Welch + perm)",
+              ess_task, ess_base)
 
     # ── Correlation guard: shrink alpha by effective-feature-count ratio ───────
     guard_factor    = _correlation_guard_factor(baseline_eq, fnames)
     local_alpha     = max(1e-9, _ALPHA     * guard_factor)
     local_fdr_alpha = max(1e-9, _FDR_ALPHA * guard_factor)
+    log.debug("[GUARD] Correlation guard factor=%.4f  alpha=%.6f  fdr_alpha=%.6f",
+              guard_factor, local_alpha, local_fdr_alpha)
 
     # ── Per-feature Welch's t + Cohen's d ─────────────────────────────────────
+    log.debug("[STATS] Welch t-test + Cohen's d on %d features ...", len(fnames))
     raw_p:    List[float]       = []
     t_stats:  Dict[str, float]  = {}
     feat_data: Dict[str, Any]   = {}
@@ -1285,6 +1661,8 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
         }
 
     # ── BH FDR + one-sided p + decision flags ─────────────────────────────────
+    log.debug("[STATS] Applying Benjamini-Hochberg FDR correction on %d p-values ...",
+              len(raw_p))
     q_vals    = _bh_fdr(raw_p)
     sig_count = 0
     for i, fname in enumerate(fnames):
@@ -1345,7 +1723,10 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
         if sig:
             sig_count += 1
 
+    log.debug("[STATS] Significant features after FDR/rules: %d / %d", sig_count, len(fnames))
+
     # ── Fisher combined + KM correlation correction ────────────────────────────
+    log.debug("[STATS] Fisher combined + Kost-McDermott correction ...")
     raw_fisher_stat, _, _ = _fisher_combined(raw_p)
     all_rows = task_eq + baseline_eq
     km_stat, km_p, km_df, km_mean_r, km_df_ratio = _km_fisher(
@@ -1353,6 +1734,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     )
 
     # ── SumP permutation (on equalized windows, mirrors legacy block perm) ─────
+    log.debug("[STATS] SumP permutation test (N=%d permutations) ...", _N_PERM)
     sum_p_val, sump_perm_p = _sum_p_perm(task_eq, baseline_eq)
 
     # ── Composite score: sum of -log10(q when available, else p) ───────────────
@@ -1462,6 +1844,10 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
         },
         "expectation": _evaluate_expectation_alignment(task_id, feat_data) if task_id else None,
     }
+    km_p_str   = f"{km_p:.4f}"   if km_p   is not None else "n/a"
+    sump_p_str = f"{sump_perm_p:.4f}" if sump_perm_p is not None else "n/a"
+    log.info("[RESULT] Task='%s'  sig=%d/%d  KM-p=%s  SumP-p=%s  guard=%.3f",
+             task_id, sig_count, nom_feat_count, km_p_str, sump_p_str, guard_factor)
     return summary, feat_data
 
 
@@ -1497,18 +1883,59 @@ def analyze(body: Dict) -> Dict:
         for samples in baseline_raw.values():
             ec_samples.extend(samples if isinstance(samples, list) else [])
 
+    task_names = list(tasks_raw.keys())
+    log.info("[REQUEST] /analyze received  |  EC=%d samples (%.1fs)  EO=%d samples  "
+             "tasks=%s  block_seconds=%.1f",
+             len(ec_samples), len(ec_samples) / _RAW_EEG_FS,
+             len(eo_samples), task_names, req_block_sec)
+
     if not ec_samples:
+        log.warning("[BASELINE] No eyes-closed data in request -- aborting")
         return {"error": "No baseline data provided"}
 
     # Record raw counts before conversion (for report header)
     ec_raw_count = len(ec_samples)
     eo_raw_count = len(eo_samples)
 
-    # Convert raw EEG → band-power windows if frontend sent raw samples
-    ec_samples = _maybe_convert_raw(ec_samples)
-    eo_samples = _maybe_convert_raw(eo_samples)
+    baseline_qc = {
+        "rows": [],
+        "kept": 0,
+        "rejected": 0,
+        "rejected_not_worn": 0,
+        "rejected_artifact": 0,
+        "rejected_flatline": 0,
+    }
+    if ec_samples and isinstance(ec_samples[0], (int, float)):
+        log.info("[BASELINE] Eyes-closed: %d raw integer samples  ->  QC + feature extraction",
+                 ec_raw_count)
+        baseline_qc = _qc_raw_baseline_windows(ec_samples)
+        baseline_rows = baseline_qc["rows"]
+        log.info("[BASELINE] QC complete: %d/%d windows kept  "
+                 "(flatline=%d, not-worn=%d, artifact=%d)",
+                 baseline_qc["kept"],
+                 baseline_qc["kept"] + baseline_qc["rejected"],
+                 baseline_qc["rejected_flatline"],
+                 baseline_qc["rejected_not_worn"],
+                 baseline_qc["rejected_artifact"])
+    else:
+        log.info("[BASELINE] Eyes-closed: %d pre-extracted feature rows (band-power dicts)",
+                 len(ec_samples))
+        baseline_rows = _rows_from_samples(ec_samples)
+        baseline_qc["rows"] = baseline_rows
+        baseline_qc["kept"] = len(baseline_rows)
+        log.info("[BASELINE] Feature rows ready: %d", len(baseline_rows))
 
-    baseline_rows = _extract_features(ec_samples)
+    eo_rows = _rows_from_samples(eo_samples)
+    if eo_samples:
+        log.info("[BASELINE] Eyes-open: %d samples -> %d feature rows (reference only)",
+                 len(eo_samples), len(eo_rows))
+
+    if not baseline_rows:
+        log.warning("[BASELINE] Zero usable baseline windows after QC -- aborting")
+        return {"error": "No usable baseline data after quality control"}
+
+    log.info("[BASELINE] Ready: %d baseline feature rows  (%d features each)",
+             len(baseline_rows), len(baseline_rows[0]) if baseline_rows else 0)
 
     per_task:      Dict[str, Any] = {}
     per_task_rows: Dict[str, List[Dict]] = {}
@@ -1516,9 +1943,11 @@ def analyze(body: Dict) -> Dict:
 
     for task_id, samples in tasks_raw.items():
         if not samples:
+            log.warning("[TASK] '%s' skipped -- no samples", task_id)
             continue
-        samples = list(_maybe_convert_raw(samples))
-        task_rows = _extract_features(samples)
+        log.info("[TASK] '%s'  %d samples -> feature extraction ...", task_id, len(samples))
+        task_rows = _rows_from_samples(list(samples))
+        log.info("[TASK] '%s'  -> %d feature rows", task_id, len(task_rows))
         per_task_rows[task_id] = task_rows
         summary, analysis = _analyze_task_vs_baseline(
             task_rows, baseline_rows, task_id, win_per_block
@@ -1533,6 +1962,8 @@ def analyze(body: Dict) -> Dict:
     # ── Combined (all tasks pooled vs baseline) ───────────────────────────────
     comb_summary, comb_analysis = ({}, {})
     if all_task_rows:
+        log.info("[COMBINED] Pooled analysis: %d task rows across %d tasks vs %d baseline rows",
+                 len(all_task_rows), len(per_task), len(baseline_rows))
         comb_summary, comb_analysis = _analyze_task_vs_baseline(
             all_task_rows, baseline_rows, windows_per_block=win_per_block
         )
@@ -1540,6 +1971,10 @@ def analyze(body: Dict) -> Dict:
     # ── Across-task omnibus (Kruskal-Wallis per feature + BH FDR) ─────────────
     n_sessions = len(per_task)
     fnames     = list(baseline_rows[0].keys()) if baseline_rows else []
+
+    if n_sessions >= 2:
+        log.info("[OMNIBUS] Kruskal-Wallis across %d tasks on %d features ...",
+                 n_sessions, len(fnames))
 
     # Gather per-feature value groups across tasks
     task_feat_groups: Dict[str, List[List[float]]] = {f: [] for f in fnames}
@@ -1587,7 +2022,71 @@ def analyze(body: Dict) -> Dict:
         }
 
     n_omnibus_sig = sum(1 for f in feat_rankings.values() if f.get("omnibus_sig"))
+    if n_sessions >= 2:
+        log.info("[OMNIBUS] Kruskal-Wallis done: %d/%d features significant across tasks "
+                 "(FDR-corrected)", n_omnibus_sig, len(fnames))
+
     can_test = n_sessions >= 2 and _SCIPY_AVAILABLE
+    cross_task_correction = {
+        "method": "holm_bonferroni",
+        "alpha": _ALPHA,
+        "tasks": [],
+        "n_tests": 0,
+        "n_rejected": 0,
+        "results": [],
+    }
+    if len(per_task) >= 2:
+        task_names_holm = list(per_task.keys())
+        km_pvals = []
+        for task_name in task_names_holm:
+            summary = per_task[task_name].get("summary", {})
+            fisher = summary.get("fisher", {})
+            km_p = fisher.get("km_p")
+            km_pvals.append(float(km_p) if isinstance(km_p, (int, float)) else 1.0)
+        rejected, adjusted = _holm_bonferroni(km_pvals, alpha=_ALPHA)
+        n_holm_rejected = int(sum(1 for flag in rejected if flag))
+        log.info("[CROSS-TASK] Holm-Bonferroni on %d tasks: %d rejected  raw_p=%s",
+                 len(task_names_holm), n_holm_rejected,
+                 [round(p, 4) for p in km_pvals])
+        cross_task_correction = {
+            "method": "holm_bonferroni",
+            "alpha": _ALPHA,
+            "tasks": task_names_holm,
+            "n_tests": len(task_names_holm),
+            "n_rejected": n_holm_rejected,
+            "results": [
+                {
+                    "task": task_name,
+                    "raw_p": round(km_pvals[i], 6),
+                    "adjusted_p": round(adjusted[i], 6),
+                    "rejected": bool(rejected[i]),
+                }
+                for i, task_name in enumerate(task_names_holm)
+            ],
+        }
+
+    # ── Neuroprofile export ────────────────────────────────────────────────────
+    try:
+        from neuroprofile_traceability import build_neuroprofile_export
+        neuroprofile_export = build_neuroprofile_export(per_task, {
+            "baseline_kept":    baseline_qc["kept"],
+            "baseline_qc":      baseline_qc,
+        })
+        n_feature_rows = len(neuroprofile_export.get("feature_rows", []))
+        tasks_detected = neuroprofile_export.get("tasks_detected", [])
+        reliability    = neuroprofile_export.get("global_reliability", {})
+        log.info("[NEUROPROFILE] Export built: %d tasks detected  |  %d feature rows  |  "
+                 "reliability=%s  confidence=%s",
+                 len(tasks_detected), n_feature_rows,
+                 reliability.get("label", "?"),
+                 neuroprofile_export.get("session_confidence_cap", {}).get("confidence_level", "?"))
+    except Exception as _np_exc:
+        neuroprofile_export = {}
+        log.warning("[NEUROPROFILE] Export skipped: %s", _np_exc)
+
+    log.info("[RESPONSE] /analyze complete: %d tasks  |  baseline %d rows  |  "
+             "omnibus_sig=%d/%d features",
+             len(per_task), len(baseline_rows), n_omnibus_sig, len(fnames))
 
     return {
         "per_task": per_task,
@@ -1600,14 +2099,16 @@ def analyze(body: Dict) -> Dict:
             "sessions_used":  n_sessions,
             "n_significant":  n_omnibus_sig,
             "features":       feat_rankings,
+            "cross_task_correction": cross_task_correction,
         },
-        "baseline_kept":              len(baseline_rows),
+        "baseline_kept":              baseline_qc["kept"],
         "ec_samples_raw":             ec_raw_count,
-        "baseline_rejected":          0,
-        "baseline_rejected_not_worn": 0,
-        "baseline_rejected_artifact": 0,
-        "baseline_rejected_flatline": 0,
-        "eo_windows":                 eo_raw_count,
+        "baseline_rejected":          baseline_qc["rejected"],
+        "baseline_rejected_not_worn": baseline_qc["rejected_not_worn"],
+        "baseline_rejected_artifact": baseline_qc["rejected_artifact"],
+        "baseline_rejected_flatline": baseline_qc["rejected_flatline"],
+        "eo_windows":                 len(eo_rows) if eo_rows else eo_raw_count,
+        "neuroprofile_feature_export": neuroprofile_export,
         "config": {
             "mode":                "aggregate_only",
             "alpha":               _ALPHA,

@@ -72,8 +72,8 @@
         "readyToStart": "Klaar om te starten",
         "recordingEC": "Opname: Ogen gesloten",
         "recordingEO": "Opname: Ogen open",
-        "phaseMsgEC": "Sluit uw ogen en ontspan... (30 seconden)",
-        "phaseMsgEO": "Houd uw ogen open en blijf ontspannen... (30 seconden)",
+        "phaseMsgEC": "Sluit uw ogen en ontspan... (60 seconden)",
+        "phaseMsgEO": "Houd uw ogen open en blijf ontspannen... (60 seconden)",
         "ecComplete": "Ogen gesloten voltooid!",
         "ecCompleteSub": "Geweldig! Laten we nu opnemen met ogen open.",
         "calibComplete": "Kalibratie voltooid!",
@@ -81,9 +81,9 @@
         "countdownReady": "Maak u klaar! Luister naar het aftellen...",
         "countdown": "Aftellen: {{count}}",
         "ecCardTitle": "Basislijn met ogen gesloten",
-        "ecCardDesc": "Ontspan met gesloten ogen gedurende 30 seconden",
+        "ecCardDesc": "Ontspan met gesloten ogen gedurende 60 seconden",
         "eoCardTitle": "Basislijn met ogen open",
-        "eoCardDesc": "Blijf ontspannen met open ogen gedurende 30 seconden",
+        "eoCardDesc": "Blijf ontspannen met open ogen gedurende 60 seconden",
         "complete": "Voltooid",
         "start": "Starten",
         "cancel": "Annuleren",
@@ -91,9 +91,9 @@
         "modalECTitle": "Basislijn met ogen gesloten",
         "modalEOTitle": "Basislijn met ogen open",
         "modalECIntro": "Maak u klaar om uw ogen te sluiten en te ontspannen.",
-        "modalECDuration": "De sensoren registreren uw basislijn hersengolfpatroon gedurende 30 seconden.",
+        "modalECDuration": "De sensoren registreren uw basislijn hersengolfpatroon gedurende 60 seconden.",
         "modalEOIntro": "Maak u klaar om uw ogen open te houden en ontspannen te blijven.",
-        "modalEODuration": "De sensoren registreren uw basislijn met open ogen gedurende 30 seconden.",
+        "modalEODuration": "De sensoren registreren uw basislijn met open ogen gedurende 60 seconden.",
         "modalWhatWillHappen": "Wat er gaat gebeuren:",
         "modalStep1": "Klik hieronder op 'Opname starten'",
         "modalStep2": "U hoort een aftelling: 5, 4, 3, 2, 1 piepjes",
@@ -101,7 +101,7 @@
         "modalECStep4": "Laat uw gedachten vrij dwalen zonder u op iets specifieks te concentreren",
         "modalStep5": "Een geluid meldt u wanneer de opname is voltooid",
         "modalECWarning": "Belangrijk: Controleer of uw luidsprekers/hoofdtelefoon AAN staan!",
-        "modalEOStep3": "Houd uw ogen open en ontspan gedurende 30 seconden",
+        "modalEOStep3": "Houd uw ogen open en ontspan gedurende 60 seconden",
         "modalEOStep4": "Blijf kalm en focus op het witte kruis in het midden van het scherm",
         "modalEOStep5": "Maak u geen zorgen over knipperen.",
         "modalEOStep6": "Een geluid meldt u wanneer de opname is voltooid",
@@ -338,8 +338,36 @@
             "phase1": "ORDE: Tel symmetrische/normale vormen. Houd uw blik standvastig en minimaliseer beweging.",
             "cue2": "VERRASSING: Tel niet-symmetrische/abnormale vormen in de volgende afbeelding. Houd uw blik standvastig.",
             "phase2": "VERRASSING: Tel niet-symmetrische/abnormale vormen. Houd uw blik standvastig en minimaliseer beweging.",
-            "rest": "Rust."
-        }
+            "rest": "Rust."        },
+        "semanticMemory": {
+            "name": "Semantisch geheugen ophalen",
+            "intro1": "Dit is een gestructureerde geheugenophaaltaak met 5 afwisselende segmenten van 10 seconden elk.",
+            "intro2": "Segment 1 (10s): Denk aan namen van mensen die u kent — vrienden, leraren, familieleden.",
+            "intro3": "Segment 2 (10s): Rust. Ontspan en laat uw geest leeg worden.",
+            "intro4": "Segment 3 (10s): Denk aan namen van steden die u kent.",
+            "intro5": "Segment 4 (10s): Rust. Ontspan.",
+            "intro6": "Segment 5 (10s): Denk aan gewone objecten om u heen — laptop, stoel, fles.",
+            "phase1": "PERSONEN: Denk aan namen van mensen die u kent. Ogen gesloten.",
+            "rest1": "RUST: Ontspan. Denk niet opzettelijk. Ogen gesloten.",
+            "phase2": "STEDEN: Denk aan namen van steden die u kent. Ogen gesloten.",
+            "rest2": "RUST: Ontspan. Ogen gesloten.",
+            "phase3": "OBJECTEN: Denk aan gewone objecten om u heen — laptop, stoel, fles. Ogen gesloten."
+        },
+        "bodyScan": {
+            "name": "Lichaamsscan",
+            "intro1": "Sluit uw ogen en verplaats uw aandacht langzaam door uw lichaam van hoofd tot voeten.",
+            "intro2": "Interne volgorde: Hoofd → Voorhoofd → Ogen → Nek → Schouders → Borst → Buik → Benen → Voeten.",
+            "intro3": "Voer de scan stilzwijgend uit — geen fysieke beweging, spiercontractie of verbalisatie.",
+            "intro4": "Houd uw aandacht zachtjes op elk lichaamsdeel gedurende de volle 60 seconden.",
+            "phaseInstruction": "LICHAAMSSCAN: Verplaats uw aandacht langzaam van hoofd tot voeten. Ogen gesloten."
+        },
+        "colorPerception": {
+            "name": "Kleurperceptie",
+            "intro1": "U ziet 5 effen kleuren één voor één, elk gedurende 12 seconden (60 seconden totaal).",
+            "intro2": "Houd uw ogen open en zacht gericht op de kleur. Kijk niet weg.",
+            "intro3": "Analyseer de kleur mentaal — let op de tint, helderheid en hoe deze u beïnvloedt.",
+            "intro4": "Verbaliseer niet en maak geen fysieke reactie tijdens de taak.",
+            "phaseInstruction": "Richt uw blik op deze kleur. Analyseer hem mentaal — tint, helderheid en uw reactie."        }
     },
     "taskMeta": {
         "visual_imagery": {
@@ -393,6 +421,18 @@
         "order_surprise": {
             "name": "Orde & Verrassing",
             "description": "Tel symmetrische (ORDE) vs niet-symmetrische (VERRASSING) vormen."
+        },
+        "semantic_memory": {
+            "name": "Semantisch geheugen ophalen",
+            "description": "Beoordeelt semantisch geheugen via afwisselende denk- en rustsegmenten — namen van mensen, steden en objecten."
+        },
+        "body_scan": {
+            "name": "Lichaamsscan",
+            "description": "Evalueert interocept bewustzijn en aandachtsregulatie via een langzame interne aandachtsscan van hoofd tot voeten."
+        },
+        "color_perception": {
+            "name": "Kleurperceptie",
+            "description": "Evalueert visuele perceptie en aandachtsverwerking onder actieve kijkomstandigheden met vijf achtereenvolgende effen kleuren."
         }
     },
     "taskSelection": {
@@ -409,6 +449,8 @@
         "runAgain": "Opnieuw uitvoeren",
         "taskInstructions": "Taakinstructies",
         "selectPlaceholder": "Selecteer een taak uit de lijst om details te zien.",
+        "sessionThreeTasks": "Sessie 3 — Verdiepende beoordeling",
+        "sessionThreeLock": "Vereist 2 partnerboekingen om te ontgrendelen",
         "pathwayPersonal": "Persoonlijk traject",
         "pathwayConnection": "Verbinding",
         "pathwayLifestyle": "Levensstijl"
@@ -424,7 +466,7 @@
         },
         "2": {
             "title": "Basislijnkalibratie",
-            "content": "Er worden twee fasen van 30 seconden opgenomen: Ogen gesloten (EC) en Ogen open (EO). Zit stil en ontspan. De kalibratie stelt uw persoonlijke basislijn in."
+            "content": "Er worden twee fasen van 60 seconden opgenomen: Ogen gesloten (EC) en Ogen open (EO). Zit stil en ontspan. De kalibratie stelt uw persoonlijke basislijn in."
         },
         "3": {
             "title": "Cognitieve taken",

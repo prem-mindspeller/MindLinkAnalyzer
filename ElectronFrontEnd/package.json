@@ -42,9 +42,11 @@
   "build": {
     "appId": "com.mindspeller.Mindlink",
     "productName": "Mindlink Analyzer",
+    "forceCodeSigning": false,
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"
+      "icon": "icon.ico",
+      "signAndEditExecutable": false
     },
     "extraResources": [
       {

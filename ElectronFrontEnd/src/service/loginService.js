@@ -163,7 +163,7 @@ const checkPartnerBookings = async (partnerId) => {
         );
 
         if (response.status === 404) {
-            return { success: false, notFound: true, hasAdvancedBooking: false };
+            return { success: false, notFound: true, hasAdvancedBooking: false, hasTwoBookings: false };
         }
 
         if (!response.ok) {
@@ -173,18 +173,36 @@ const checkPartnerBookings = async (partnerId) => {
         const data = await response.json();
 
         let hasAdvancedBooking = false;
+        let hasTwoBookings = false;
+
+        // Helper: count from any bookings array in the response
+        const _countBookings = (obj) => {
+            if (Array.isArray(obj.partner_bookings)) return obj.partner_bookings.length;
+            if (Array.isArray(obj.bookings))         return obj.bookings.length;
+            if (typeof obj.booking_count === 'number') return obj.booking_count;
+            return 0;
+        };
+
         if (typeof data.has_booking !== 'undefined') {
             hasAdvancedBooking = Boolean(data.has_booking);
+            const count = _countBookings(data);
+            hasTwoBookings = count >= 2;
+        } else if (Array.isArray(data.partner_bookings)) {
+            hasAdvancedBooking = data.partner_bookings.length > 0;
+            hasTwoBookings     = data.partner_bookings.length >= 2;
         } else if (Array.isArray(data.bookings)) {
             hasAdvancedBooking = data.bookings.length > 0;
+            hasTwoBookings     = data.bookings.length >= 2;
         } else if (data.data && typeof data.data.has_booking !== 'undefined') {
             hasAdvancedBooking = Boolean(data.data.has_booking);
+            const count = _countBookings(data.data);
+            hasTwoBookings = count >= 2;
         }
 
-        return { success: true, notFound: false, hasAdvancedBooking };
+        return { success: true, notFound: false, hasAdvancedBooking, hasTwoBookings };
     } catch (error) {
         console.error('Error checking partner:', error);
-        return { success: false, notFound: false, hasAdvancedBooking: false, error: error.message };
+        return { success: false, notFound: false, hasAdvancedBooking: false, hasTwoBookings: false, error: error.message };
     }
 };
 
