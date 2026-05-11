@@ -1,0 +1,575 @@
+{
+    "header": {
+        "help": "Ayuda",
+        "logout": "Cerrar sesión"
+    },
+    "home": {
+        "eyebrow": "Mindspeller·MindLink Analyzer",
+        "title": "Entiende tu cerebro.",
+        "titleAccent": "Una sesión a la vez.",
+        "subtitle": "MindLink Analyzerregistra tuEEGactividad durante una serie de tareas cognitivas, la compara con su línea de base personal y genera un perfil neuronal detallado, todo desde un auricular de consumo.",
+        "getStarted": "Comience",
+        "howItWorks": "Cómo funciona",
+        "featuresTitle": "¿QuéMindLink Analyzerhace",
+        "stepsTitle": "Tu sesión de un vistazo",
+        "stepsSubtitle": "Una sesión completa dura entre 20 y 30 minutos y es totalmente guiada.",
+        "feature1Title": "Tiempo realEEGGrabación",
+        "feature1Desc": "Capture datos de ondas cerebrales en vivo desde suEEGauriculares con precisión de milisegundos.",
+        "feature2Title": "Análisis de tareas cognitivas",
+        "feature2Desc": "Ejecute tareas cognitivas validadas y reciba un análisis estadístico de su actividad cerebral en bandas de frecuencia.",
+        "feature3Title": "Flujo de trabajo guiado",
+        "feature3Desc": "Un proceso paso a paso lo guía a través de la configuración del dispositivo, la calibración inicial, las tareas y los resultados, sin necesidad de experiencia.",
+        "feature4Title": "Soberanía de datos",
+        "feature4Desc": "Elija su servidor regional para que sus datos neurológicos permanezcan dentro de su jurisdicción preferida."
+    },
+    "region": {
+        "title": "Selecciona tu región",
+        "subtitle": "Paso 1 de 7: Elige tu región de soberanía de datos",
+        "welcome": "Bienvenido a",
+        "appName": "Mindlink Analyzer",
+        "description": "Paso 1 de 7: Comience con su sesión de análisis de ondas cerebrales seleccionando su región.",
+        "getStarted": "Comience"
+    },
+    "login": {
+        "title": "Iniciar sesión",
+        "subtitle": "Paso 2 de 7: Ingresa tuMindspellercredenciales de cuenta para continuar",
+        "partnerTitle": "Ingrese el ID del socio",
+        "partnerSubtitle": "Paso 3 de 7: Ingresa tu ID de socio para continuar"
+    },
+    "loginForm": {
+        "emailLabel": "Correo electrónico:",
+        "passwordLabel": "Contraseña:",
+        "emailPlaceholder": "Introduce tu correo electrónico",
+        "passwordPlaceholder": "Ingresa tu contraseña",
+        "signIn": "Iniciar sesión",
+        "signingIn": "Iniciando sesión...",
+        "errorFailed": "Error al iniciar sesión. Por favor verifique sus credenciales.",
+        "errorGeneral": "Se produjo un error durante el inicio de sesión. Por favor inténtalo de nuevo."
+    },
+    "partnerId": {
+        "label": "ID de socio:",
+        "placeholder": "Ingrese su ID de socio",
+        "submit": "Enviar ID de socio",
+        "submitting": "Enviando...",
+        "errorNotFound": "No se reconoce el ID del socio. Por favor verifique e intente nuevamente.",
+        "errorConnection": "No se pudo verificar la identificación del socio. Por favor verifique su conexión e inténtelo nuevamente."
+    },
+    "warning": {
+        "title": "Antes de iniciar sesión, asegúrese de que sus auriculares estén:",
+        "bluetooth": "Vinculado con su dispositivo a través de Bluetooth",
+        "turnedOn": "Encendido y colocado correctamente en tu cabeza.",
+        "sound": "El sonido está activado (escuchará pitidos de cuenta regresiva)",
+        "note": "La conexión del dispositivo se verificará después de iniciar sesión.",
+        "helpLink": "Ver guía de configuración →"
+    },
+    "baseline": {
+        "title": "Calibración de línea base",
+        "subtitle": "Paso 5 de 7: Establece tu actividad cerebral inicial",
+        "signalWaiting": "Señal: Esperando...",
+        "notWorn": "No usado",
+        "signalGood": "Señal: Buena",
+        "signalNoisy": "Señal: Ruidosa",
+        "readyToStart": "Listo para empezar",
+        "recordingEC": "Grabación: Ojos cerrados",
+        "recordingEO": "Grabación: Ojos abiertos",
+        "phaseMsgEC": "Cierra los ojos y relájate... (30 segundos)",
+        "phaseMsgEO": "Mantén los ojos abiertos y mantente relajado... (30 segundos)",
+        "ecComplete": "¡Ojos cerrados completos!",
+        "ecCompleteSub": "¡Genial! Ahora grabemos con los ojos abiertos.",
+        "calibComplete": "¡Calibración completada!",
+        "calibCompleteSub": "¡Ambas fases de referencia se registraron con éxito!",
+        "countdownReady": "¡Prepárate! Escuche la cuenta regresiva...",
+        "countdown": "Cuenta atrás:{{count}}",
+        "ecCardTitle": "Ojos cerrados Línea base",
+        "ecCardDesc": "Relájate con los ojos cerrados durante 30 segundos.",
+        "eoCardTitle": "Línea de base con los ojos abiertos",
+        "eoCardDesc": "Mantente relajado con los ojos abiertos durante 30 segundos.",
+        "complete": "Completo",
+        "start": "Inicio",
+        "cancel": "Cancelar",
+        "startRecording": "Iniciar grabación",
+        "modalECTitle": "Ojos cerrados Línea base",
+        "modalEOTitle": "Línea de base con los ojos abiertos",
+        "modalECIntro": "Prepárate para cerrar los ojos y relajarte.",
+        "modalECDuration": "Los sensores registrarán su patrón de ondas cerebrales de referencia durante 30 segundos.",
+        "modalEOIntro": "Prepárate para mantener los ojos abiertos y relajarte.",
+        "modalEODuration": "Los sensores registrarán su línea de base con los ojos abiertos durante 30 segundos.",
+        "modalWhatWillHappen": "¿Qué pasará?",
+        "modalStep1": "Haga clic en 'Iniciar grabación' a continuación",
+        "modalStep2": "Escucharás una cuenta regresiva: 5, 4, 3, 2, 1 pitidos",
+        "modalECStep3": "Siéntate cómodamente y relájate.",
+        "modalECStep4": "Intenta dejar que tu mente divague naturalmente sin centrarte en nada específico.",
+        "modalStep5": "Un sonido te notificará cuando se complete la grabación.",
+        "modalECWarning": "Importante: ¡Comprueba que tus parlantes/auriculares estén encendidos!",
+        "modalEOStep3": "Mantén los ojos abiertos y relájate durante 30 segundos.",
+        "modalEOStep4": "Mantén la calma y concéntrate en la única cruz blanca en el medio de la pantalla.",
+        "modalEOStep5": "No te preocupes por parpadear.",
+        "modalEOStep6": "Un sonido te notificará cuando se complete la grabación",
+        "modalEOWarning": "Importante: ¡Mantén los ojos abiertos pero relajado!"
+    },
+    "tasks": {
+        "title": "Tareas cognitivas",
+        "subtitle": "Paso 6 de 7"
+    },
+    "upload": {
+        "title": "Análisis de tareas",
+        "subtitle": "Paso 7 de 7: AnalizarEEGdatos y enviar informe",
+        "desc": "Haz clic en Analizar todas las tareas para ver cómo respondió tu cerebro a cada desafío. ¡Esto sólo lleva unos segundos! Una vez que aparezcan los resultados, haga clic en Cargar aMindspellerpara cargar de forma segura tus datos y completar tu evaluación.",
+        "analyse": "Analizar todas las tareas",
+        "analysing": "Analizando…",
+        "analysisComplete": "Análisis completo",
+        "upload": "Subir aMindspeller",
+        "uploading": "Subiendo…",
+        "uploaded": "Subido",
+        "downloadReport": "Descargar Informe",
+        "analysisFailed": "Análisis fallido:",
+        "finish": "Finalizar",
+        "seedSuccess": "El informe se ha subido correctamente a la base de datos de Mindspeller.",
+        "seedFailed": "Error al subir: {{message}}"
+    },
+    "liveEeg": {
+        "title": "En vivoEEGLectura",
+        "subtitle": "Paso 4 de 7: Conecta tuEEGdispositivo",
+        "connecting": "Conectando al dispositivo…",
+        "scanning": "BuscandoEEGdispositivo…",
+        "reconnect": "Reconectar",
+        "signalGood": "Calidad de la señal: Buena | Los datos fluyen normalmente",
+        "notWorn": "Auricular no usado: colóquelo firmemente contra su frente",
+        "signalNoisy": "Calidad de la señal: ruidosa: quédate quieto y presiona el auricular contra tu frente",
+        "infoConnected": "NO continúe hasta que vea Calidad de la señal: Buena en el encabezado de arriba.",
+        "infoDisconnected": "Haga clic en el botón Volver a conectar arriba para conectarse al dispositivo antes de continuar",
+        "noDeviceDetected": "No se detect? ning?n dispositivo EEG. Aseg?rese de que el dispositivo est? encendido e int?ntelo de nuevo.",
+        "waitForGoodSignal": "Espere a tener una buena calidad de se?al antes de continuar."
+    },
+    "loggedInHeader": {
+        "device": "Dispositivo:",
+        "signal": "Señal:",
+        "disconnected": "Desconectado",
+        "searching": "Buscando…",
+        "connecting": "Conectando…",
+        "connected": "Conectado",
+        "noDevice": "Sin dispositivo",
+        "notWorn": "No usado",
+        "signalGood": "Señal: Buena",
+        "signalNoisy": "Señal: Ruidosa"
+    },
+    "footer": {
+        "text": "Mindlink Analyzerv1.0.0 | ©{{year}} Mindspeller"
+    },
+    "nav": {
+        "back": "Atrás",
+        "next": "Siguiente"
+    },
+    "help": {
+        "title": "Ayuda y manual de usuario",
+        "subtitle": "Instrucciones de configuración del hardware y guía de aplicación",
+        "gettingStarted": "Primeros pasos",
+        "userManual": "Manual de usuario",
+        "tips": "Consejos"
+    },
+    "eegWaveform": {
+        "time": "Hora",
+        "chartTitle": "CrudoEEG· Paso de banda de 1–45 Hz · Muesca de 50 Hz",
+        "waiting": "EsperandoEEGdatos…",
+        "scanning": "Buscando dispositivo…",
+        "noDevice": "Sin dispositivo: haga clic en Escanear nuevamente"
+    },
+    "analysis": {
+        "significant": "Significativo",
+        "notSignificant": "No significativo",
+        "pValue": "p-value(SumP)",
+        "effectSize": "Tamaño del efecto (d)",
+        "samples": "Muestras",
+        "tasksAnalysed": "Tareas analizadas",
+        "significantCount": "Significativo (p < 0,05)",
+        "baselineSamples": "Muestras de referencia"
+    },
+    "regionCard": {
+        "region": "Región",
+        "dataSovereignty": "Soberanía de datos",
+        "noticeTitle": "Aviso importante",
+        "noticePre": "Antes de continuar, asegúrese de que su dispositivo esté emparejado con suEEGauriculares a través de Bluetooth y que tienes una cuenta existente en el sitio web. Consulta el",
+        "noticePost": "en la esquina superior derecha como guía.",
+        "helpMenuLink": "menú de ayuda"
+    },
+    "stepsData": {
+        "1": {
+            "label": "Selección de región",
+            "description": "Elige tu región de soberanía de datos"
+        },
+        "2": {
+            "label": "Iniciar sesión",
+            "description": "Inicia sesión en tuMindspellercuenta"
+        },
+        "3": {
+            "label": "Conectar dispositivo",
+            "description": "Empareja tuEEGauriculares vía Bluetooth"
+        },
+        "4": {
+            "label": "Calibración de línea base",
+            "description": "Registra tu actividad inicial de ondas cerebrales"
+        },
+        "5": {
+            "label": "Selección de tarea",
+            "description": "Elige tus tareas cognitivas"
+        },
+        "6": {
+            "label": "Ejecutar tareas",
+            "description": "Completa el seleccionadoEEGtareas"
+        },
+        "7": {
+            "label": "Cargar y analizar",
+            "description": "Sube y analiza tus datos de ondas cerebrales"
+        }
+    },
+    "taskRunner": {
+        "readInstruction": "Lea las instrucciones a continuación antes de comenzar.",
+        "eyesClosed": "Tarea Ojos Cerrados",
+        "eyesOpen": "Tarea Ojos Abiertos",
+        "soundNotice": "Asegúrate de que el sonido esté activado antes de comenzar.",
+        "countdownHint": "Escucharás un pitido de cuenta regresiva de 5 segundos antes de que comience la tarea y un pitido doble cuando finalice.",
+        "cancel": "Cancelar",
+        "start": "▶ Iniciar tarea",
+        "getReady": "Prepárate…",
+        "listenBeeps": "Escuche los pitidos",
+        "recording": "Grabación",
+        "getReadyBadge": "Prepárate",
+        "readInstructions": "Leer instrucciones",
+        "eyesClosedHint": "Mantén los ojos cerrados",
+        "eyesOpenHint": "Mantén los ojos abiertos",
+        "abort": "✕ Cancelar",
+        "complete": "{{taskName}}¡Completo!",
+        "doneMsg": "EEGdatos han sido grabados. Ahora puede volver a la lista de tareas.",
+        "backToTasks": "← Volver a Tareas",
+        "emotionalFaceAlt": "Est?mulo facial emocional"
+    },
+    "taskContent": {
+        "attentionFocus": {
+            "name": "Atención enfocada",
+            "intro1": "Centra toda la atención en tu respiración.",
+            "intro2": "No cuentes tus respiraciones, solo siente el ritmo natural de tus inhalaciones y exhalaciones.",
+            "intro3": "Cuenta mentalmente del 1 al 10 en silencio, sin importar qué tan rápido o lento sea.",
+            "intro4": "Cuando llegues a 10, comienza de nuevo en 1.",
+            "intro5": "Si tu mente divaga, tráela suavemente y reinicia desde 1.",
+            "intro6": "Continúa durante 52 segundos con los ojos cerrados.",
+            "phaseInstruction": "ENFOQUE: Atiende sólo a la respiración. Cuente las respiraciones del 1 al 10 y reinicie; regrese suavemente si se distrae. Ojos cerrados."
+        },
+        "visualImagery": {
+            "name": "Imágenes visuales",
+            "intro1": "Cierra los ojos e imagina vívidamente caminando por tu casa.",
+            "intro2": "Activa todos tus sentidos: vista, oído, olfato y tacto.",
+            "intro3": "Intenta que las imágenes sean lo más detalladas y continuas posible.",
+            "intro4": "Continúa durante 52 segundos sin abrir los ojos.",
+            "phaseInstruction": "IMÁGENES: Visualiza caminar continuamente por tu casa con ricos detalles sensoriales."
+        },
+        "mentalMath": {
+            "name": "Cálculo mental",
+            "intro": "Comienza en 200. En tu mente, resta 7 cada vez (200, 193, 186, 179, 172,…). Continúe mentalmente con la mayor rapidez y precisión que pueda durante 52 segundos.",
+            "phaseInstruction": "CONTAR: 200, 193, 186, 179… Sigue contando hacia atrás de 7 en 7. Ojos cerrados."
+        },
+        "emotionFace": {
+            "name": "Reconocimiento de emociones",
+            "introLine1": "En un momento, verás una serie de caras.",
+            "introLine2": "Simplemente mira cada rostro y permítete experimentar naturalmente tu reacción ante él.",
+            "introLine3": "No es necesario etiquetar ni analizar la emoción, solo observa cómo te afecta la cara.",
+            "introLine4": "Mantén tu mirada en la pantalla y responde con naturalidad.",
+            "cueInstruction": "INSTRUCCIÓN: Prepárate para la próxima cara."
+        },
+        "workingMemory": {
+            "name": "Memoria de trabajo",
+            "intro": "Memoriza la secuencia 3-8-2-9-5-1. Luego suma mentalmente 2 a cada dígito repetidamente. Continúe recorriendo la secuencia modificada durante 52 segundos.",
+            "cueInstruction": "INSTRUCCIÓN: Prepárate para recordar y manipular: 3-8-2-9-5-1. Suma 2 a cada número. Cierra los ojos al escuchar el pitido.",
+            "phaseInstruction": "RECUERDA: 3-8-2-9-5-1. Suma 2 a cada uno: 5-10-4-11-7-3. Continúe recorriendo la secuencia. Ojos cerrados."
+        },
+        "languageProcessing": {
+            "name": "Procesamiento del lenguaje",
+            "intro": "Genera silenciosamente tantas palabras como sea posible que comiencen con la letra 'S'. Evite las repeticiones y mantenga un ritmo mental constante durante 52 segundos.",
+            "phaseInstruction": "INSTRUCCIÓN: Enumere en silencio palabras con 'S' distintas. Evite repeticiones, mantenga un ritmo constante. Ojos cerrados."
+        },
+        "motorImagery": {
+            "name": "Imágenes motoras",
+            "intro": "Imagina mentalmente lanzando una pelota con la mano derecha, luego con la izquierda, alternando continuamente. Siente cada movimiento lo más vívidamente posible durante 52 segundos.",
+            "cueInstruction": "INSTRUCCIÓN: Prepárate para imaginar lanzando una pelota, con la mano derecha y luego con la izquierda, alternando. Cierra los ojos al escuchar el pitido.",
+            "phaseInstruction": "IMAGINA: Lanza una pelota con la mano derecha, luego con la izquierda, alternando. Siente el movimiento vívidamente. Ojos cerrados."
+        },
+        "cognitiveLoad": {
+            "name": "Carga cognitiva",
+            "intro": "Realiza dos tareas mentales simultáneamente: cuenta hacia atrás desde 50 de 3 en 3 Y visualiza cada número en azul brillante. Continúe durante 52 segundos.",
+            "phaseInstruction": "CUENTA Y VISUALIZA: 50, 47, 44, 41… Cuenta hacia atrás de 3 en 3 mientras ves cada número en azul. Ojos cerrados."
+        },
+        "diverseThinking": {
+            "name": "Fluidez creativa",
+            "intro": "Recibirás 2 indicaciones de pensamiento creativo. Para cada uno: lea atentamente la indicación y luego piense en tantos usos creativos e inusuales como sea posible. Ojos abiertos por todas partes. Duración total ~96 segundos.",
+            "getReady1": "Prepárate para el pensamiento creativo...",
+            "cue1": "INDICACIÓN 1: PAPERCLIP: Piense en tantos usos creativos e inusuales para un PAPERCLIP como pueda.",
+            "phase1": "PENSAR: Usos creativos para un PAPERCLIP. Sea imaginativo: ¡vaya más allá de lo obvio!",
+            "getReady2": "Prepárate para el siguiente mensaje...",
+            "cue2": "PUNTO 2: INTELIGENCIA ARTIFICIAL: Piense en usos creativos e innovadores para la IA.",
+            "phase2": "PENSAR: Usos creativos de la INTELIGENCIA ARTIFICIAL. ¡Considere las posibilidades actuales y futuras!"
+        },
+        "reappraisal": {
+            "name": "Cambio de perspectiva",
+            "intro": "Recibirás 2 escenarios. Para cada uno: cambie deliberadamente su perspectiva según las instrucciones: primero vea lo positivo y luego concéntrese en lo negativo. Ojos abiertos por todas partes. Duración total ~96 segundos.",
+            "getReady1": "Prepárate para la tarea de pensar...",
+            "cue1": "ESCENARIO 1 — PENSAR POSITIVO: 'Recibir comentarios inesperados de un amigo cercano'. Vea el lado positivo.",
+            "phase1": "PENSAR POSITIVO: ¿Qué beneficio podría obtenerse de esta retroalimentación? ¿Cuáles son los aspectos positivos?",
+            "getReady2": "Prepárate para el próximo escenario…",
+            "cue2": "ESCENARIO 2 — ENFOQUE EN LOS NEGATIVOS: 'Estás a punto de perder un vuelo'. Concéntrate en lo que salió mal.",
+            "phase2": "ENFOQUE EN LOS NEGATIVOS: Piense en lo que salió mal y las consecuencias negativas de perder el vuelo."
+        },
+        "curiosity": {
+            "name": "Revelación de curiosidad",
+            "intro": "Mira un breve vídeo revelador con total atención y curiosidad genuina. Déjate atraer por lo que se revela. Ojos abiertos por todas partes. Duración total ~45 segundos.",
+            "getReady": "Prepárate para el vídeo revelador…",
+            "cue": "El vídeo comenzará pronto: ¡míralo con toda tu atención!",
+            "wait": "Vídeo comenzando…",
+            "phase": "MIRA: Mira el video revelado con total atención. Deja que tu curiosidad te guíe."
+        },
+        "numForm": {
+            "name": "Preferencia numérica",
+            "intro": "Verás una imagen de estímulo en dos fases: primero te centrarás en NÚMEROS, luego en FORMAS (figuras). Mantenga la mirada fija y minimice el movimiento. Ojos abiertos por todas partes. Duración total ~60 segundos.",
+            "getReady": "Prepárate…",
+            "cue1": "NÚMEROS: En la siguiente pantalla, busca los números. Mantén la mirada fija.",
+            "phase1": "NÚMEROS: Mira los números. Mantenga la mirada fija y minimice el movimiento.",
+            "cue2": "FORMAS: En la siguiente pantalla, busca las formas. Mantén la mirada fija.",
+            "phase2": "FORMAS: Mira las formas. Mantenga la mirada fija y minimice el movimiento.",
+            "rest": "Descanso."
+        },
+        "orderSurprise": {
+            "name": "Orden y Sorpresa",
+            "intro": "Observarás una imagen de estímulo en dos fases: primero cuenta ORDEN (formas simétricas/normales), luego cuenta SORPRESA (formas no simétricas/anormales). Ojos abiertos por todas partes. Duración total ~60 segundos.",
+            "getReady": "Prepárate…",
+            "cue1": "ORDEN: Cuente formas simétricas/normales en la siguiente imagen. Mantén la mirada fija.",
+            "phase1": "ORDEN: Contar formas simétricas/normales. Mantenga la mirada fija y minimice el movimiento.",
+            "cue2": "SORPRESA: Cuente formas no simétricas/anormales en la siguiente imagen. Mantén la mirada fija.",
+            "phase2": "SORPRESA: Cuenta formas no simétricas/anormales. Mantenga la mirada fija y minimice el movimiento.",
+            "rest": "Descanso."
+        }
+    },
+    "taskMeta": {
+        "visual_imagery": {
+            "name": "Imágenes visuales",
+            "description": "Las imágenes visuales capturan la capacidad de generar y estabilizar representaciones internas sin información sensorial externa. Amplía la evaluación para perfilar el estilo imaginativo y la fuerza de la simulación."
+        },
+        "attention_focus": {
+            "name": "Atención enfocada",
+            "description": "Esta tarea aísla la capacidad de mantener un enfoque interno estable con una estimulación externa mínima, que es fundamental para todos los demás dominios cognitivos."
+        },
+        "mental_math": {
+            "name": "Cálculo mental",
+            "description": "Esta tarea impone una demanda ejecutiva controlada para medir la eficiencia del procesamiento y la tensión cognitiva sin requerir habla o movimiento."
+        },
+        "emotion_face": {
+            "name": "Reconocimiento de emociones",
+            "description": "Esta tarea introduce la evaluación afectiva en la batería, actuando como un puente entre los dominios ejecutivo y emocional. Valioso para evaluar la sintonía socioemocional."
+        },
+        "working_memory": {
+            "name": "Memoria de trabajo",
+            "description": "Una tarea dedicada a la memoria de trabajo aísla limpiamente los efectos de la carga cognitiva, lo que permite curvas de capacidad interpretables."
+        },
+        "language_processing": {
+            "name": "Procesamiento del lenguaje",
+            "description": "Las tareas de lenguaje introducen un dominio estructurado conceptualmente que refleja el razonamiento, el estilo de comunicación y la organización semántica."
+        },
+        "motor_imagery": {
+            "name": "Imágenes motoras",
+            "description": "Esta tarea extiende el dominio de la simulación a la cognición orientada a la acción al probar la capacidad de simular internamente la acción sin movimiento manifiesto."
+        },
+        "cognitive_load": {
+            "name": "Carga cognitiva",
+            "description": "Esto sirve como una prueba de estrés ejecutivo de dominio general al monitorear el comportamiento del cerebro bajo conflicto, cambios e interferencias."
+        },
+        "diverse_thinking": {
+            "name": "Fluidez creativa",
+            "description": "Generar usos creativos e inusuales para dos objetos/conceptos determinados."
+        },
+        "reappraisal": {
+            "name": "Cambio de perspectiva",
+            "description": "Cambiar deliberadamente la perspectiva en dos escenarios contrastantes."
+        },
+        "curiosity": {
+            "name": "Revelación de curiosidad",
+            "description": "Mira un breve vídeo revelador con total atención y curiosidad genuina."
+        },
+        "num_form": {
+            "name": "Preferencia numérica",
+            "description": "Evaluar preferencia estética entre números y formas."
+        },
+        "order_surprise": {
+            "name": "Orden y Sorpresa",
+            "description": "Cuenta formas simétricas (ORDEN) y no simétricas (SORPRESA)."
+        }
+    },
+    "taskSelection": {
+        "subtitle": "Paso 6 de 7 · Ruta:{{pathway}}",
+        "taskSubtitle": "Paso 6 de 7: Registro de tareas cognitivas",
+        "generalTasks": "Tareas generales",
+        "advancedTasks": "{{pathway}}— Tareas avanzadas",
+        "completed": "Completado",
+        "eyesClosed": "Ojos cerrados",
+        "eyesOpen": "Ojos abiertos",
+        "advanced": "Avanzado",
+        "locked": "Bloqueado",
+        "alreadyDone": "Esta tarea ya se ha completado. Puede ejecutarlo nuevamente o seleccionar una tarea diferente.",
+        "runAgain": "Ejecutar de nuevo",
+        "taskInstructions": "Instrucciones de tarea",
+        "selectPlaceholder": "Selecciona una tarea de la lista para ver los detalles.",
+        "pathwayPersonal": "Camino personal",
+        "pathwayConnection": "Conexión",
+        "pathwayLifestyle": "Estilo de vida"
+    },
+    "manual": {
+        "0": {
+            "title": "Flujo de trabajo de la aplicación",
+            "content": "ElMindLink Analyzerlo guía a través de un flujo de trabajo de 7 pasos: Selección de región → Iniciar sesión → En vivoEEGverificación → Calibración de línea base → Selección de tarea → Ejecución de tarea → Carga de resultados. Cada paso se muestra en el subtítulo de la página."
+        },
+        "1": {
+            "title": "Indicadores de calidad de señal",
+            "content": "La barra de estado muestra en tiempo realEEGcalidad de la señal. Verde (bueno) significa que los auriculares están colocados correctamente y la señal es limpia. Amarillo (ruidoso) significa que puede haber movimiento o mal contacto. Rojo/No usado significa que el electrodo no tiene contacto con la piel; vuelva a colocar el auricular."
+        },
+        "2": {
+            "title": "Calibración de línea base",
+            "content": "Se graban dos fases de 30 segundos: Ojos cerrados (EC) y Ojos abiertos (EO). Siéntate quieto y relájate. La calibración establece su línea de base personal utilizada para normalizar todos los registros de tareas posteriores."
+        },
+        "3": {
+            "title": "Tareas cognitivas",
+            "content": "Cada tarea se ejecuta durante 45 a 114 segundos. Siga atentamente las instrucciones que aparecen en pantalla. Permanezca lo más quieto posible para minimizar los artefactos de movimiento. Una vez completadas todas las tareas seleccionadas, continúe con la pantalla de carga."
+        },
+        "4": {
+            "title": "Subiendo resultados",
+            "content": "En la página Cargar, haga clic en Ejecutar análisis para calcular suEEGperfil de características. Luego puede descargar el informe como un archivo de texto o cargarlo directamente a suMindspellercuenta."
+        },
+        "5": {
+            "title": "Solución de problemas",
+            "content": "Si la señal muestra No Usado: reposicione el auricular y presione firmemente el electrodo de la frente. Si la señal sigue siendo ruidosa: verifique la conexión Bluetooth e intente alejarse de otros dispositivos electrónicos. Si la aplicación no puede encontrar los auriculares: primero asegúrese de que el dispositivo esté emparejado a través de la configuración Bluetooth de Windows."
+        },
+        "6": {
+            "title": "Contacto y soporte",
+            "content": "Para soporte técnico, contacta a contact@mindspeller.com. Incluya la versión de su sistema operativo, la versión de la aplicación (que se muestra en el pie de página) y una descripción del problema."
+        }
+    },
+    "tips": {
+        "0": {
+            "title": "Las lecturas ligeramente ruidosas son normales",
+            "content": "EEGlas señales son muy sensibles y pueden captar movimientos menores o actividad muscular. Algunas lecturas amarillas (ruidosas) durante una sesión son normales. Concéntrese en mantener la señal mayoritariamente verde (buena) y evite lecturas en rojo (no usado)."
+        },
+        "1": {
+            "title": "Asegurar un buen contacto con la piel.",
+            "content": "El electrodo de frente necesita un contacto firme con la piel limpia y seca. Retire el vello del área del electrodo y presione el auricular suave pero firmemente contra su frente antes de comenzar."
+        },
+        "2": {
+            "title": "Cobrar antes de una sesión",
+            "content": "Una batería baja puede causar cortes de señal a mitad de la sesión. Siempre verifique que el amplificador esté completamente cargado antes de comenzar una sesión de grabación."
+        },
+        "3": {
+            "title": "Complete la calibración de referencia cuidadosamente",
+            "content": "La línea de base se utiliza para normalizar todos los resultados de las tareas. Correr o moverse durante las fases de calibración de 30 segundos reducirá la precisión de toda la sesión."
+        },
+        "4": {
+            "title": "Vuelva a ejecutar una tarea si algo sale mal",
+            "content": "Si te molestaron durante una tarea (ruido, movimiento, distracción), puedes ejecutarla nuevamente desde la lista de tareas. En el análisis sólo se utiliza la última grabación."
+        },
+        "5": {
+            "title": "Utilice una habitación tranquila y bien iluminada.",
+            "content": "Para tareas que requieren ojos abiertos (por ejemplo, reconocimiento de emociones, fluidez creativa), la iluminación ambiental constante reduce el ruido visual. Un ambiente tranquilo ayuda con las tareas de concentración cognitiva."
+        }
+    },
+    "gettingStarted": {
+        "power": {
+            "title": "1. Encendido/apagado del amplificador",
+            "onLabel": "Para ENCENDER:",
+            "on1": "Mantenga presionado el botón de encendido durante<1>2 segundos</1>.",
+            "on2": "El amplificador<1>vibrar una vez</1>para confirmar que está encendido.",
+            "offLabel": "Para APAGAR:",
+            "off1": "Presione el botón de encendido<1>una vez</1>(pulsación corta).",
+            "off2": "El amplificador<1>vibrar dos veces</1>para confirmar que está apagado.",
+            "batLabel": "Advertencia de batería baja:",
+            "bat1": "Cuando la batería está vacía, el amplificador<1>vibra varias veces continuamente</1>y se apaga automáticamente.",
+            "bat2": "Cargue el amplificador cuando esto suceda."
+        },
+        "bluetooth": {
+            "title": "2. Emparejamiento del amplificador con su dispositivo",
+            "importantLabel": "Importante:",
+            "introText": "Siga el proceso de emparejamiento Bluetooth estándar de Windows:",
+            "step1": "Enciende el amplificador (mantén presionado durante 2 segundos).",
+            "step2": "Abrir<1>Configuración → Bluetooth y dispositivos → Agregar dispositivo</1>en Windows.",
+            "step3": "Seleccionar<1>\"Bluetooth\"</1>desde las opciones de agregar dispositivo.",
+            "step4": "Espera<1>\"Brainlink_Pro (Audio)\"</1>para que aparezca en la lista.",
+            "step5": "Haga clic en<1>\"Brainlink_Pro (Audio)\"</1>para emparejar.",
+            "note": "<0>Nota:</0>Los auriculares<2>conectar brevemente y luego desconectar</2>automáticamente: ¡esto es normal! El proceso de emparejamiento solo registra el auricular con su dispositivo. La conexión real se establecerá automáticamente cuando inicie sesión en la aplicación."
+        },
+        "wearing": {
+            "title": "3. Cómo usar los auriculares correctamente",
+            "amp": "<0>Posición del amplificador:</0>Coloca el amplificador<2>encima de tu oreja izquierda</2>.",
+            "light": "<0>Posición del sensor de luz:</0>El sensor de luz debe colocarse<2>justo entre tus cejas</2>.",
+            "electrode": "<0>Posición del electrodo:</0>Los electrodos deben colocarse<2>2 pulgadas por encima de tus cejas</2>para una calidad de señal óptima.",
+            "tip": "<0>Consejo:</0>El posicionamiento adecuado garantiza una precisiónEEGlecturas. Tómese un momento para ajustar los auriculares antes de comenzar la calibración."
+        },
+        "charging": {
+            "title": "4. Extracción del amplificador para cargarlo",
+            "intro": "Para cargar el amplificador, debes retirarlo del clip:",
+            "step1": "Ubique el clip que sujeta el amplificador a la diadema.",
+            "step2": "Tire suavemente del amplificador<1>fuera del clip</1>.",
+            "step3": "Conecte el cable de carga al amplificador.",
+            "step4": "Cargue hasta que el indicador muestre batería llena.",
+            "note": "<0>Nota:</0>El amplificador no se puede cargar mientras está conectado al clip del auricular."
+        },
+        "reinsert": {
+            "title": "5. Insertar el amplificador nuevamente en el clip",
+            "intro": "Después de cargar, vuelva a conectar el amplificador al auricular:",
+            "step1": "Sostenga el amplificador con la orientación correcta.",
+            "step2": "Alinee el amplificador con la abertura del clip.",
+            "step3": "Empuje suavemente el amplificador dentro del clip hasta que<1>hace clic de forma segura</1>.",
+            "step4": "Asegúrese de que el amplificador esté firmemente conectado antes de usar los auriculares.",
+            "note": "<0>Importante:</0>Asegúrese de que el amplificador esté correctamente asentado para mantener un buen contacto con los electrodos."
+        }
+    },
+    "stepInfo": {
+        "btnLabel": "¿Por qué este paso?",
+        "btnAriaLabel": "¿Por qué es importante este paso?",
+        "closeAriaLabel": "Cerrar",
+        "stepBadge": "Paso{{step}}",
+        "steps": {
+            "region": {
+                "title": "Paso 1 — Selección de región",
+                "why": "Seleccionar su región garantiza que sus datos de ondas cerebrales se procesen y almacenen de conformidad con las leyes locales de soberanía de datos. Esto mantiene sus datos neuronales personales privados y legalmente protegidos."
+            },
+            "login": {
+                "title": "Paso 2 y 3: inicio de sesión e identificación de socio",
+                "why": "Iniciar sesión vincula tuEEGgrabaciones a tuMindspellercuenta, lo que permite el almacenamiento seguro y la comparación de sus perfiles cognitivos a lo largo del tiempo. Sin autenticación, los datos de su sesión no se pueden guardar ni analizar. Al ingresar su ID de socio, su sesión se conecta con un socio específico."
+            },
+            "liveReading": {
+                "title": "Paso 4: Verificar la señal en vivo",
+                "why": "Una conexión Bluetooth en vivo a tuEEGlos auriculares permiten que la aplicación transmita señales de ondas cerebrales sin procesar en tiempo real. Se requiere una conexión estable y de calidad antes de poder comenzar cualquier grabación."
+            },
+            "baseline": {
+                "title": "Paso 5: Calibración de referencia",
+                "why": "Tu línea de base personal captura la actividad del estado de reposo de tu cerebro. Cada métrica cognitiva medida durante las tareas se compara con esta línea de base, lo que hace que su análisis sea excepcionalmente preciso en lugar de depender de promedios genéricos."
+            },
+            "taskSelection": {
+                "title": "Paso 6: Selección y grabación de tareas",
+                "why": "Diferentes tareas cognitivas activan distintas regiones del cerebro. Elegir las tareas correctas mapea habilidades mentales específicas (concentración, memoria, creatividad y más) brindándole un perfil cognitivo rico y personalizado."
+            },
+            "upload": {
+                "title": "Paso 7: cargar y analizar",
+                "why": "Al cargar tus grabaciones, las envías alMindspellerCanal de análisis de IA, que calcula tus puntuaciones cognitivas y genera un informe detallado de ondas cerebrales que puedes descargar y compartir."
+            }
+        }
+    },
+    "errors": {
+        "incorrectCredentials": "Correo electr?nico o contrase?a incorrectos. Int?ntelo de nuevo.",
+        "serverUnavailable": "El servidor no est? disponible temporalmente. Int?ntelo de nuevo en unos minutos.",
+        "serverError": "Error del servidor ({{status}}). Int?ntelo de nuevo m?s tarde.",
+        "loginServiceNotFound": "No se encontr? el servicio de inicio de sesi?n. Revise la selecci?n de regi?n.",
+        "loginFailedStatus": "Error al iniciar sesi?n ({{status}}). Int?ntelo de nuevo.",
+        "noAuthToken": "No se recibi? ning?n token de autenticaci?n.",
+        "noBaselineData": "No se encontraron datos de referencia. Complete primero la calibraci?n de referencia.",
+        "noTaskData": "No se encontraron datos de tareas. Complete primero al menos una tarea.",
+        "analysisFailedStatus": "Error en el an?lisis ({{status}}): {{message}}",
+        "notAuthenticated": "No est? autenticado. Inicie sesi?n de nuevo.",
+        "sessionExpired": "Su sesi?n ha caducado. Inicie sesi?n de nuevo.",
+        "seedingFailedStatus": "Error al subir ({{status}}): {{message}}",
+        "unexpectedError": "Error inesperado: {{status}}",
+        "connectionFailed": "Error de conexi?n."
+    }
+}

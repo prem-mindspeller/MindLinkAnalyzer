@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 const API_ENDPOINTS = {
     en: 'https://en.mindspeller.com',
     nl: 'https://nl.mindspeller.com',
@@ -25,15 +27,15 @@ const loginUser = async (email, password, region = 'en') => {
             const status = response.status;
             let message;
             if (status === 401 || status === 403) {
-                message = 'Incorrect email or password. Please try again.';
+                message = i18n.t('errors.incorrectCredentials');
             } else if (status === 503 || status === 502) {
-                message = 'The server is temporarily unavailable. Please try again in a few minutes.';
+                message = i18n.t('errors.serverUnavailable');
             } else if (status >= 500) {
-                message = `Server error (${status}). Please try again later.`;
+                message = i18n.t('errors.serverError', { status });
             } else if (status === 404) {
-                message = 'Login service not found. Please check your region selection.';
+                message = i18n.t('errors.loginServiceNotFound');
             } else {
-                message = `Login failed (${status}). Please try again.`;
+                message = i18n.t('errors.loginFailedStatus', { status });
             }
             throw new Error(message);
         }
@@ -42,7 +44,7 @@ const loginUser = async (email, password, region = 'en') => {
         const token = data["x-jwt-access-token"];
 
         if (!token) {
-            throw new Error("No authentication token received");
+            throw new Error(i18n.t('errors.noAuthToken'));
         }
 
         sessionStorage.setItem('jwtToken', token);
@@ -167,7 +169,7 @@ const checkPartnerBookings = async (partnerId) => {
         }
 
         if (!response.ok) {
-            throw new Error(`Unexpected error: ${response.status}`);
+            throw new Error(i18n.t('errors.unexpectedError', { status: response.status }));
         }
 
         const data = await response.json();

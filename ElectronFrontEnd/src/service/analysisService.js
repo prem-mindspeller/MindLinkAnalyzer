@@ -13,6 +13,7 @@
  *                     JWT token stored by loginService.
  */
 import loginService from './loginService';
+import i18n from '../i18n';
 
 const BACKEND_HTTP = 'http://localhost:8000';
 
@@ -73,7 +74,7 @@ export async function runAnalysis() {
     };
 
     if (baseline.eyes_closed.length === 0 && baseline.eyes_open.length === 0) {
-        throw new Error('No baseline data found. Please complete baseline calibration first.');
+        throw new Error(i18n.t('errors.noBaselineData'));
     }
 
     // Collect task samples
@@ -86,7 +87,7 @@ export async function runAnalysis() {
     }
 
     if (Object.keys(tasks).length === 0) {
-        throw new Error('No task data found. Please complete at least one task first.');
+        throw new Error(i18n.t('errors.noTaskData'));
     }
 
     const res = await fetch(`${BACKEND_HTTP}/analyze`, {
@@ -97,7 +98,7 @@ export async function runAnalysis() {
 
     if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`Analysis failed (${res.status}): ${text}`);
+        throw new Error(i18n.t('errors.analysisFailedStatus', { status: res.status, message: text }));
     }
 
     const data = await res.json();
@@ -106,7 +107,7 @@ export async function runAnalysis() {
 
     const enriched = {};
     for (const [id, result] of Object.entries(data.per_task || {})) {
-        enriched[id] = { ...result, name: TASK_NAMES[id] || id };
+        enriched[id] = { ...result, name: i18n.t(`taskMeta.${id}.name`, { defaultValue: TASK_NAMES[id] || id }) };
     }
 
     return { ...data, per_task: enriched };
@@ -126,7 +127,7 @@ export async function seedReport(email, protocolType, analysisResults) {
     const region = loginService.getRegion();
     const baseUrl = API_ENDPOINTS[region] || API_ENDPOINTS.en;
 
-    if (!token) throw new Error('Not authenticated. Please log in again.');
+    if (!token) throw new Error(i18n.t('errors.notAuthenticated'));
 
     const partnerId = sessionStorage.getItem('partnerId');
     // Generate session ID matching legacy format: session_YYYYMMDD_HHMMSS_xxxxxxxx
@@ -171,7 +172,7 @@ export async function seedReport(email, protocolType, analysisResults) {
     if (res.status === 401) {
         await loginService.refreshToken();
         const newToken = loginService.getToken();
-        if (!newToken) throw new Error('Session expired. Please log in again.');
+        if (!newToken) throw new Error(i18n.t('errors.sessionExpired'));
 
         const retryRes = await fetch(`${baseUrl}/api/cas/eeg-reports/seed`, {
             method: 'POST',
@@ -184,14 +185,14 @@ export async function seedReport(email, protocolType, analysisResults) {
 
         if (!retryRes.ok) {
             const text = await retryRes.text().catch(() => '');
-            throw new Error(`Seeding failed (${retryRes.status}): ${text}`);
+            throw new Error(i18n.t('errors.seedingFailedStatus', { status: retryRes.status, message: text }));
         }
         return { success: true };
     }
 
     if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`Seeding failed (${res.status}): ${text}`);
+        throw new Error(i18n.t('errors.seedingFailedStatus', { status: res.status, message: text }));
     }
 
     return { success: true };

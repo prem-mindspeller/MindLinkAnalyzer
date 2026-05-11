@@ -116,33 +116,37 @@
         "subtitle": "Step 7 of 7: Analyse EEG data and send report",
         "desc": "Click Analyse All Tasks to see how your brain responded to each challenge. This just takes a few seconds! Once your results appear, click Upload to Mindspeller to securely upload your data and complete your assessment.",
         "analyse": "Analyse All Tasks",
-        "analysing": "Analysing\u2026",
+        "analysing": "Analysing…",
         "analysisComplete": "Analysis Complete",
         "upload": "Upload to Mindspeller",
-        "uploading": "Uploading\u2026",
+        "uploading": "Uploading…",
         "uploaded": "Uploaded",
         "downloadReport": "Download Report",
         "analysisFailed": "Analysis failed:",
-        "finish": "Finish"
+        "finish": "Finish",
+        "seedSuccess": "Report successfully uploaded to the Mindspeller database.",
+        "seedFailed": "Upload failed: {{message}}"
     },
     "liveEeg": {
         "title": "Live EEG Reading",
         "subtitle": "Step 4 of 7: Connect your EEG device",
-        "connecting": "Connecting to device\u2026",
-        "scanning": "Scanning for EEG device\u2026",
+        "connecting": "Connecting to device…",
+        "scanning": "Scanning for EEG device…",
         "reconnect": "Reconnect",
         "signalGood": "Signal quality: Good | Data flowing normally",
-        "notWorn": "Headset not worn \u2014 place it firmly against your forehead",
-        "signalNoisy": "Signal quality: Noisy \u2014 hold still and press the headset against your forehead",
+        "notWorn": "Headset not worn — place it firmly against your forehead",
+        "signalNoisy": "Signal quality: Noisy — hold still and press the headset against your forehead",
         "infoConnected": "Do NOT proceed until you see Signal quality: Good in the header above.",
-        "infoDisconnected": "Click on the Reconnect button above to connect to the device before proceeding"
+        "infoDisconnected": "Click on the Reconnect button above to connect to the device before proceeding",
+        "noDeviceDetected": "No EEG device detected. Make sure the device is switched on, then try again.",
+        "waitForGoodSignal": "Wait for good signal quality before proceeding."
     },
     "loggedInHeader": {
         "device": "Device:",
         "signal": "Signal:",
         "disconnected": "Disconnected",
-        "searching": "Searching\u2026",
-        "connecting": "Connecting\u2026",
+        "searching": "Searching…",
+        "connecting": "Connecting…",
         "connected": "Connected",
         "noDevice": "No Device",
         "notWorn": "Not Worn",
@@ -150,7 +154,7 @@
         "signalNoisy": "Signal: Noisy"
     },
     "footer": {
-        "text": "Mindlink Analyzer v1.0.0 | \u00a9 {{year}} Mindspeller"
+        "text": "Mindlink Analyzer v1.0.0 | © {{year}} Mindspeller"
     },
     "nav": {
         "back": "Back",
@@ -236,7 +240,8 @@
         "abort": "✕ Abort",
         "complete": "{{taskName}} Complete!",
         "doneMsg": "EEG data has been recorded. You can now return to the task list.",
-        "backToTasks": "← Back to Tasks"
+        "backToTasks": "← Back to Tasks",
+        "emotionalFaceAlt": "Emotional face stimulus"
     },
     "taskContent": {
         "attentionFocus": {
@@ -550,5 +555,21 @@
                 "why": "Uploading your recordings sends them to the Mindspeller AI analysis pipeline, which computes your cognitive scores and generates a detailed brainwave report you can download and share."
             }
         }
+    },
+    "errors": {
+        "incorrectCredentials": "Incorrect email or password. Please try again.",
+        "serverUnavailable": "The server is temporarily unavailable. Please try again in a few minutes.",
+        "serverError": "Server error ({{status}}). Please try again later.",
+        "loginServiceNotFound": "Login service not found. Please check your region selection.",
+        "loginFailedStatus": "Login failed ({{status}}). Please try again.",
+        "noAuthToken": "No authentication token was received.",
+        "noBaselineData": "No baseline data found. Please complete baseline calibration first.",
+        "noTaskData": "No task data found. Please complete at least one task first.",
+        "analysisFailedStatus": "Analysis failed ({{status}}): {{message}}",
+        "notAuthenticated": "You are not authenticated. Please sign in again.",
+        "sessionExpired": "Your session has expired. Please sign in again.",
+        "seedingFailedStatus": "Upload failed ({{status}}): {{message}}",
+        "unexpectedError": "Unexpected error: {{status}}",
+        "connectionFailed": "Connection failed."
     }
 }

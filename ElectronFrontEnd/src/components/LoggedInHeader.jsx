@@ -4,15 +4,10 @@ import eegConnectService, { CONNECTION_STATUS } from '../service/wsEegService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleCheck, faTriangleExclamation, faBatteryFull } from '@fortawesome/free-solid-svg-icons';
 import StepInfoPopup from './StepInfoPopup';
+import LanguageMenu from './LanguageMenu';
 
 const LoggedInHeader = () => {
-    const { t, i18n } = useTranslation();
-
-    const handleLanguageChange = (e) => {
-        const lang = e.target.value;
-        i18n.changeLanguage(lang);
-        sessionStorage.setItem('language', lang);
-    };
+    const { t } = useTranslation();
     const [battery, setBattery] = useState(eegConnectService.getBattery());
     const [poorSignal, setPoorSignal] = useState(eegConnectService.getPoorSignal());
     const [status, setStatus] = useState(eegConnectService.getStatus());
@@ -81,17 +76,7 @@ const LoggedInHeader = () => {
 
             <div className="header-right">
                 <StepInfoPopup />
-                <div className="badge language-badge">
-                    <select
-                        className="language-select"
-                        value={i18n.language}
-                        onChange={handleLanguageChange}
-                    >
-                        <option value="en">English</option>
-                        <option value="nl">Nederlands</option>
-                    </select>
-                    <span className="language-chevron">▾</span>
-                </div>
+                <LanguageMenu />
                 <span className="header-user">
                     {sessionStorage.getItem('loggedInUser') || ''}
                 </span>

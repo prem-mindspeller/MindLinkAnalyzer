@@ -52,7 +52,7 @@
         "submit": "Partner-ID indienen",
         "submitting": "Indienen...",
         "errorNotFound": "Partner-ID wordt niet herkend. Controleer en probeer opnieuw.",
-        "errorConnection": "Kan partner-ID niet verifi\u00ebren. Controleer uw verbinding en probeer opnieuw."
+        "errorConnection": "Kan partner-ID niet verifiëren. Controleer uw verbinding en probeer opnieuw."
     },
     "warning": {
         "title": "Controleer vóór het aanmelden of uw headset:",
@@ -116,33 +116,37 @@
         "subtitle": "Stap 7 van 7: EEG-gegevens analyseren en rapport verzenden",
         "desc": "Klik op Alle taken analyseren om te zien hoe uw brein reageerde op elke uitdaging. Dit duurt slechts enkele seconden! Zodra uw resultaten verschijnen, klikt u op Uploaden naar Mindspeller om uw gegevens veilig te uploaden.",
         "analyse": "Alle taken analyseren",
-        "analysing": "Analyseren\u2026",
+        "analysing": "Analyseren…",
         "analysisComplete": "Analyse voltooid",
         "upload": "Uploaden naar Mindspeller",
-        "uploading": "Uploaden\u2026",
-        "uploaded": "Ge\u00fcpload",
+        "uploading": "Uploaden…",
+        "uploaded": "Geüpload",
         "downloadReport": "Rapport downloaden",
         "analysisFailed": "Analyse mislukt:",
-        "finish": "Voltooien"
+        "finish": "Voltooien",
+        "seedSuccess": "Rapport succesvol ge?pload naar de Mindspeller-database.",
+        "seedFailed": "Uploaden mislukt: {{message}}"
     },
     "liveEeg": {
         "title": "Live EEG-meting",
         "subtitle": "Stap 4 van 7: Verbind uw EEG-apparaat",
-        "connecting": "Verbinding maken met apparaat\u2026",
-        "scanning": "Scannen naar EEG-apparaat\u2026",
+        "connecting": "Verbinding maken met apparaat…",
+        "scanning": "Scannen naar EEG-apparaat…",
         "reconnect": "Opnieuw verbinden",
         "signalGood": "Signaalkwaliteit: Goed | Gegevens stromen normaal",
-        "notWorn": "Headset niet gedragen \u2014 druk hem stevig tegen uw voorhoofd",
-        "signalNoisy": "Signaalkwaliteit: Ruisachtig \u2014 blijf stil en druk de headset tegen uw voorhoofd",
+        "notWorn": "Headset niet gedragen — druk hem stevig tegen uw voorhoofd",
+        "signalNoisy": "Signaalkwaliteit: Ruisachtig — blijf stil en druk de headset tegen uw voorhoofd",
         "infoConnected": "Ga NIET verder totdat u Signaalkwaliteit: Goed ziet in de header hierboven.",
-        "infoDisconnected": "Klik op de knop Opnieuw verbinden hierboven om het apparaat te verbinden voordat u doorgaat"
+        "infoDisconnected": "Klik op de knop Opnieuw verbinden hierboven om het apparaat te verbinden voordat u doorgaat",
+        "noDeviceDetected": "Geen EEG-apparaat gedetecteerd. Controleer of het apparaat is ingeschakeld en probeer het opnieuw.",
+        "waitForGoodSignal": "Wacht op een goede signaalkwaliteit voordat u doorgaat."
     },
     "loggedInHeader": {
         "device": "Apparaat:",
         "signal": "Signaal:",
         "disconnected": "Verbroken",
-        "searching": "Zoeken\u2026",
-        "connecting": "Verbinden\u2026",
+        "searching": "Zoeken…",
+        "connecting": "Verbinden…",
         "connected": "Verbonden",
         "noDevice": "Geen apparaat",
         "notWorn": "Niet gedragen",
@@ -150,7 +154,7 @@
         "signalNoisy": "Signaal: Ruisachtig"
     },
     "footer": {
-        "text": "Mindlink Analyzer v1.0.0 | \u00a9 {{year}} Mindspeller"
+        "text": "Mindlink Analyzer v1.0.0 | © {{year}} Mindspeller"
     },
     "nav": {
         "back": "Terug",
@@ -236,7 +240,8 @@
         "abort": "✕ Afbreken",
         "complete": "{{taskName}} voltooid!",
         "doneMsg": "EEG-gegevens zijn opgenomen. U kunt nu terugkeren naar de takenlijst.",
-        "backToTasks": "← Terug naar taken"
+        "backToTasks": "← Terug naar taken",
+        "emotionalFaceAlt": "Emotionele gezichtsprikkel"
     },
     "taskContent": {
         "attentionFocus": {
@@ -550,5 +555,21 @@
                 "why": "Door uw opnames te uploaden worden ze naar de Mindspeller AI-analysepijplijn gestuurd, die uw cognitieve scores berekent en een gedetailleerd hersengolfrapport genereert dat u kunt downloaden en delen."
             }
         }
+    },
+    "errors": {
+        "incorrectCredentials": "Onjuist e-mailadres of wachtwoord. Probeer het opnieuw.",
+        "serverUnavailable": "De server is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw.",
+        "serverError": "Serverfout ({{status}}). Probeer het later opnieuw.",
+        "loginServiceNotFound": "Aanmeldservice niet gevonden. Controleer uw regioselectie.",
+        "loginFailedStatus": "Aanmelden mislukt ({{status}}). Probeer het opnieuw.",
+        "noAuthToken": "Er is geen authenticatietoken ontvangen.",
+        "noBaselineData": "Geen basislijngegevens gevonden. Voltooi eerst de basislijnkalibratie.",
+        "noTaskData": "Geen taakgegevens gevonden. Voltooi eerst ten minste ??n taak.",
+        "analysisFailedStatus": "Analyse mislukt ({{status}}): {{message}}",
+        "notAuthenticated": "U bent niet geauthenticeerd. Meld u opnieuw aan.",
+        "sessionExpired": "Uw sessie is verlopen. Meld u opnieuw aan.",
+        "seedingFailedStatus": "Uploaden mislukt ({{status}}): {{message}}",
+        "unexpectedError": "Onverwachte fout: {{status}}",
+        "connectionFailed": "Verbinding mislukt."
     }
 }
