@@ -48,6 +48,7 @@ except Exception as _e:
     print(f"[Backend] BrainLinkParser SDK unavailable ({_e}), falling back to TGAM parser", flush=True)
 
 from eeg_processor import TGAMParser, create_eeg_filter
+from neuroprofile_traceability import build_neuroprofile_export
 
 # ─── Known BrainLink hardware identifiers ────────────────────────────────────
 KNOWN_HWIDS  = ["5C361634682F", "5C3616327E59", "5C3616346938", "5C3616346838", "5C36163468D3", "5C3616327C21", "5C36163468D3", "90E2FC2C5F37", '90E2FC2C627C','90E2FC2C6378','90E2FC2C5E7D','90E2FC2C5FAA','90E2FC2C614B']
@@ -398,11 +399,11 @@ def disconnect() -> Dict:
 
 _BANDS = ["delta", "theta", "lowAlpha", "highAlpha", "lowBeta", "highBeta", "lowGamma", "midGamma"]
 
-# Raw EEG → band-power conversion (used when frontend sends raw 512 Hz samples
-# instead of TGAM-chip band-power dicts)
+# Raw EEG conversion helpers used when the frontend sends raw 512 Hz samples
+# instead of TGAM-chip band-power dicts.
 _RAW_EEG_FS      = 512    # BrainLink sample rate (Hz)
-_RAW_WINDOW      = 256    # samples per FFT window (0.5 sec → 2 Hz resolution)
-_RAW_STEP        = 8      # slide step in samples (~15 ms → ~64 windows/sec)
+_RAW_WINDOW      = 1024   # samples per FFT window (2.0 sec at 512 Hz)
+_RAW_STEP        = 1024   # non-overlapping offline windows for block statistics
 _MT_TAPERS       = 3      # DPSS multitaper count (matches legacy mt_tapers=3)
 _MT_NW           = 2.5    # time-bandwidth product (matches legacy NW=2.5)
 
@@ -549,14 +550,231 @@ def _raw_to_bp_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Dict]:
     return result
 
 
+_RAW_FEATURE_BANDS: Dict[str, tuple] = {
+    "delta":  (0.5,  4.0),
+    "theta":  (4.0,  8.0),
+    "alpha":  (8.0, 13.0),
+    "beta":   (13.0, 30.0),
+    "gamma":  (30.0, 45.0),
+    "theta1": (4.0,  6.0),
+    "theta2": (6.0,  8.0),
+    "beta1":  (13.0, 20.0),
+    "beta2":  (20.0, 30.0),
+}
+
+
+def _trapz(y, x=None) -> float:
+    if not _NP_AVAILABLE:
+        return 0.0
+    try:
+        return float(_np.trapezoid(y, x))
+    except AttributeError:
+        return float(_np.trapz(y, x))
+
+
+def _iter_raw_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List:
+    if not _NP_AVAILABLE or len(raw_samples) < _RAW_WINDOW:
+        return []
+    arr = _np.asarray(raw_samples, dtype=_np.float64)
+    windows = []
+    for start in range(0, len(arr) - _RAW_WINDOW + 1, _RAW_STEP):
+        windows.append(arr[start:start + _RAW_WINDOW])
+    return windows
+
+
+def _window_psd(window, fs: int = _RAW_EEG_FS):
+    x = _np.asarray(window, dtype=_np.float64)
+    x = x - _np.mean(x)
+    psd = None
+    freqs = _np.fft.rfftfreq(x.size, d=1.0 / fs)
+
+    if _DPSS_AVAILABLE:
+        try:
+            tapers = _dpss(x.size, NW=_MT_NW, Kmax=max(1, int(_MT_TAPERS)), sym=False)
+            psd_accum = None
+            for taper in tapers:
+                Xk = _np.fft.rfft(x * taper)
+                Pk = (_np.abs(Xk) ** 2) / (fs * x.size + 1e-12)
+                psd_accum = Pk if psd_accum is None else psd_accum + Pk
+            psd = psd_accum / float(len(tapers))
+        except Exception:
+            psd = None
+
+    if psd is None:
+        tapered = x * _np.hanning(x.size)
+        Xk = _np.fft.rfft(tapered)
+        psd = (_np.abs(Xk) ** 2) / (fs * x.size + 1e-12)
+
+    return freqs, psd, x
+
+
+def _raw_window_qc(window, fs: int = _RAW_EEG_FS) -> Optional[str]:
+    if not _NP_AVAILABLE:
+        return None
+    x = _np.asarray(window, dtype=_np.float64)
+    med = float(_np.median(x))
+    mad = float(_np.median(_np.abs(x - med))) + 1e-12
+    scale = 1.4826 * mad
+
+    if scale < 0.5:
+        return "flatline"
+
+    try:
+        freqs, psd, _ = _window_psd(x, fs)
+        total = float(_np.sum(psd)) + 1e-12
+        neural_ratio = float(_np.sum(psd[(freqs >= 0.5) & (freqs <= 13.0)])) / total
+        hf_ratio = float(_np.sum(psd[freqs >= 30.0])) / total
+        valid = (freqs >= 1.0) & (freqs <= 40.0) & (psd > 0)
+        if int(_np.sum(valid)) > 10:
+            slope, _ = _np.polyfit(_np.log10(freqs[valid]), _np.log10(psd[valid]), 1)
+        else:
+            slope = -1.0
+        hf_threshold = 0.70 if slope < -0.5 else 0.50
+        if neural_ratio < 0.20 or slope > -0.1 or hf_ratio > hf_threshold:
+            return "not_worn"
+    except Exception:
+        if scale > 400.0:
+            return "not_worn"
+
+    extreme_outliers = _np.abs(x - med) > (20.0 * scale)
+    if int(_np.sum(extreme_outliers)) > (len(x) * 0.05) and scale > 10.0:
+        return "artifact"
+
+    return None
+
+
+def _raw_window_to_features(window, fs: int = _RAW_EEG_FS) -> Dict[str, float]:
+    freqs, psd, x = _window_psd(window, fs)
+    noise_floor = float(_np.percentile(psd, 10)) if psd.size else 0.0
+    snr_psd = _np.maximum(psd - noise_floor, 0.0)
+    psd_norm = (psd - max(noise_floor, 1e-12)) / max(noise_floor, 1e-12)
+    total_power = float(_np.var(x))
+    total_snr = _trapz(snr_psd, freqs) if psd.size else 0.0
+    denom = total_snr if total_snr > 0 else total_power + 1e-12
+
+    features: Dict[str, float] = {}
+    band_powers: Dict[str, float] = {}
+
+    for band_name, (low, high) in _RAW_FEATURE_BANDS.items():
+        mask = (freqs >= low) & (freqs <= high)
+        if not _np.any(mask):
+            mid = (low + high) / 2.0
+            features[f"{band_name}_power"] = 0.0
+            features[f"{band_name}_power_raw"] = 0.0
+            features[f"{band_name}_relative"] = 0.0
+            features[f"{band_name}_peak_freq"] = mid
+            features[f"{band_name}_peak_amp"] = 0.0
+            features[f"{band_name}_peak_rel_amp"] = 0.0
+            features[f"{band_name}_entropy"] = 0.0
+            band_powers[band_name] = 0.0
+            continue
+
+        band_freqs = freqs[mask]
+        band_psd = psd[mask]
+        band_snr = snr_psd[mask]
+        band_norm = psd_norm[mask]
+        raw_power = _trapz(band_psd, band_freqs)
+        snr_power = _trapz(band_snr, band_freqs)
+        band_powers[band_name] = snr_power
+        features[f"{band_name}_power"] = snr_power
+        features[f"{band_name}_power_raw"] = raw_power
+        features[f"{band_name}_relative"] = snr_power / (denom + 1e-12)
+
+        peak_idx = int(_np.argmax(band_norm))
+        peak_amp_norm = float(band_norm[peak_idx])
+        mean_band = float(_np.mean(band_norm)) + 1e-12
+        features[f"{band_name}_peak_freq"] = float(band_freqs[peak_idx])
+        features[f"{band_name}_peak_amp"] = float(band_psd[peak_idx])
+        features[f"{band_name}_peak_rel_amp"] = peak_amp_norm / mean_band
+
+        p = band_norm / (float(_np.sum(band_norm)) + 1e-12)
+        p = _np.clip(p, 1e-12, 1.0)
+        p = p / (float(_np.sum(p)) + 1e-12)
+        features[f"{band_name}_entropy"] = float(-_np.sum(p * _np.log2(p)))
+
+    emg_flag = False
+    try:
+        hf_mask = (freqs >= 35.0) & (freqs <= 45.0)
+        mid_mask = (freqs >= 20.0) & (freqs <= 30.0)
+        hf_power = _trapz(psd[hf_mask], freqs[hf_mask]) if _np.any(hf_mask) else 0.0
+        mid_power = _trapz(psd[mid_mask], freqs[mid_mask]) if _np.any(mid_mask) else 0.0
+        ratio_hf_mid = hf_power / (mid_power + 1e-12)
+        use_mask = (freqs >= 20.0) & (freqs <= 45.0)
+        f_sel = freqs[use_mask]
+        p_sel = psd[use_mask]
+        if f_sel.size >= 3:
+            logf = _np.log(f_sel + 1e-12)
+            logp = _np.log(p_sel + 1e-18)
+            A = _np.vstack([logf, _np.ones_like(logf)]).T
+            slope, _ = _np.linalg.lstsq(A, logp, rcond=None)[0]
+            emg_flag = bool(ratio_hf_mid > 1.2 or slope > -0.6)
+        else:
+            emg_flag = True
+    except Exception:
+        emg_flag = False
+
+    if emg_flag:
+        for suffix in ("power", "power_raw", "relative", "peak_freq", "peak_amp", "peak_rel_amp", "entropy"):
+            features[f"gamma_{suffix}"] = 0.0
+
+    features["_emg_guard"] = float(1 if emg_flag else 0)
+    features["_gamma_evaluated"] = float(0 if emg_flag else 1)
+    features["alpha_theta_ratio"] = band_powers.get("alpha", 0.0) / (band_powers.get("theta", 0.0) + 1e-10)
+    features["beta_alpha_ratio"] = band_powers.get("beta", 0.0) / (band_powers.get("alpha", 0.0) + 1e-10)
+    features["beta2_beta1_ratio"] = band_powers.get("beta2", 0.0) / (band_powers.get("beta1", 0.0) + 1e-10)
+    features["theta2_theta1_ratio"] = band_powers.get("theta2", 0.0) / (band_powers.get("theta1", 0.0) + 1e-10)
+    features["total_power"] = total_power
+    return features
+
+
+def _raw_to_feature_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Dict[str, float]]:
+    if not _NP_AVAILABLE:
+        return []
+    return [_raw_window_to_features(window, fs) for window in _iter_raw_windows(raw_samples, fs)]
+
+
+def _baseline_feature_rows(samples: List) -> tuple:
+    counters = {
+        "kept": 0,
+        "rejected": 0,
+        "not_worn": 0,
+        "artifact": 0,
+        "flatline": 0,
+    }
+    if not samples:
+        return [], counters
+    if isinstance(samples[0], (int, float)):
+        rows: List[Dict[str, float]] = []
+        for window in _iter_raw_windows(samples):
+            reason = _raw_window_qc(window)
+            if reason is None:
+                rows.append(_raw_window_to_features(window))
+                counters["kept"] += 1
+            else:
+                counters["rejected"] += 1
+                counters[reason] += 1
+        return rows, counters
+
+    rows = _extract_features(samples)
+    counters["kept"] = len(rows)
+    return rows, counters
+
+
+def _samples_to_feature_rows(samples: List) -> List[Dict[str, float]]:
+    if not samples:
+        return []
+    if isinstance(samples[0], (int, float)):
+        return _raw_to_feature_windows(samples)
+    return _extract_features(samples)
+
 
 def _maybe_convert_raw(samples: List) -> List[Dict]:
-    """If samples is a list of numbers (raw EEG), convert to band-power windows.
+    """If samples is a list of numbers (raw EEG), convert to raw feature windows.
     If already a list of dicts (band-power), return as-is."""
     if not samples:
         return samples
     if isinstance(samples[0], (int, float)):
-        return _raw_to_bp_windows(samples)
+        return _raw_to_feature_windows(samples)
     return samples
 _ALPHA              = 0.05
 _FDR_ALPHA          = 0.05
@@ -565,11 +783,11 @@ _MIN_PERCENT_CHANGE      = 10.0  # raw-power features
 _MIN_PERCENT_CHANGE_REL  =  5.0  # relative/ratio features (bounded 0-1, smaller natural range)
 
 # Block aggregation constants (mirrors legacy default block_seconds=8.0)
-# Window duration = window_samples / fs = 256 / 512 = 0.5s (raw EEG path)
-# windows_per_block = 8.0 / 0.5 = 16 windows  →  8 seconds of non-overlapping EEG per block
+# Window duration = window_samples / fs = 1024 / 512 = 2.0s (raw EEG path)
+# windows_per_block = 8.0 / 2.0 = 4 windows -> 8 seconds of EEG per block
 _BLOCK_SECONDS       = 8.0
-_WINDOW_DURATION_SEC = _RAW_WINDOW / _RAW_EEG_FS   # 0.5 s
-_WINDOWS_PER_BLOCK   = max(1, round(_BLOCK_SECONDS / _WINDOW_DURATION_SEC))  # 16
+_WINDOW_DURATION_SEC = _RAW_WINDOW / _RAW_EEG_FS   # 2.0 s
+_WINDOWS_PER_BLOCK   = max(1, round(_BLOCK_SECONDS / _WINDOW_DURATION_SEC))  # 4
 
 # Derived band definitions: (name, [source_tgam_keys], fraction_of_source, center_hz)
 # theta1/theta2 are approximated as 50% of theta.
@@ -1465,6 +1683,45 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     return summary, feat_data
 
 
+def _holm_bonferroni(p_items: List[tuple], alpha: float = _ALPHA) -> Dict[str, Any]:
+    valid = [(name, float(p)) for name, p in p_items if p is not None and math.isfinite(float(p))]
+    valid.sort(key=lambda item: item[1])
+    m = len(valid)
+    adjusted_by_name: Dict[str, float] = {}
+    rejected_by_name: Dict[str, bool] = {}
+    running = 0.0
+    gate_open = True
+
+    for rank, (name, p_value) in enumerate(valid, start=1):
+        adjusted = min(1.0, max(running, (m - rank + 1) * p_value))
+        running = adjusted
+        threshold = alpha / float(m - rank + 1)
+        rejected = bool(gate_open and p_value <= threshold)
+        if not rejected:
+            gate_open = False
+        adjusted_by_name[name] = adjusted
+        rejected_by_name[name] = rejected
+
+    records = []
+    for name, p_value in p_items:
+        adj = adjusted_by_name.get(name)
+        records.append({
+            "task": name,
+            "p_value": round(float(p_value), 6) if p_value is not None and math.isfinite(float(p_value)) else None,
+            "holm_p": round(adj, 6) if adj is not None else None,
+            "rejected": bool(rejected_by_name.get(name, False)),
+        })
+
+    return {
+        "method": "holm_bonferroni",
+        "alpha": alpha,
+        "tasks": [name for name, _ in p_items],
+        "n_tests": m,
+        "n_rejected": sum(1 for value in rejected_by_name.values() if value),
+        "results": records,
+    }
+
+
 @app.post("/analyze")
 def analyze(body: Dict) -> Dict:
     """
@@ -1504,11 +1761,13 @@ def analyze(body: Dict) -> Dict:
     ec_raw_count = len(ec_samples)
     eo_raw_count = len(eo_samples)
 
-    # Convert raw EEG → band-power windows if frontend sent raw samples
-    ec_samples = _maybe_convert_raw(ec_samples)
-    eo_samples = _maybe_convert_raw(eo_samples)
+    # Convert raw EEG directly to enhanced-style feature rows and apply
+    # eyes-closed baseline QC before baseline statistics are finalized.
+    baseline_rows, baseline_qc = _baseline_feature_rows(ec_samples)
+    eo_rows = _samples_to_feature_rows(eo_samples)
 
-    baseline_rows = _extract_features(ec_samples)
+    if not baseline_rows:
+        return {"error": "No usable baseline data after quality control"}
 
     per_task:      Dict[str, Any] = {}
     per_task_rows: Dict[str, List[Dict]] = {}
@@ -1517,8 +1776,8 @@ def analyze(body: Dict) -> Dict:
     for task_id, samples in tasks_raw.items():
         if not samples:
             continue
-        samples = list(_maybe_convert_raw(samples))
-        task_rows = _extract_features(samples)
+        samples = list(samples)
+        task_rows = _samples_to_feature_rows(samples)
         per_task_rows[task_id] = task_rows
         summary, analysis = _analyze_task_vs_baseline(
             task_rows, baseline_rows, task_id, win_per_block
@@ -1526,7 +1785,7 @@ def analyze(body: Dict) -> Dict:
         per_task[task_id] = {
             "summary":      summary,
             "analysis":     analysis,
-            "sample_count": len(samples),
+            "sample_count": len(task_rows),
         }
         all_task_rows.extend(task_rows)
 
@@ -1588,8 +1847,13 @@ def analyze(body: Dict) -> Dict:
 
     n_omnibus_sig = sum(1 for f in feat_rankings.values() if f.get("omnibus_sig"))
     can_test = n_sessions >= 2 and _SCIPY_AVAILABLE
+    task_p_items = [
+        (task_id, ((result.get("summary") or {}).get("fisher") or {}).get("km_p"))
+        for task_id, result in per_task.items()
+    ]
+    cross_task_correction = _holm_bonferroni(task_p_items, _ALPHA)
 
-    return {
+    response = {
         "per_task": per_task,
         "combined": {
             "summary":  comb_summary,
@@ -1600,14 +1864,15 @@ def analyze(body: Dict) -> Dict:
             "sessions_used":  n_sessions,
             "n_significant":  n_omnibus_sig,
             "features":       feat_rankings,
+            "cross_task_correction": cross_task_correction,
         },
-        "baseline_kept":              len(baseline_rows),
+        "baseline_kept":              baseline_qc["kept"],
         "ec_samples_raw":             ec_raw_count,
-        "baseline_rejected":          0,
-        "baseline_rejected_not_worn": 0,
-        "baseline_rejected_artifact": 0,
-        "baseline_rejected_flatline": 0,
-        "eo_windows":                 eo_raw_count,
+        "baseline_rejected":          baseline_qc["rejected"],
+        "baseline_rejected_not_worn": baseline_qc["not_worn"],
+        "baseline_rejected_artifact": baseline_qc["artifact"],
+        "baseline_rejected_flatline": baseline_qc["flatline"],
+        "eo_windows":                 len(eo_rows),
         "config": {
             "mode":                "aggregate_only",
             "alpha":               _ALPHA,
@@ -1619,6 +1884,18 @@ def analyze(body: Dict) -> Dict:
             "discretization_bins": 5,
         },
     }
+
+    # ── Neuroprofile traceability export (additive, does not alter existing keys) ─
+    try:
+        response["neuroprofile_feature_export"] = build_neuroprofile_export(
+            per_task, response
+        )
+    except Exception as _npe:
+        response["neuroprofile_feature_export"] = {
+            "error": f"Neuroprofile export failed: {_npe}"
+        }
+
+    return response
 
 
 
