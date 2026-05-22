@@ -72,8 +72,8 @@
         "readyToStart": "Ready to start",
         "recordingEC": "Recording: Eyes Closed",
         "recordingEO": "Recording: Eyes Open",
-        "phaseMsgEC": "Close your eyes and relax... (30 seconds)",
-        "phaseMsgEO": "Keep your eyes open and stay relaxed... (30 seconds)",
+        "phaseMsgEC": "Close your eyes and relax... (60 seconds)",
+        "phaseMsgEO": "Keep your eyes open and stay relaxed... (60 seconds)",
         "ecComplete": "Eyes Closed Complete!",
         "ecCompleteSub": "Great! Now let's record with eyes open.",
         "calibComplete": "Calibration Complete!",
@@ -81,9 +81,9 @@
         "countdownReady": "Get ready! Listen for the countdown...",
         "countdown": "Countdown: {{count}}",
         "ecCardTitle": "Eyes Closed Baseline",
-        "ecCardDesc": "Relax with eyes closed for 30 seconds",
+        "ecCardDesc": "Relax with eyes closed for 60 seconds",
         "eoCardTitle": "Eyes Open Baseline",
-        "eoCardDesc": "Stay relaxed with eyes open for 30 seconds",
+        "eoCardDesc": "Stay relaxed with eyes open for 60 seconds",
         "complete": "Complete",
         "start": "Start",
         "cancel": "Cancel",
@@ -91,9 +91,9 @@
         "modalECTitle": "Eyes Closed Baseline",
         "modalEOTitle": "Eyes Open Baseline",
         "modalECIntro": "Get ready to close your eyes and relax.",
-        "modalECDuration": "The sensors will record your baseline brainwave pattern for 30 seconds.",
+        "modalECDuration": "The sensors will record your baseline brainwave pattern for 60 seconds.",
         "modalEOIntro": "Get ready to keep your eyes open and stay relaxed.",
-        "modalEODuration": "The sensors will record your eyes-open baseline for 30 seconds.",
+        "modalEODuration": "The sensors will record your eyes-open baseline for 60 seconds.",
         "modalWhatWillHappen": "What will happen:",
         "modalStep1": "Click 'Start Recording' below",
         "modalStep2": "You'll hear a countdown: 5, 4, 3, 2, 1 beeps",
@@ -101,7 +101,7 @@
         "modalECStep4": "Try to let your mind wander naturally without focusing on anything specific",
         "modalStep5": "A sound will notify you when recording is complete",
         "modalECWarning": "Important: Check your speakers/headphones are ON!",
-        "modalEOStep3": "Keep your eyes open and relax for 30 seconds",
+        "modalEOStep3": "Keep your eyes open and relax for 60 seconds",
         "modalEOStep4": "Stay calm and focus on the single white cross in the middle of the screen",
         "modalEOStep5": "Do not worry about blinking.",
         "modalEOStep6": "A sound will notify you when recording is complete",
@@ -116,33 +116,37 @@
         "subtitle": "Step 7 of 7: Analyse EEG data and send report",
         "desc": "Click Analyse All Tasks to see how your brain responded to each challenge. This just takes a few seconds! Once your results appear, click Upload to Mindspeller to securely upload your data and complete your assessment.",
         "analyse": "Analyse All Tasks",
-        "analysing": "Analysing\u2026",
+        "analysing": "Analysing…",
         "analysisComplete": "Analysis Complete",
         "upload": "Upload to Mindspeller",
-        "uploading": "Uploading\u2026",
+        "uploading": "Uploading…",
         "uploaded": "Uploaded",
         "downloadReport": "Download Report",
         "analysisFailed": "Analysis failed:",
-        "finish": "Finish"
+        "finish": "Finish",
+        "seedSuccess": "Report successfully uploaded to the Mindspeller database.",
+        "seedFailed": "Upload failed: {{message}}"
     },
     "liveEeg": {
         "title": "Live EEG Reading",
         "subtitle": "Step 4 of 7: Connect your EEG device",
-        "connecting": "Connecting to device\u2026",
-        "scanning": "Scanning for EEG device\u2026",
+        "connecting": "Connecting to device…",
+        "scanning": "Scanning for EEG device…",
         "reconnect": "Reconnect",
         "signalGood": "Signal quality: Good | Data flowing normally",
-        "notWorn": "Headset not worn \u2014 place it firmly against your forehead",
-        "signalNoisy": "Signal quality: Noisy \u2014 hold still and press the headset against your forehead",
+        "notWorn": "Headset not worn — place it firmly against your forehead",
+        "signalNoisy": "Signal quality: Noisy — hold still and press the headset against your forehead",
         "infoConnected": "Do NOT proceed until you see Signal quality: Good in the header above.",
-        "infoDisconnected": "Click on the Reconnect button above to connect to the device before proceeding"
+        "infoDisconnected": "Click on the Reconnect button above to connect to the device before proceeding",
+        "noDeviceDetected": "No EEG device detected. Make sure the device is switched on, then try again.",
+        "waitForGoodSignal": "Wait for good signal quality before proceeding."
     },
     "loggedInHeader": {
         "device": "Device:",
         "signal": "Signal:",
         "disconnected": "Disconnected",
-        "searching": "Searching\u2026",
-        "connecting": "Connecting\u2026",
+        "searching": "Searching…",
+        "connecting": "Connecting…",
         "connected": "Connected",
         "noDevice": "No Device",
         "notWorn": "Not Worn",
@@ -150,7 +154,7 @@
         "signalNoisy": "Signal: Noisy"
     },
     "footer": {
-        "text": "Mindlink Analyzer v1.0.0 | \u00a9 {{year}} Mindspeller"
+        "text": "Mindlink Analyzer v1.0.0 | © {{year}} Mindspeller"
     },
     "nav": {
         "back": "Back",
@@ -236,7 +240,8 @@
         "abort": "✕ Abort",
         "complete": "{{taskName}} Complete!",
         "doneMsg": "EEG data has been recorded. You can now return to the task list.",
-        "backToTasks": "← Back to Tasks"
+        "backToTasks": "← Back to Tasks",
+        "emotionalFaceAlt": "Emotional face stimulus"
     },
     "taskContent": {
         "attentionFocus": {
@@ -424,7 +429,7 @@
         },
         "2": {
             "title": "Baseline Calibration",
-            "content": "Two 30-second phases are recorded: Eyes Closed (EC) and Eyes Open (EO). Sit still and relax. The calibration establishes your personal baseline used to normalise all subsequent task recordings."
+            "content": "Two 60-second phases are recorded: Eyes Closed (EC) and Eyes Open (EO). Sit still and relax. The calibration establishes your personal baseline used to normalise all subsequent task recordings."
         },
         "3": {
             "title": "Cognitive Tasks",
@@ -458,7 +463,7 @@
         },
         "3": {
             "title": "Complete baseline calibration carefully",
-            "content": "The baseline is used to normalise all task results. Rushing or moving during the 30-second calibration phases will reduce the accuracy of your entire session."
+            "content": "The baseline is used to normalise all task results. Rushing or moving during the 60-second calibration phases will reduce the accuracy of your entire session."
         },
         "4": {
             "title": "Re-run a task if something goes wrong",
@@ -550,5 +555,21 @@
                 "why": "Uploading your recordings sends them to the Mindspeller AI analysis pipeline, which computes your cognitive scores and generates a detailed brainwave report you can download and share."
             }
         }
+    },
+    "errors": {
+        "incorrectCredentials": "Incorrect email or password. Please try again.",
+        "serverUnavailable": "The server is temporarily unavailable. Please try again in a few minutes.",
+        "serverError": "Server error ({{status}}). Please try again later.",
+        "loginServiceNotFound": "Login service not found. Please check your region selection.",
+        "loginFailedStatus": "Login failed ({{status}}). Please try again.",
+        "noAuthToken": "No authentication token was received.",
+        "noBaselineData": "No baseline data found. Please complete baseline calibration first.",
+        "noTaskData": "No task data found. Please complete at least one task first.",
+        "analysisFailedStatus": "Analysis failed ({{status}}): {{message}}",
+        "notAuthenticated": "You are not authenticated. Please sign in again.",
+        "sessionExpired": "Your session has expired. Please sign in again.",
+        "seedingFailedStatus": "Upload failed ({{status}}): {{message}}",
+        "unexpectedError": "Unexpected error: {{status}}",
+        "connectionFailed": "Connection failed."
     }
 }

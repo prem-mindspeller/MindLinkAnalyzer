@@ -1,0 +1,22 @@
+{
+  "name": "mindlink-focus-cube-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5174",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4174",
+    "test": "vitest",
+    "verify:canvas": "node scripts/verify-canvas.cjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "three": "^0.181.2",
+    "vite": "^7.3.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0",
+    "vitest": "^4.0.15"
+  }
+}

@@ -45,7 +45,7 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
     if (isIdle) {
         return (
             <div className="task-runner-card">
-                <h2 className="task-runner-name">Read the instruction <strong>below before starting</strong></h2>
+                <h2 className="task-runner-name">{t('taskRunner.readInstruction')}</h2>
                 <div className="task-runner-badges">
                     {eyesClosed !== undefined && (
                         <div className={`task-eyes-badge${eyesClosed ? ' eyes-closed' : ' eyes-open'}`}>
@@ -100,7 +100,7 @@ const TaskRunner = ({ phases, taskName, eyesClosed, introText, onComplete, onBac
                     <img
                         className="task-runner-face-image"
                         src={currentPhase.image}
-                        alt="emotional face"
+                        alt={t('taskRunner.emotionalFaceAlt')}
                     />
                 )}
                 {eyesClosed && isRecordingPhase && (

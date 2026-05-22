@@ -1,0 +1,411 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - img "MindLink logo" [ref=e4]
+      - generic [ref=e5]:
+        - heading "MINDLINK — ADMINISTRATOR QUICK REFERENCE" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Booth Operator Guide · v2.0
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - heading "① SESSION FLOW AT A GLANCE" [level=2] [ref=e10]:
+          - generic [ref=e11]: ①
+          - text: SESSION FLOW AT A GLANCE
+        - generic [ref=e12]:
+          - generic [ref=e13]:
+            - generic [ref=e14]: "1"
+            - generic [ref=e15]:
+              - text: Connect headband
+              - text: + power ON
+          - generic [ref=e16]: →
+          - generic [ref=e17]:
+            - generic [ref=e18]: "2"
+            - generic [ref=e19]:
+              - text: Log in
+              - text: (booth account)
+          - generic [ref=e20]: →
+          - generic [ref=e21]:
+            - generic [ref=e22]: "3"
+            - generic [ref=e23]:
+              - text: Check signal
+              - text: quality indicator
+              - text: →
+              - strong [ref=e24]: Good?
+          - generic [ref=e25]: →
+          - generic [ref=e26]:
+            - generic [ref=e27]: "4"
+            - generic [ref=e28]:
+              - text: Eyes CLOSED
+              - text: 30 seconds
+          - generic [ref=e29]: →
+          - generic [ref=e30]:
+            - generic [ref=e31]: "5"
+            - generic [ref=e32]:
+              - text: Eyes OPEN
+              - text: 30 seconds
+          - generic [ref=e33]: →
+          - generic [ref=e34]:
+            - generic [ref=e35]: "6"
+            - generic [ref=e36]:
+              - text: Cognitive
+              - text: tasks
+          - generic [ref=e37]: →
+          - generic [ref=e38]:
+            - generic [ref=e39]: "7"
+            - generic [ref=e40]:
+              - text: Seed Report
+              - text: + wrap up
+        - paragraph [ref=e41]:
+          - text: "Total time per student:"
+          - strong [ref=e42]: ~7–10 minutes
+      - generic [ref=e43]:
+        - heading "② CONNECTING THE AMPLIFIER TO LAPTOP" [level=2] [ref=e44]:
+          - generic [ref=e45]: ②
+          - text: CONNECTING THE AMPLIFIER TO LAPTOP
+        - list [ref=e46]:
+          - listitem [ref=e47]:
+            - text: Press and hold the button on the BrainLink device for
+            - strong [ref=e48]: 2 seconds
+          - listitem [ref=e49]:
+            - text: Wait for the LED to blink
+            - strong [ref=e50]: blue-red-blue
+            - text: pattern
+          - listitem [ref=e51]:
+            - text: On your laptop, open
+            - strong [ref=e52]: Bluetooth settings
+            - text: and click "Add device"
+          - listitem [ref=e53]:
+            - text: Select the device labeled
+            - strong [ref=e54]: "\"Brainlink_Pro (Audio)\""
+          - listitem [ref=e55]:
+            - text: The device will connect briefly and then disconnect —
+            - strong [ref=e56]: this is normal
+          - listitem [ref=e57]:
+            - text: Open the
+            - strong [ref=e58]: MindLink app
+            - text: and log in — the actual connection is established through the app
+          - listitem [ref=e59]:
+            - text: When successfully connected, the LED will change from blue-red-blue to
+            - strong [ref=e60]: solid blue
+        - generic [ref=e61]:
+          - generic [ref=e62]: 💡
+          - generic [ref=e63]:
+            - strong [ref=e64]: "Connection Tip:"
+            - text: The Bluetooth pairing is just the first step. The device will appear to disconnect after initial pairing, but this is expected behavior. The real data connection happens when you log into the MindLink app.
+    - generic [ref=e65]:
+      - generic [ref=e66]: "GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration."
+      - generic [ref=e67]: Page 1 of 6
+  - generic [ref=e68]:
+    - generic [ref=e69]:
+      - img "MindLink logo" [ref=e70]
+      - heading "HEADBAND FITTING & DEVICE SETUP" [level=1] [ref=e71]
+    - generic [ref=e73]:
+      - heading "③ HEADBAND FITTING" [level=2] [ref=e74]:
+        - generic [ref=e75]: ③
+        - text: HEADBAND FITTING
+      - generic [ref=e76]:
+        - img "How to wear the headband" [ref=e78]
+        - list [ref=e80]:
+          - listitem [ref=e81]:
+            - generic [ref=e82]: ☑
+            - text: Clean electrode contacts with a soft cloth
+          - listitem [ref=e83]:
+            - generic [ref=e84]: ☑
+            - text: Push hair aside from the forehead electrode area
+          - listitem [ref=e85]:
+            - generic [ref=e86]: ☑
+            - text: Moisten the electrode pad lightly (alcohol wipes)
+          - listitem [ref=e87]:
+            - generic [ref=e88]: ☑
+            - text: Place electrode ~2 cm above the center of eyebrows
+          - listitem [ref=e89]:
+            - generic [ref=e90]: ☑
+            - text: Strap snug but NOT tight — no red marks on skin
+      - generic [ref=e91]:
+        - generic [ref=e92]: 🔄
+        - generic [ref=e93]:
+          - strong [ref=e94]: "Switch to Macrotellect soft-shell flex-band if:"
+          - list [ref=e95]:
+            - listitem [ref=e96]: If head is small and the fit is loose
+            - listitem [ref=e97]: Standard band keeps slipping after 2 re-seats
+            - listitem [ref=e98]: Signal stays RED or AMBER after 3 repositioning attempts
+            - listitem [ref=e99]: Student reports discomfort with the rigid band
+      - generic [ref=e100]:
+        - figure "Battery / USB connection" [ref=e101]:
+          - img "How to insert battery / connect" [ref=e102]
+          - generic [ref=e103]: Battery / USB connection
+        - figure "Power ON / OFF" [ref=e104]:
+          - img "Power on and off" [ref=e105]
+          - generic [ref=e106]: Power ON / OFF
+    - generic [ref=e107]:
+      - generic [ref=e108]: "GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration."
+      - generic [ref=e109]: Page 2 of 6
+  - generic [ref=e110]:
+    - generic [ref=e111]:
+      - img "MindLink logo" [ref=e112]
+      - heading "SIGNAL QUALITY & STUDENT FAQ" [level=1] [ref=e113]
+    - generic [ref=e115]:
+      - heading "④ SIGNAL QUALITY — TRAFFIC LIGHT" [level=2] [ref=e116]:
+        - generic [ref=e117]: ④
+        - text: SIGNAL QUALITY — TRAFFIC LIGHT
+      - generic [ref=e118]:
+        - generic [ref=e121]:
+          - strong [ref=e122]: GRAY — Waiting
+          - paragraph [ref=e123]: Normal on startup. Wait 5–10 seconds.
+        - generic [ref=e126]:
+          - strong [ref=e127]: GREEN — Good
+          - paragraph [ref=e128]: Proceed with calibration.
+        - generic [ref=e131]:
+          - strong [ref=e132]: AMBER — Poor
+          - paragraph [ref=e133]: Re-seat headband. Ask student to relax forehead & jaw.
+        - generic [ref=e136]:
+          - strong [ref=e137]: RED — Not worn
+          - paragraph [ref=e138]: Electrode not touching skin — reposition immediately.
+      - generic [ref=e139]:
+        - generic [ref=e140]: 🔧
+        - generic [ref=e141]:
+          - strong [ref=e142]: "If stuck on RED or AMBER:"
+          - list [ref=e143]:
+            - listitem [ref=e144]: Moisten the electrode pad
+            - listitem [ref=e145]: Re-seat lower on forehead (~2 cm above brow line)
+            - listitem [ref=e146]: Clear hair from under the electrode
+            - listitem [ref=e147]: Clean the skin with an alcohol wipe
+            - listitem [ref=e148]: Switch to the soft shell flex-band
+    - generic [ref=e149]:
+      - generic [ref=e150]: "GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration."
+      - generic [ref=e151]: Page 3 of 6
+  - generic [ref=e152]:
+    - generic [ref=e153]:
+      - img "MindLink logo" [ref=e154]
+      - heading "STUDENT FAQ" [level=1] [ref=e155]
+    - generic [ref=e157]:
+      - heading "⑤ COMMON STUDENT QUESTIONS" [level=2] [ref=e158]:
+        - generic [ref=e159]: ⑤
+        - text: COMMON STUDENT QUESTIONS
+      - generic [ref=e160]:
+        - generic [ref=e161]:
+          - paragraph [ref=e162]: "\"Can I blink?\""
+          - paragraph [ref=e163]:
+            - strong [ref=e164]: "YES"
+            - text: — blink normally when performing eyes open calibration or tasks. Our software filters blink artifacts. Trying NOT to blink creates more noise.
+        - generic [ref=e165]:
+          - paragraph [ref=e166]: "\"Can I move?\""
+          - paragraph [ref=e167]:
+            - text: Stay as
+            - strong [ref=e168]: still
+            - text: as comfortable. Avoid head turns, jaw clenching, or scratching during recording. Stretch between segments.
+        - generic [ref=e169]:
+          - paragraph [ref=e170]: "\"What am I supposed to do?\""
+          - paragraph [ref=e171]:
+            - text: Follow the
+            - strong [ref=e172]: on-screen prompts
+            - text: . I'll tell you when to close or open your eyes. Just relax and pay attention.
+        - generic [ref=e173]:
+          - paragraph [ref=e174]: "\"Is this safe?\""
+          - paragraph [ref=e175]:
+            - text: Completely. It only
+            - strong [ref=e176]: READS
+            - text: brain waves, sends nothing into your head. Just a simple sensor on your forehead.
+        - generic [ref=e177]:
+          - paragraph [ref=e178]: "\"How long does it take?\""
+          - paragraph [ref=e179]:
+            - text: About
+            - strong [ref=e180]: 7–10 minutes
+            - text: . 30 s eyes closed, 30 s eyes open, then a few short tasks on screen.
+        - generic [ref=e181]:
+          - paragraph [ref=e182]: "\"What if I mess up?\""
+          - paragraph [ref=e183]:
+            - text: No right or wrong — we measure your brain's
+            - strong [ref=e184]: natural response
+            - text: ", not performance. Just do your best."
+    - generic [ref=e185]:
+      - generic [ref=e186]: "GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration."
+      - generic [ref=e187]: Page 4 of 6
+  - generic [ref=e188]:
+    - generic [ref=e189]:
+      - img "MindLink logo" [ref=e190]
+      - heading "TROUBLESHOOTING" [level=1] [ref=e191]
+    - generic [ref=e192]:
+      - generic [ref=e193]:
+        - heading "⑥ EMG / NOISE ERRORS" [level=2] [ref=e194]:
+          - generic [ref=e195]: ⑥
+          - text: EMG / NOISE ERRORS
+        - paragraph [ref=e196]:
+          - strong [ref=e197]: "If \"High noise detected\" appears on screen:"
+        - list [ref=e198]:
+          - listitem [ref=e199]:
+            - generic [ref=e200]: ✦
+            - text: "Ask:"
+            - emphasis [ref=e201]: "\"Can you relax your forehead? Try to unclench your jaw.\""
+          - listitem [ref=e202]:
+            - generic [ref=e203]: ✦
+            - text: Move student's phone / smartwatch
+            - strong [ref=e204]: ">30 cm"
+            - text: away from headband
+          - listitem [ref=e205]:
+            - generic [ref=e206]: ✦
+            - text: Check that laptop charger cable isn't draped near the headband
+          - listitem [ref=e207]:
+            - generic [ref=e208]: ✦
+            - text: Re-seat headband
+            - strong [ref=e209]: lower
+            - text: on forehead
+          - listitem [ref=e210]:
+            - generic [ref=e211]: ✦
+            - text: Wait 10 seconds, transient bursts often self-resolve
+        - generic [ref=e212]:
+          - generic [ref=e213]: ⏱️
+          - generic [ref=e214]:
+            - strong [ref=e215]: "If noise persists >30 seconds:"
+            - list [ref=e216]:
+              - listitem [ref=e217]: Power-cycle device (OFF → wait 5 sec → ON)
+              - listitem [ref=e218]: Close the app completely and reopen
+              - listitem [ref=e219]: Try the Macrotellect soft shell flex-band
+        - heading "Warning Messages Explained" [level=3] [ref=e220]
+        - table [ref=e221]:
+          - rowgroup [ref=e222]:
+            - row "Message on Screen What It Means What to Do" [ref=e223]:
+              - columnheader "Message on Screen" [ref=e224]
+              - columnheader "What It Means" [ref=e225]
+              - columnheader "What to Do" [ref=e226]
+          - rowgroup [ref=e227]:
+            - row "\"Not Worn\" Electrode has no skin contact Reposition headband on forehead" [ref=e228]:
+              - cell "\"Not Worn\"" [ref=e229]
+              - cell "Electrode has no skin contact" [ref=e230]
+              - cell "Reposition headband on forehead" [ref=e231]
+            - row "\"Demo signal detected\" Device streaming test data, not real EEG Reconnect USB & power-cycle the device" [ref=e232]:
+              - cell "\"Demo signal detected\"" [ref=e233]
+              - cell "Device streaming test data, not real EEG" [ref=e234]
+              - cell "Reconnect USB & power-cycle the device" [ref=e235]
+            - 'row "\"Signal: Waiting…\" App is filling its data buffer Normal, just wait 5–10 seconds" [ref=e236]':
+              - 'cell "\"Signal: Waiting…\"" [ref=e237]'
+              - cell "App is filling its data buffer" [ref=e238]
+              - cell "Normal, just wait 5–10 seconds" [ref=e239]
+            - row "\"High noise detected\" Muscle tension or electrical interference Follow the EMG steps above" [ref=e240]:
+              - cell "\"High noise detected\"" [ref=e241]
+              - cell "Muscle tension or electrical interference" [ref=e242]
+              - cell "Follow the EMG steps above" [ref=e243]
+      - generic [ref=e244]:
+        - heading "⑦ IF A STUDENT WANTS TO STOP" [level=2] [ref=e245]:
+          - generic [ref=e246]: ⑦
+          - text: IF A STUDENT WANTS TO STOP
+        - list [ref=e247]:
+          - listitem [ref=e248]:
+            - text: "Say calmly:"
+            - strong [ref=e249]: "\"No problem at all.\""
+          - listitem [ref=e250]: Click ✕ on the task window to end recording
+          - listitem [ref=e251]: Gently remove the headband
+          - listitem [ref=e252]:
+            - text: "Reassure:"
+            - strong [ref=e253]: "\"This is completely voluntary. Your data will not be used.\""
+          - listitem [ref=e254]: Log the incident on the booth sheet (student initials + time)
+        - generic [ref=e255]:
+          - generic [ref=e256]: 💬
+          - generic [ref=e257]:
+            - strong [ref=e258]: "If anxious but willing to continue:"
+            - list [ref=e259]:
+              - listitem [ref=e260]: "\"It only reads, like a fitness tracker for your brain.\""
+              - listitem [ref=e261]: "\"You can stop at any time, just say the word.\""
+              - listitem [ref=e262]: "\"Just relax and breathe normally.\""
+              - listitem [ref=e263]: Offer water. Take a 30-second break before restarting.
+        - paragraph [ref=e264]: ⚠️ NEVER force continuation. Student wellbeing is more important than data.
+    - generic [ref=e265]:
+      - generic [ref=e266]: "GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration."
+      - generic [ref=e267]: Page 5 of 6
+  - generic [ref=e268]:
+    - generic [ref=e269]:
+      - img "MindLink logo" [ref=e270]
+      - heading "WRAP-UP & DEVICE ISSUES" [level=1] [ref=e271]
+    - generic [ref=e272]:
+      - generic [ref=e273]:
+        - heading "⑧ END OF SESSION" [level=2] [ref=e274]:
+          - generic [ref=e275]: ⑧
+          - text: END OF SESSION
+        - generic [ref=e276]:
+          - img "How to remove the headband" [ref=e278]
+          - generic [ref=e279]:
+            - list [ref=e280]:
+              - listitem [ref=e281]: Press the analyze button and mention that it will take a few minutes to complete
+              - listitem [ref=e282]: When the Seed report button is active, click and confirm the student's email ID
+              - listitem [ref=e283]: Wait for seeding to complete. Proceed after you see a success message
+              - listitem [ref=e284]: Gently remove the headband
+              - listitem [ref=e285]:
+                - text: Power
+                - strong [ref=e286]: "OFF"
+                - text: the device
+              - listitem [ref=e287]: Wipe electrode & headband with an alcohol wipe
+            - paragraph [ref=e288]:
+              - text: "Target turnaround between students:"
+              - strong [ref=e289]: ~30 seconds
+      - generic [ref=e290]:
+        - heading "⑨ DEVICE RECONNECTION (MID-SESSION)" [level=2] [ref=e291]:
+          - generic [ref=e292]: ⑨
+          - text: DEVICE RECONNECTION (MID-SESSION)
+        - paragraph [ref=e293]: "If the device disconnects during a session:"
+        - list [ref=e294]:
+          - listitem [ref=e295]: Restart the application
+          - listitem [ref=e296]:
+            - text: Switch
+            - strong [ref=e297]: "OFF"
+            - text: the BrainLink amplifier (hold power button 2 seconds)
+          - listitem [ref=e298]:
+            - text: Wait
+            - strong [ref=e299]: 3–5 seconds
+          - listitem [ref=e300]:
+            - text: Switch
+            - strong [ref=e301]: "ON"
+            - text: the amplifier and check the LED if it blinks blue-red-blue
+          - listitem [ref=e302]:
+            - strong [ref=e303]: Log in again
+            - text: "- this clears stale data and re-establishes the serial connection"
+        - generic [ref=e304]:
+          - generic [ref=e305]: 🔌
+          - generic [ref=e306]:
+            - strong [ref=e307]: "If it still won't connect:"
+            - list [ref=e308]:
+              - listitem [ref=e309]: Turn off the device and wait 10 seconds
+              - listitem [ref=e310]: Restart the MindLink application entirely
+              - listitem [ref=e311]: Verify battery level is above 20%
+              - listitem [ref=e312]: Check if the LED blinks blue-red-blue, which means its ready to connect.
+      - generic [ref=e313]:
+        - heading "⑩ NETWORK / LOGIN ISSUES" [level=2] [ref=e314]:
+          - generic [ref=e315]: ⑩
+          - text: NETWORK / LOGIN ISSUES
+        - list [ref=e316]:
+          - listitem [ref=e317]:
+            - generic [ref=e318]: ✦
+            - strong [ref=e319]: "Windows security block:"
+            - text: Right-click the .exe → Properties → check "Unblock" → OK
+          - listitem [ref=e320]:
+            - generic [ref=e321]: ✦
+            - strong [ref=e322]: "Firewall:"
+            - text: Allow BrainCompanion.exe through Windows Firewall (both Private and Public)
+          - listitem [ref=e323]:
+            - generic [ref=e324]: ✦
+            - strong [ref=e325]: Required URLs
+            - text: "(must be reachable via HTTPS):"
+            - code [ref=e326]: en.mindspeller.com
+            - code [ref=e327]: nl.mindspeller.com
+          - listitem [ref=e328]:
+            - generic [ref=e329]: ✦
+            - strong [ref=e330]: "Campus / corporate Wi-Fi:"
+            - text: Ask venue IT to whitelist the URLs above
+            - emphasis [ref=e331]: before
+            - text: the event
+    - generic [ref=e332]:
+      - generic [ref=e333]: "REMEMBER: Signal Indicator should show Good FIRST. Noisy = no calibration."
+      - generic [ref=e334]: Page 6 of 6
+  - generic [ref=e335]:
+    - generic [ref=e336]:
+      - button "🖨️ Print / Save as PDF" [ref=e337] [cursor=pointer]
+      - button "🌐 Open in Browser" [ref=e338] [cursor=pointer]
+    - generic [ref=e339]:
+      - strong [ref=e340]: "Best results:"
+      - text: "Click \"Open in Browser\" to open in Chrome/Edge → press Ctrl+P → Paper:"
+      - strong [ref=e341]: A4
+      - text: "· Orientation:"
+      - strong [ref=e342]: Landscape
+      - text: "· Scale:"
+      - strong [ref=e343]: 100%
+      - text: "· Margins:"
+      - strong [ref=e344]: None
+      - text: · uncheck Headers & Footers → Save as PDF.

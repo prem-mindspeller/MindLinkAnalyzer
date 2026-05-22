@@ -1328,13 +1328,12 @@ def _build_blocks(rows: List[Dict], windows_per_block: int = _WINDOWS_PER_BLOCK)
     per-block feature means.  Mirrors legacy _build_blocks / block aggregation.
 
     This is the key step that decorre lates temporally adjacent EEG windows
-    before running Welch's t-test and permutation tests.  Without it the highly
-    overlapping windows (step=8 samples) would give artificially tiny p-values.
+    before running Welch's t-test and permutation tests.
 
     Args:
         rows:              List of per-window feature dicts.
         windows_per_block: How many consecutive windows to average into one block.
-                           Default _WINDOWS_PER_BLOCK = 16  (= 8 s at 0.5 s/window).
+                           Default _WINDOWS_PER_BLOCK = 4 (= 8 s at 2.0 s/window).
 
     Returns:
         List of per-block mean dicts.  Length ≈ len(rows) // windows_per_block.
@@ -1351,26 +1350,6 @@ def _build_blocks(rows: List[Dict], windows_per_block: int = _WINDOWS_PER_BLOCK)
             block[f] = sum(vals) / len(vals)
         blocks.append(block)
     return blocks if blocks else rows   # fallback: return raw if too short for even one block
-
-
-def _equalize_windows(rows_a: List[Dict], rows_b: List[Dict],
-                      seed: int = 42) -> tuple:
-    """Downsample the larger group to min(|a|, |b|), preserving order.
-    Port of EnhancedBrainLinkAnalyzerWindow._equalize_blocks.
-    """
-    na, nb = len(rows_a), len(rows_b)
-    n = min(na, nb)
-    if na == nb:
-        return rows_a, rows_b
-    rng = random.Random(seed)
-    if na > n:
-        idx    = sorted(rng.sample(range(na), n))
-        rows_a = [rows_a[i] for i in idx]
-    if nb > n:
-        idx    = sorted(rng.sample(range(nb), n))
-        rows_b = [rows_b[i] for i in idx]
-    return rows_a, rows_b
-
 
 def _correlation_guard_factor(all_rows: List[Dict], features: List[str]) -> float:
     """Port of EnhancedBrainLinkAnalyzerWindow._correlation_guard_factor.
@@ -1408,7 +1387,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     Full per-task analysis mirroring EnhancedFeatureAnalysisEngine output.
     Returns (summary_dict, analysis_per_feature_dict).
 
-    windows_per_block controls block aggregation (default 16 = 8 s at 0.5 s/window).
+    windows_per_block controls block aggregation (default 4 = 8 s at 2.0 s/window).
     Pass windows_per_block=1 to disable blocking (individual windows, NOT recommended
     for overlapping EEG windows — produces spuriously low p-values).
     """
@@ -1423,16 +1402,15 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
         fnames = [f for f in fnames if not f.startswith("gamma_")]
 
     # ── Block aggregation: average consecutive windows → decorrelated blocks ───
-    # This is the most important step for valid p-values.  EEG windows separated
-    # by only 8 samples (~15 ms) are nearly identical; treating them as independent
-    # samples inflates n ×16 and pushes p-values near 0 on random noise.
+    # This is the most important step for valid p-values.
     task_blocks     = _build_blocks(task_rows,     windows_per_block)
     baseline_blocks = _build_blocks(baseline_rows, windows_per_block)
 
-    # ── Equalize block counts (mirrors legacy _equalize_blocks) ───────────────
-    task_eq, baseline_eq = _equalize_windows(task_blocks, baseline_blocks)
-    ess_task = len(task_eq)
-    ess_base = len(baseline_eq)
+    # ── Preserve all blocks; unequal-n tests handle task/baseline length gaps ─
+    task_eq     = task_blocks
+    baseline_eq = baseline_blocks
+    ess_task    = len(task_eq)
+    ess_base    = len(baseline_eq)
 
     # ── Correlation guard: shrink alpha by effective-feature-count ratio ───────
     guard_factor    = _correlation_guard_factor(baseline_eq, fnames)
@@ -1570,7 +1548,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
         raw_fisher_stat, fnames, all_rows
     )
 
-    # ── SumP permutation (on equalized windows, mirrors legacy block perm) ─────
+    # ── SumP permutation on all task and baseline blocks ─────
     sum_p_val, sump_perm_p = _sum_p_perm(task_eq, baseline_eq)
 
     # ── Composite score: sum of -log10(q when available, else p) ───────────────

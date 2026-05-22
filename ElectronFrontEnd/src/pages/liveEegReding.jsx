@@ -41,13 +41,13 @@ const LiveEegReading = () => {
             const found = await eegConnectService.autoDetect(hwids);
             if (found) {
                 const result = await eegConnectService.connect(found.path);
-                if (!result.success) setConnectError(result.error || 'Connection failed.');
+                if (!result.success) setConnectError(result.error || t('errors.connectionFailed'));
             } else {
-                setScanMessage('No EEG device detected. Make sure the device is switched on and try again.');
+                setScanMessage(t('liveEeg.noDeviceDetected'));
             }
         };
         scan();
-    }, []);
+    }, [t]);
 
     const handleRescan = async () => {
         setScanMessage('');
@@ -56,9 +56,9 @@ const LiveEegReading = () => {
         const found = await eegConnectService.autoDetect(hwids);
         if (found) {
             const result = await eegConnectService.connect(found.path);
-            if (!result.success) setConnectError(result.error || 'Connection failed.');
+            if (!result.success) setConnectError(result.error || t('errors.connectionFailed'));
         } else {
-            setScanMessage('No EEG device detected. Make sure the device is switched on and try again.');
+            setScanMessage(t('liveEeg.noDeviceDetected'));
         }
     };
 
@@ -143,9 +143,9 @@ const LiveEegReading = () => {
                             className="btn-next-eeg"
                             onClick={() => navigate('/baselineCalibration1')}
                             disabled={!isGoodSignal}
-                            title={!isGoodSignal ? 'Wait for good signal quality before proceeding' : ''}
+                            title={!isGoodSignal ? t('liveEeg.waitForGoodSignal') : ''}
                         >
-                            Next <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                            {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
                         </button>
                     </div>
                 </div>

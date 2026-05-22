@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a separate browser-based test application that uses the existing BrainLink headset pipeline to drive a small neurofeedback game. The user sees a split screen: a focus-controlled cube on the left and a live neural activity visualization on the right. The app is isolated from the existing MindLinkAnalyzer application code.
+Build a separate browser-based test application that uses live raw BrainLink EEG samples to drive a small neurofeedback game. The user sees a split screen: a focus-controlled cube on the left and a live neural activity visualization on the right. The app is isolated from the existing MindLinkAnalyzer application code.
 
 ## Scope
 
@@ -11,6 +11,7 @@ The new app lives under `MindLinkFocusCube/` and does not modify existing MindLi
 The first version supports:
 
 - BrainLink serial input through Python.
+- Raw-sample feature extraction owned by this app; the app must not use BrainLinkParser's built-in `attention` or `meditation` values for control.
 - A demo mode that emits realistic synthetic band powers when no headset is connected.
 - Local WebSocket streaming from backend to browser.
 - Split-screen Three.js rendering.
@@ -23,7 +24,7 @@ OSC is out of scope for the first version because WebSocket is simpler, lower-fr
 
 ## Architecture
 
-`MindLinkFocusCube/backend` contains the Python backend. It connects to BrainLink using the existing `BrainLinkParser` package when available, buffers raw EEG samples, runs the feature extraction pipeline, normalizes band powers, and broadcasts compact JSON frames over WebSocket.
+`MindLinkFocusCube/backend` contains the Python backend. It connects to BrainLink using the existing `BrainLinkParser` package only for serial packet parsing and raw EEG callbacks. Built-in BrainLink attention and meditation fields are ignored for gameplay and visualization. The backend buffers raw EEG samples, runs the feature extraction pipeline, normalizes band powers, and broadcasts compact JSON frames over WebSocket.
 
 `MindLinkFocusCube/frontend` contains a lightweight browser app using Vite and Three.js. It connects to the backend WebSocket, smooths incoming control values for rendering, and updates the cube and neural visualization every animation frame.
 
@@ -32,7 +33,7 @@ The backend owns signal processing and normalization. The frontend owns presenta
 ## Data Flow
 
 1. BrainLink serial bytes are read by the backend.
-2. `BrainLinkParser` invokes raw EEG callbacks.
+2. `BrainLinkParser` invokes raw EEG callbacks. Any parser-provided attention or meditation callbacks are logged only for diagnostics, not used for app state.
 3. Raw samples enter a fixed-size rolling buffer.
 4. Once enough samples exist, the backend applies the same broad pipeline used in the existing analyzer: notch filtering, 1-45 Hz bandpass filtering, Welch PSD, Simpson band-power integration.
 5. The backend computes absolute and relative delta, theta, alpha, beta, and gamma values.
@@ -139,8 +140,7 @@ Expected developer flow:
 
 ```powershell
 cd MindLinkAnalyzer\MindLinkFocusCube
-python -m venv .venv
-.\.venv\Scripts\pip install -r backend\requirements.txt
+C:\Users\conta\anaconda3\envs\brainlink\python.exe -m pip install -r backend\requirements.txt
 npm install
 npm run dev
 ```

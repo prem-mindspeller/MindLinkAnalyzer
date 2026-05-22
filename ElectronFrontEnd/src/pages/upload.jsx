@@ -74,11 +74,11 @@ const UploadPage = () => {
         try {
             await seedReport(email, protocolType, results);
             setSeedStatus('success');
-            setSeedMsg('Report successfully seeded to Mindspeller database.');
+            setSeedMsg(t('upload.seedSuccess'));
             setNotUploadedProfile(false);
         } catch (err) {
             setSeedStatus('error');
-            setSeedMsg(`Seeding failed: ${err.message}`);
+            setSeedMsg(t('upload.seedFailed', { message: err.message }));
             setShowDownloadProfileButton(true);
         }
     };

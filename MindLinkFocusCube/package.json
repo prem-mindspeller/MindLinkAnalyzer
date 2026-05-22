@@ -1,0 +1,20 @@
+{
+  "name": "mindlink-focus-cube",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "C:\\Users\\conta\\anaconda3\\envs\\brainlink\\python.exe -m backend.focuscube.server --demo",
+    "dev:backend:device": "C:\\Users\\conta\\anaconda3\\envs\\brainlink\\python.exe -m backend.focuscube.server",
+    "dev:backend:device:strict": "C:\\Users\\conta\\anaconda3\\envs\\brainlink\\python.exe -m backend.focuscube.server --require-device",
+    "dev:backend:device:pure": "C:\\Users\\conta\\anaconda3\\envs\\brainlink\\python.exe -m backend.focuscube.server --require-device --allow-pure-parser",
+    "dev:backend:list-ports": "C:\\Users\\conta\\anaconda3\\envs\\brainlink\\python.exe -m backend.focuscube.server --list-ports",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test": "C:\\Users\\conta\\anaconda3\\envs\\brainlink\\python.exe -m pytest backend/tests -q && npm --prefix frontend test -- --run",
+    "build": "npm --prefix frontend run build",
+    "verify": "npm run test && npm run build && npm --prefix frontend run verify:canvas"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

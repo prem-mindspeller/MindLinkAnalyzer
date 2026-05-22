@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MindLink Focus Cube</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="device-badge" aria-label="Device connection status">
+        <div>
+          <span class="label">Connection</span>
+          <strong id="device-state-value">disconnected</strong>
+        </div>
+        <div>
+          <span class="label">Battery</span>
+          <strong id="battery-value">--</strong>
+        </div>
+        <div>
+          <span class="label">Port</span>
+          <strong id="port-value">--</strong>
+        </div>
+        <div>
+          <span class="label">Samples</span>
+          <strong id="samples-value">0</strong>
+        </div>
+      </aside>
+      <section class="panel game-panel" aria-label="Focus cube game">
+        <canvas id="cube-canvas"></canvas>
+        <div class="hud">
+          <div>
+            <span class="label">Attention</span>
+            <strong id="attention-value">0.00</strong>
+          </div>
+          <div>
+            <span class="label">Mode</span>
+            <strong id="mode-value">waiting</strong>
+          </div>
+          <div>
+            <span class="label">Signal</span>
+            <strong id="quality-value">0.00</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel brain-panel" aria-label="Neural activity visualization">
+        <canvas id="brain-canvas"></canvas>
+        <div class="legend">
+          <span><i class="swatch blue"></i>Alpha</span>
+          <span><i class="swatch pink"></i>Beta/Gamma</span>
+          <span id="connection-value">connecting</span>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
