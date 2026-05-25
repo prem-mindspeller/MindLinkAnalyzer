@@ -28,27 +28,74 @@ const ui = {
   battery: document.querySelector('#battery-value'),
   port: document.querySelector('#port-value'),
   samples: document.querySelector('#samples-value'),
+  calibration: document.querySelector('#calibration-value'),
+  calibrationBar: document.querySelector('#calibration-bar'),
+  contact: document.querySelector('#contact-value'),
+  focus: document.querySelector('#focus-value'),
+  frontal: document.querySelector('#frontal-value'),
+  occipital: document.querySelector('#occipital-value'),
+  resetCalibration: document.querySelector('#reset-calibration'),
 };
+
+let activeSocket = null;
 
 function renderDeviceBadge() {
   const mode = state.mode;
   const device = state.device || {};
-  const hasRealDevice = mode === 'device' || mode === 'device_warming';
+  const hasRealDevice = mode === 'device'
+    || mode === 'device_warming'
+    || mode === 'device_not_worn'
+    || mode === 'device_calibrating';
   const label = mode === 'device'
     ? 'real device'
     : mode === 'device_warming'
       ? 'warming'
-      : mode === 'demo'
-        ? 'demo'
-        : state.connected
-          ? 'connected'
-          : 'disconnected';
+      : mode === 'device_not_worn'
+        ? 'not worn'
+        : mode === 'device_calibrating'
+          ? 'calibrating'
+          : mode === 'demo'
+            ? 'demo'
+            : state.connected
+              ? 'connected'
+              : 'disconnected';
 
   ui.deviceState.textContent = label;
   ui.battery.textContent = device.battery == null ? '--' : `${device.battery}%`;
-  ui.port.textContent = device.port || '--';
+  ui.port.textContent = device.serialPort || (device.ipAddress ? `${device.ipAddress}:${device.ipPort ?? '--'}` : '--');
   ui.samples.textContent = String(device.sampleCount ?? 0);
   document.body.dataset.mode = hasRealDevice ? 'device' : mode;
+}
+
+function renderProcessingStatus(payload = {}) {
+  const device = payload.device || {};
+  const focus = payload.focus || {};
+  const components = focus.components || {};
+  const progress = Number(focus.baselineProgress ?? device.baselineProgress ?? 0);
+  const count = device.baselineCount ?? focus.baselineCount ?? 0;
+  const required = device.baselineRequired ?? focus.baselineRequired ?? '--';
+  const progressPercent = Math.round(Math.max(0, Math.min(1, progress)) * 100);
+  const contactQuality = Number(device.contactQuality ?? 0);
+  const contactReason = device.contactReason || (device.worn ? 'contact' : 'unknown');
+
+  ui.calibration.textContent = payload.mode === 'device_calibrating'
+    ? `${progressPercent}% (${count}/${required})`
+    : progress >= 1
+      ? 'ready'
+      : '--';
+  ui.calibrationBar.style.width = `${progressPercent}%`;
+  ui.contact.textContent = device.worn === false
+    ? `not worn (${contactReason})`
+    : device.worn === true
+      ? `${Math.round(contactQuality * 100)}% (${contactReason})`
+      : '--';
+  ui.focus.textContent = Number(focus.smoothed ?? payload.attention ?? 0).toFixed(2);
+  ui.frontal.textContent = Number(components.frontalEngagement ?? 0).toFixed(2);
+  const alphaControl = Math.max(
+    Number(components.occipitalAlphaSuppression ?? 0),
+    Number(components.occipitalAlphaActivation ?? 0),
+  );
+  ui.occipital.textContent = alphaControl.toFixed(2);
 }
 
 function createRenderer(canvas) {
@@ -170,9 +217,10 @@ function createParticleCloud(color, count, mode) {
 
   const material = new THREE.PointsMaterial({
     color,
-    size: 0.014,
+    size: 3,
+    sizeAttenuation: false,
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.78,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
@@ -330,6 +378,7 @@ function animateBrainParticles(points, params, intensity, time) {
 
 function connectWebSocket() {
   const socket = new WebSocket('ws://127.0.0.1:8765');
+  activeSocket = socket;
 
   socket.addEventListener('open', () => {
     state.connected = true;
@@ -348,6 +397,7 @@ function connectWebSocket() {
     ui.mode.textContent = state.mode;
     ui.quality.textContent = state.quality.toFixed(2);
     renderDeviceBadge();
+    renderProcessingStatus(payload);
   });
 
   socket.addEventListener('close', () => {
@@ -357,6 +407,7 @@ function connectWebSocket() {
     ui.connection.textContent = 'disconnected';
     state.targetAttention = 0.5;
     renderDeviceBadge();
+    renderProcessingStatus();
     setTimeout(connectWebSocket, 1200);
   });
 
@@ -364,6 +415,12 @@ function connectWebSocket() {
     ui.connection.textContent = 'retrying';
   });
 }
+
+ui.resetCalibration?.addEventListener('click', () => {
+  if (activeSocket?.readyState === WebSocket.OPEN) {
+    activeSocket.send(JSON.stringify({ type: 'reset_calibration' }));
+  }
+});
 
 const cubeScene = setupCubeScene();
 const brainScene = setupBrainScene();

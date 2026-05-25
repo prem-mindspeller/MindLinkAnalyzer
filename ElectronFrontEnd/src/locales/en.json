@@ -154,7 +154,7 @@
         "signalNoisy": "Signal: Noisy"
     },
     "footer": {
-        "text": "Mindlink Analyzer v1.0.0 | © {{year}} Mindspeller"
+        "text": "Mindlink Analyzer v2.0.0 | © {{year}} Mindspeller"
     },
     "nav": {
         "back": "Back",

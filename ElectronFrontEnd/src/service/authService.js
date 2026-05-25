@@ -1,6 +1,5 @@
 function updateToken() {
   if (isRefreshing && refreshPromise) {
-    console.log('[updateToken] Token refresh already in progress, waiting for it to finish.');
     return refreshPromise;
   }
   isRefreshing = true;
@@ -16,46 +15,30 @@ function _doUpdateToken() {
   const jwtToken = getStorageItem(STORAGE_KEYS.JWT_TOKEN);
   const refreshToken = getStorageItem(STORAGE_KEYS.JWT_REFRESH_TOKEN);
 
-  console.log('[updateToken] Current state:', {
-    isAnonymous: isAnonymous === 'true' ? 'true' : 'false',
-    hasJwtToken: !!jwtToken,
-    hasRefreshToken: !!refreshToken,
-    currentPage: window.location.hash
-  });
-
   // PRIORITY FIX: Protection against transitions to anonymous state during username changes
   // If we have valid tokens but somehow the anonymous flag is true, this is a critical error
   if (jwtToken && refreshToken && isAnonymous === 'true') {
-    console.warn('[updateToken] CRITICAL ERROR: Inconsistent state detected - Anonymous=true but has valid tokens. Fixing...');
     // Fix the inconsistent state by setting anonymous to false
     setStorageItem(STORAGE_KEYS.IS_ANONYMOUS, 'false');
 
     // Check if this error occurred on My Account page during/after username change
-    if (window.location.hash.includes('/my_account')) {
-      console.log('[updateToken] Error occurred on My Account page, likely during username change. Fixed.');
-    }
-
     // Proceed with normal user token refresh, using the refresh token we already have
-    console.log('[updateToken] Proceeding with corrected user token refresh');
     return refreshUserToken(refreshToken);
   }
 
   // Case 1: User is on the network page without tokens
   if (isNetworkPage() && !jwtToken) {
-    console.log('[updateToken] On network page without tokens, getting network token');
     clearAuthData();
     return refreshNetworkToken();
   }
 
   // Case 2: User has a refresh token and is not anonymous and not on network page
   else if (refreshToken && isAnonymous !== 'true' && !isNetworkPage()) {
-    console.log('[updateToken] Normal user with refresh token, refreshing user token');
     return refreshUserToken(refreshToken);
   }
 
   // Case 3: User is on network page and is anonymous
   else if (isAnonymous === 'true' && isNetworkPage()) {
-    console.log('[updateToken] Already anonymous on network page, no refresh needed');
     // Already anonymous and on network page, no need to refresh
     return Promise.resolve();
   }
@@ -65,20 +48,17 @@ function _doUpdateToken() {
     // Special protection: If user is on a protected page (like my_account) but isAnonymous='true',
     // this might be a session error after username change. Check if we have tokens first.
     if (jwtToken && refreshToken) {
-      console.warn('[updateToken] isAnonymous=true but has tokens on protected page. Fixing session state.');
       // Fix the state by setting anonymous to false and refreshing the user token
       setStorageItem(STORAGE_KEYS.IS_ANONYMOUS, 'false');
       return refreshUserToken(refreshToken).then(response => {
         // Force page reload to apply fixed session state if this was on My Account page
         if (window.location.hash.includes('/my_account')) {
-          console.log('[updateToken] Fixed session state on My Account page, reloading...');
           window.location.reload();
         }
         return response;
       });
     }
 
-    console.log('[updateToken] Anonymous user not on network page, redirecting to network');
     // Don't clear auth if we have tokens - the user might be transitioning from logged in to anonymous
     if (!jwtToken && !refreshToken) {
       clearAuthData();
@@ -89,7 +69,6 @@ function _doUpdateToken() {
 
   // Case 5: No valid tokens - passive handling, no error
   else {
-    console.log('[updateToken] No valid authentication tokens found');
     return Promise.resolve();
   }
 }
@@ -106,7 +85,6 @@ function refreshNetworkToken() {
       throw new Error('Invalid network token response');
     })
     .catch(error => {
-      console.error('Network token refresh failed:', error);
       // Report token refresh errors with context
       errorReporter.handleAxiosError(error, {
         component: 'AxiosHelper',
@@ -141,10 +119,6 @@ function refreshUserToken(refreshToken) {
         const hasIdBasedAuth = response.headers['x-id-based-authentication'] === 'true' ||
           metadata.id_based_authentication === true;
 
-        if (hasIdBasedAuth) {
-          console.log('[refreshUserToken] ID-based authentication confirmed by backend');
-        }
-
         // Broadcast token refresh event with userID data
         try {
           import('@/eventBus').then(({ EventBus }) => {
@@ -154,13 +128,8 @@ function refreshUserToken(refreshToken) {
               metadata: metadata,
               hasIdBasedAuth: hasIdBasedAuth
             });
-            console.log('[refreshUserToken] Token refresh event broadcast via EventBus');
-          }).catch(e => {
-            console.error('[refreshUserToken] Failed to import EventBus:', e);
-          });
-        } catch (e) {
-          console.error('[refreshUserToken] Error broadcasting token refresh event:', e);
-        }
+          }).catch(() => {});
+        } catch (e) {}
 
         return response;
       }
@@ -168,16 +137,12 @@ function refreshUserToken(refreshToken) {
     })
     .catch(error => {
       if (error.response && error.response.status === 401) {
-        console.warn('Refresh token invalidated by backend, clearing auth data.');
         clearAuthData();
         // Only redirect to signup if NOT on a landing page - let users browse landing pages without forced redirect
         if (!isNetworkPage()) {
           window.location.replace('/#/respondent_signup');
-        } else {
-          console.log('[refreshUserToken] On landing page, skipping automatic redirect to signup');
         }
       } else {
-        console.error('User token refresh failed:', error);
         // Report token refresh errors with context
         errorReporter.handleAxiosError(error, {
           component: 'AxiosHelper',
@@ -191,7 +156,5 @@ function refreshUserToken(refreshToken) {
 setInterval(function () {
   if (!isNetworkPage()) {
     updateToken();
-  } else {
-    console.log('[Token Refresh Interval] Skipping token refresh on landing page');
   }
 }, 14 * 60 * 1000);

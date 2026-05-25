@@ -6,6 +6,7 @@ import sys
 import random
 import threading
 import time
+import warnings
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Set
 
@@ -33,19 +34,37 @@ import serial.tools.list_ports
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+try:
+    from cushy_serial import CushySerial as _CushySerial
+    _HAVE_CUSHY_SERIAL = True
+    print("[Backend] CushySerial: available", flush=True)
+except Exception as _cushy_e:
+    _CushySerial = None
+    _HAVE_CUSHY_SERIAL = False
+    print(f"[Backend] CushySerial: unavailable ({_cushy_e})", flush=True)
+
 # Add workspace root to sys.path so BrainLinkParser package can be found
 _WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, _WORKSPACE_ROOT)
 
+# On Python 3.8+ (Windows) the DLL search path no longer includes the package
+# directory automatically. Register the BrainLinkParser directory before import.
+_BRAINLINK_PYD_DIR = os.path.join(_WORKSPACE_ROOT, "BrainLinkParser")
+if hasattr(os, "add_dll_directory") and os.path.isdir(_BRAINLINK_PYD_DIR):
+    try:
+        os.add_dll_directory(_BRAINLINK_PYD_DIR)
+    except Exception:
+        pass
+
 try:
     from BrainLinkParser.BrainLinkParser import BrainLinkParser as _BrainLinkParser
     _USE_SDK = True
-    print("[Backend] Using BrainLinkParser SDK", flush=True)
+    print("[Backend] BrainLinkParser SDK: loaded", flush=True)
 except Exception as _e:
     _USE_SDK = False
     _BrainLinkParser = None
-    print(f"[Backend] BrainLinkParser SDK unavailable ({_e}), falling back to TGAM parser", flush=True)
+    print(f"[Backend] BrainLinkParser SDK: unavailable ({_e}), using TGAM fallback", flush=True)
 
 from eeg_processor import TGAMParser, create_eeg_filter
 from neuroprofile_traceability import build_neuroprofile_export
@@ -129,6 +148,48 @@ def _reader_worker(port_path: str) -> None:
     FLUSH_INTERVAL = 0.016
     SILENCE_TIMEOUT = 3.0
 
+    def _run_cushy_parser(parse_message) -> None:
+        nonlocal last_data_time
+        global _serial_port, _status
+
+        serial_obj = None
+        try:
+            # CushySerial opens the port inside __init__ (pyserial behaviour);
+            # do NOT call serial_obj.open() again — it would raise "Port is already open".
+            serial_obj = _CushySerial(port_path, 115200)
+            _serial_port = serial_obj
+
+            @serial_obj.on_message()
+            def handle_serial_message(msg: bytes):
+                nonlocal last_data_time
+                last_data_time = time.monotonic()
+                parse_message(msg)
+
+            _status = "connected"
+            _enqueue({"type": "status", "value": "connected"})
+
+            while not _stop_event.is_set():
+                now = time.monotonic()
+                if now - last_flush >= FLUSH_INTERVAL:
+                    _flush_raw_batch()
+                if now - last_data_time > SILENCE_TIMEOUT:
+                    _enqueue({"type": "error", "message": "Device silent for 3 s — disconnecting."})
+                    break
+                time.sleep(0.02)
+
+        except Exception as exc:
+            print(f"[Backend] CushySerial error: {exc}", flush=True)
+            _enqueue({"type": "error", "message": str(exc)})
+        finally:
+            if serial_obj and getattr(serial_obj, "is_open", False):
+                try:
+                    serial_obj.close()
+                except Exception:
+                    pass
+            _serial_port = None
+            _status = "disconnected"
+            _enqueue({"type": "status", "value": "disconnected"})
+
     # ── Shared callbacks used by both SDK and fallback parser ────────────────
     def _flush_raw_batch():
         nonlocal raw_batch, last_flush
@@ -151,11 +212,11 @@ def _reader_worker(port_path: str) -> None:
         poor = getattr(data, 'poorSignal', getattr(data, 'signalLevel', getattr(data, 'signal', 200)))
         attn = getattr(data, 'attention',  0)
         med  = getattr(data, 'meditation', 0)
+        _set_battery_level(_extract_battery_level(data), "sdk_eeg")
         # Band powers (attributes vary by firmware; use getattr with 0 default)
         bp_attrs = ['delta', 'theta', 'lowAlpha', 'highAlpha', 'lowBeta', 'highBeta', 'lowGamma', 'midGamma']
         bp = {k: getattr(data, k, 0) for k in bp_attrs}
         band_power = bp if any(bp.values()) else None
-        print(f"[EEG] poorSignal={poor}  attention={attn}  meditation={med}", flush=True)
         _enqueue({
             "type":       "eeg_data",
             "poorSignal": poor,
@@ -166,18 +227,32 @@ def _reader_worker(port_path: str) -> None:
         })
 
     def _on_extend_eeg(data):
-        global _battery_level
-        bat = getattr(data, 'battery', None)
-        if bat is not None:
-            _battery_level = int(bat)
-            print(f"[BATTERY] {_battery_level}%", flush=True)
-            _enqueue({"type": "battery", "level": _battery_level})
+        battery_val = _extract_sdk_extend_battery(data)
+        _set_battery_level(battery_val, "sdk_extend")
 
     def _noop(*args): pass
 
     # ── SDK parser path ──────────────────────────────────────────────────────
     if _USE_SDK and _BrainLinkParser:
         sdk_parser = _BrainLinkParser(_on_eeg, _on_extend_eeg, _noop, _noop, _on_raw)
+
+        def _sdk_sidecar_on_packet(payload: List[int]) -> None:
+            parsed = TGAMParser.parse_payload(payload)
+            if "battery" not in parsed:
+                return
+            battery_val = _normalize_battery_level(parsed.get("battery"))
+            _set_battery_level(battery_val, "sdk_sidecar_tgam")
+
+        sdk_sidecar_parser = TGAMParser(_sdk_sidecar_on_packet)
+
+        def _parse_sdk_chunk(chunk: bytes) -> None:
+            sdk_parser.parse(chunk)
+            for byte in chunk:
+                sdk_sidecar_parser.feed(byte)
+
+        if _HAVE_CUSHY_SERIAL:
+            _run_cushy_parser(_parse_sdk_chunk)
+            return
 
         try:
             _serial_port = serial.Serial(port_path, baudrate=115200, timeout=0.02)
@@ -188,7 +263,7 @@ def _reader_worker(port_path: str) -> None:
                 chunk = _serial_port.read(64)
                 if chunk:
                     last_data_time = time.monotonic()
-                    sdk_parser.parse(chunk)
+                    _parse_sdk_chunk(chunk)
 
                 now = time.monotonic()
                 if now - last_flush >= FLUSH_INTERVAL:
@@ -214,12 +289,10 @@ def _reader_worker(port_path: str) -> None:
     # ── Fallback: custom TGAM parser ─────────────────────────────────────────
     def on_packet(payload: List[int]) -> None:
         nonlocal raw_batch, last_flush
-        global _battery_level
         data = TGAMParser.parse_payload(payload)
 
         if "raw" in data:
             raw_val = data["raw"]
-            print(f"[RAW] {raw_val}", flush=True)
             _enqueue({"type": "raw_unfiltered_batch", "samples": [raw_val]})
             raw_batch.append(round(eeg_filter(raw_val)))
 
@@ -230,9 +303,9 @@ def _reader_worker(port_path: str) -> None:
             last_flush = now
 
         if "battery" in data:
-            _battery_level = data["battery"]
-            print(f"[BATTERY] {_battery_level}%", flush=True)
-            _enqueue({"type": "battery", "level": _battery_level})
+            raw_bat = data["battery"]
+            print(f"[TGAM_0x85] raw battery byte={raw_bat}", flush=True)
+            _set_battery_level(_normalize_battery_level(raw_bat), "tgam_extended")
 
         if "poorSignal" in data or "attention" in data:
             _enqueue({
@@ -245,6 +318,10 @@ def _reader_worker(port_path: str) -> None:
             })
 
     tgam_parser = TGAMParser(on_packet)
+
+    if _HAVE_CUSHY_SERIAL:
+        _run_cushy_parser(lambda msg: [tgam_parser.feed(byte) for byte in msg])
+        return
 
     try:
         _serial_port = serial.Serial(port_path, baudrate=115200, timeout=0.02)
@@ -334,8 +411,7 @@ def list_ports() -> Dict:
                 "description":  p.description  or p.device,
             })
         return {"ports": ports}
-    except Exception as exc:
-        print(f"[Ports] list error: {exc}", flush=True)
+    except Exception:
         return {"ports": []}
 
 
@@ -406,6 +482,55 @@ _RAW_WINDOW      = 1024   # samples per FFT window (2.0 sec at 512 Hz)
 _RAW_STEP        = 1024   # non-overlapping offline windows for block statistics
 _MT_TAPERS       = 3      # DPSS multitaper count (matches legacy mt_tapers=3)
 _MT_NW           = 2.5    # time-bandwidth product (matches legacy NW=2.5)
+_INFERENTIAL_ABS_TOL = 1e-12
+_INFERENTIAL_REL_TOL = 1e-9
+_BATTERY_ATTRS = ("battery", "Battery", "electricity", "power")
+
+
+def _debug_log(tag: str, message: str) -> None:
+    return None
+
+
+def _feature_sample(names: List[str], limit: int = 8) -> str:
+    if not names:
+        return "(none)"
+    shown = names[:limit]
+    suffix = "" if len(names) <= limit else f" ... (+{len(names) - limit} more)"
+    return ", ".join(shown) + suffix
+
+
+def _normalize_battery_level(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip().rstrip("%")
+    try:
+        level = int(float(value))
+    except Exception:
+        return None
+    return max(0, min(100, level))
+
+
+def _extract_battery_level(data: Any) -> Optional[int]:
+    for attr in _BATTERY_ATTRS:
+        level = _normalize_battery_level(getattr(data, attr, None))
+        if level is not None:
+            return level
+    return None
+
+
+def _extract_sdk_extend_battery(data: Any) -> Optional[int]:
+    """Mirror the legacy GUI path: onExtendEEG reads `data.battery` directly."""
+    return _normalize_battery_level(getattr(data, "battery", None))
+
+
+def _set_battery_level(level: Optional[int], source: str = "") -> None:
+    global _battery_level
+    if level is None:
+        return
+    if level != _battery_level:
+        _battery_level = level
+        _enqueue({"type": "battery", "level": _battery_level})
 
 # TGAM frequency band ranges (Hz) for raw EEG conversion
 _TGAM_BAND_HZ: Dict[str, tuple] = {
@@ -898,9 +1023,13 @@ def _welch_t(a: List[float], b: List[float]):
     """Welch's t-test. Returns (t, p)."""
     if len(a) < 2 or len(b) < 2:
         return 0.0, 1.0
+    if _series_is_near_constant(a) or _series_is_near_constant(b):
+        return 0.0, 1.0
     if _SCIPY_AVAILABLE:
         try:
-            t, p = _scipy_stats.ttest_ind(a, b, equal_var=False)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                t, p = _scipy_stats.ttest_ind(a, b, equal_var=False)
             return (0.0, 1.0) if math.isnan(p) else (float(t), float(p))
         except Exception:
             pass
@@ -931,6 +1060,29 @@ def _cohens_d_vals(a: List[float], b: List[float]) -> float:
     va = sum((x - ma)**2 for x in a) / (len(a) - 1)
     vb = sum((x - mb)**2 for x in b) / (len(b) - 1)
     return (ma - mb) / (math.sqrt((va + vb) / 2) or 1e-9)
+
+
+def _series_is_near_constant(values: List[float]) -> bool:
+    """True when a sample series is too flat for stable inferential testing."""
+    if len(values) < 2:
+        return True
+    lo = min(values)
+    hi = max(values)
+    scale = max(1.0, abs(lo), abs(hi), abs(sum(values) / len(values)))
+    tol = max(_INFERENTIAL_ABS_TOL, _INFERENTIAL_REL_TOL * scale)
+    return (hi - lo) <= tol
+
+
+def _degenerate_feature_mask(mat: "_np.ndarray") -> "_np.ndarray":
+    """Column mask for features that are too flat for stable Welch tests."""
+    if mat.shape[0] < 2:
+        return _np.ones(mat.shape[1], dtype=bool)
+    col_min = _np.min(mat, axis=0)
+    col_max = _np.max(mat, axis=0)
+    col_mean = _np.abs(_np.mean(mat, axis=0))
+    col_scale = _np.maximum(1.0, _np.maximum(_np.abs(col_min), _np.maximum(_np.abs(col_max), col_mean)))
+    tol = _np.maximum(_INFERENTIAL_ABS_TOL, _INFERENTIAL_REL_TOL * col_scale)
+    return (col_max - col_min) <= tol
 
 
 def _bh_fdr(p_values: List[float]) -> List[float]:
@@ -1046,7 +1198,7 @@ def _km_fisher(fisher_stat: Optional[float], fnames: List[str],
     return adj_stat, km_p, df, mean_r, km_df_ratio
 
 
-def _sum_p_perm(task_rows: List[Dict], baseline_rows: List[Dict]) -> tuple:
+def _sum_p_perm(task_rows: List[Dict], baseline_rows: List[Dict], label: str = "") -> tuple:
     """SumP permutation test. Returns (observed_sum_p, perm_p).
 
     VECTORISED: pre-extracts a (n_total × n_features) numpy matrix once,
@@ -1065,30 +1217,50 @@ def _sum_p_perm(task_rows: List[Dict], baseline_rows: List[Dict]) -> tuple:
     pool_rows = task_rows + baseline_rows
     n_task    = len(task_rows)
     n_total   = len(pool_rows)
+    context   = label or "combined"
 
     if _NP_AVAILABLE:
         # ── Fast numpy path ──────────────────────────────────────────────────
         mat = _np.array([[float(r.get(f, 0.0)) for f in fnames]
                           for r in pool_rows], dtype=float)   # (n_total, n_feat)
+        observed_deg_mask = _degenerate_feature_mask(mat[:n_task]) | _degenerate_feature_mask(mat[n_task:])
+        observed_deg_names = [fnames[i] for i, flag in enumerate(observed_deg_mask) if flag]
+        if observed_deg_names:
+            _debug_log(
+                "DEGENERATE",
+                f"SumP {context}: skipping {len(observed_deg_names)}/{len(fnames)} near-constant features -> {_feature_sample(observed_deg_names)}",
+            )
 
         def _sum_p_vec(t_idx: "_np.ndarray", b_idx: "_np.ndarray") -> float:
+            p_arr = _np.ones(len(fnames), dtype=float)
+            deg_mask = _degenerate_feature_mask(mat[t_idx]) | _degenerate_feature_mask(mat[b_idx])
+            valid_mask = ~deg_mask
+            if not _np.any(valid_mask):
+                return float(p_arr.sum())
             if _SCIPY_AVAILABLE:
                 try:
-                    _, p_arr = _scipy_stats.ttest_ind(
-                        mat[t_idx], mat[b_idx], axis=0, equal_var=False)
-                    p_arr = _np.where(_np.isfinite(p_arr), p_arr, 1.0)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)
+                        _, valid_p = _scipy_stats.ttest_ind(
+                            mat[t_idx][:, valid_mask],
+                            mat[b_idx][:, valid_mask],
+                            axis=0,
+                            equal_var=False,
+                        )
+                    p_arr[valid_mask] = _np.where(_np.isfinite(valid_p), valid_p, 1.0)
                     return float(p_arr.sum())
                 except Exception:
                     pass
             # Pure-numpy Welch fallback (approximate, avoids scipy import failure)
-            a, b  = mat[t_idx], mat[b_idx]
+            a = mat[t_idx][:, valid_mask]
+            b = mat[b_idx][:, valid_mask]
             n1, n2 = a.shape[0], b.shape[0]
             m1, m2 = a.mean(0), b.mean(0)
             v1 = a.var(0, ddof=1);  v2 = b.var(0, ddof=1)
             se = _np.sqrt(v1 / n1 + v2 / n2) + 1e-12
             t_stat = _np.abs((m1 - m2) / se)
             # Estimate p via standard normal (over-estimates df but is fast)
-            p_arr  = 2.0 * (1.0 - 0.5 * (1.0 + _np.vectorize(math.erf)(t_stat / math.sqrt(2))))
+            p_arr[valid_mask] = 2.0 * (1.0 - 0.5 * (1.0 + _np.vectorize(math.erf)(t_stat / math.sqrt(2))))
             return float(p_arr.sum())
 
         rng         = _np.random.RandomState(42)
@@ -1104,6 +1276,17 @@ def _sum_p_perm(task_rows: List[Dict], baseline_rows: List[Dict]) -> tuple:
     # ── Pure-Python fallback (no numpy) ─────────────────────────────────────
     pool  = pool_rows[:]
     rng_p = random.Random(42)
+    observed_deg_names = []
+    for fn in fnames:
+        tv = [r[fn] for r in task_rows if fn in r]
+        bv = [r[fn] for r in baseline_rows if fn in r]
+        if _series_is_near_constant(tv) or _series_is_near_constant(bv):
+            observed_deg_names.append(fn)
+    if observed_deg_names:
+        _debug_log(
+            "DEGENERATE",
+            f"SumP {context}: skipping {len(observed_deg_names)}/{len(fnames)} near-constant features -> {_feature_sample(observed_deg_names)}",
+        )
 
     def _compute_sum_p_slow(t_rows, b_rows):
         s = 0.0
@@ -1421,6 +1604,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     raw_p:    List[float]       = []
     t_stats:  Dict[str, float]  = {}
     feat_data: Dict[str, Any]   = {}
+    degenerate_features: List[str] = []
     for fname in fnames:
         tv = [r[fname] for r in task_eq     if fname in r]
         bv = [r[fname] for r in baseline_eq if fname in r]
@@ -1434,10 +1618,12 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
         # Std devs
         t_std = (sum((x - tm)**2 for x in tv) / max(len(tv)-1, 1))**0.5 if len(tv) > 1 else 0.0
         b_std = (sum((x - bm)**2 for x in bv) / max(len(bv)-1, 1))**0.5 if len(bv) > 1 else 0.0
-        # Degenerate variance (pooled ≈ 0)
+        # Degenerate variance / near-constant groups are not inferentially stable.
         pooled = ((t_std**2 + b_std**2) / 2.0)**0.5
-        degenerate = pooled <= 1e-12
+        degenerate = pooled <= _INFERENTIAL_ABS_TOL or _series_is_near_constant(tv) or _series_is_near_constant(bv)
         reason = "Degenerate variance (pooled ≈ 0)" if degenerate else None
+        if degenerate:
+            degenerate_features.append(fname)
         # Discretization bin edges: quantile edges of baseline effect samples (legacy default bins=5)
         _disc_bins: Optional[list] = None
         if _NP_AVAILABLE and len(bv) >= 2:
@@ -1479,6 +1665,18 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
             "reason":               reason,
             "decision_flags":       {},
         }
+
+    analysis_label = task_id or "combined"
+    if degenerate_features:
+        _debug_log(
+            "DEGENERATE",
+            f"{analysis_label}: {len(degenerate_features)}/{len(fnames)} features marked near-constant before inference -> {_feature_sample(degenerate_features)}",
+        )
+    else:
+        _debug_log(
+            "DEGENERATE",
+            f"{analysis_label}: 0/{len(fnames)} features marked near-constant before inference",
+        )
 
     # ── BH FDR + one-sided p + decision flags ─────────────────────────────────
     q_vals    = _bh_fdr(raw_p)
@@ -1549,7 +1747,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     )
 
     # ── SumP permutation on all task and baseline blocks ─────
-    sum_p_val, sump_perm_p = _sum_p_perm(task_eq, baseline_eq)
+    sum_p_val, sump_perm_p = _sum_p_perm(task_eq, baseline_eq, analysis_label)
 
     # ── Composite score: sum of -log10(q when available, else p) ───────────────
     # Mirrors legacy: adjusted_values uses q_value if present, else p_value
@@ -1885,6 +2083,9 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     _ws_clients.add(ws)
     # Immediately tell the new client the current connection state
     await ws.send_text(json.dumps({"type": "status", "value": _status}))
+    # Also push the last known battery level so the UI doesn't wait for the next change
+    if _battery_level is not None:
+        await ws.send_text(json.dumps({"type": "battery", "level": _battery_level}))
     try:
         while True:
             # Keep the WebSocket alive; we only push from the server side.

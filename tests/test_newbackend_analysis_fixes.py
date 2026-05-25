@@ -2,6 +2,7 @@ import importlib.util
 import json
 import sys
 import types
+import warnings
 from pathlib import Path
 
 
@@ -110,3 +111,141 @@ def test_baseline_locale_copy_uses_sixty_seconds():
         for forbidden in forbidden_values:
             assert forbidden not in baseline_copy
             assert forbidden not in manual_copy
+
+
+def test_welch_t_skips_near_constant_series_without_runtime_warning():
+    backend = _load_backend()
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        t_stat, p_value = backend._welch_t(
+            [1.0, 1.0, 1.0, 1.0 + 1e-13],
+            [1.0, 1.0, 1.0, 1.0],
+        )
+
+    runtime_warnings = [w for w in caught if issubclass(w.category, RuntimeWarning)]
+    assert runtime_warnings == []
+    assert t_stat == 0.0
+    assert p_value == 1.0
+
+
+def test_sum_p_perm_skips_degenerate_features_without_runtime_warning():
+    backend = _load_backend()
+    task_rows = [
+        {"alpha_power": 1.0, "beta_power": 2.10, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.20, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.15, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.30, "_gamma_evaluated": 1.0},
+    ]
+    baseline_rows = [
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.85, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.95, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.90, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.88, "_gamma_evaluated": 1.0},
+    ]
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        obs_sum, perm_p = backend._sum_p_perm(task_rows, baseline_rows)
+
+    runtime_warnings = [w for w in caught if issubclass(w.category, RuntimeWarning)]
+    assert runtime_warnings == []
+    assert obs_sum is not None
+    assert 0.0 <= perm_p <= 1.0
+
+
+def test_analyze_task_handles_degenerate_feature_summary_without_logging(capsys):
+    backend = _load_backend()
+    task_rows = [
+        {"alpha_power": 1.0, "beta_power": 2.10, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.20, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.15, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.30, "_gamma_evaluated": 1.0},
+    ]
+    baseline_rows = [
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.85, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.95, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.90, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.88, "_gamma_evaluated": 1.0},
+    ]
+
+    backend._analyze_task_vs_baseline(task_rows, baseline_rows, task_id="attention_focus", windows_per_block=1)
+    out = capsys.readouterr().out
+
+    assert out == ""
+
+
+def test_sum_p_perm_handles_degenerate_feature_summary_without_logging(capsys):
+    backend = _load_backend()
+    task_rows = [
+        {"alpha_power": 1.0, "beta_power": 2.10, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.20, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.15, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0, "beta_power": 2.30, "_gamma_evaluated": 1.0},
+    ]
+    baseline_rows = [
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.85, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.95, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.90, "_gamma_evaluated": 1.0},
+        {"alpha_power": 1.0 + 1e-13, "beta_power": 1.88, "_gamma_evaluated": 1.0},
+    ]
+
+    backend._sum_p_perm(task_rows, baseline_rows, "attention_focus")
+    out = capsys.readouterr().out
+
+    assert out == ""
+
+
+def test_baseline_calibration_runtime_uses_sixty_seconds():
+    baseline_file = Path(__file__).resolve().parents[1] / "ElectronFrontEnd" / "src" / "pages" / "BaselineCalibration1.jsx"
+    source = baseline_file.read_text(encoding="utf-8")
+
+    assert "const PHASE_DURATION_S = 60;" in source
+
+
+def test_battery_normalization_and_extraction_support_multiple_sdk_shapes():
+    backend = _load_backend()
+
+    class _Packet:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    assert backend._normalize_battery_level(42) == 42
+    assert backend._normalize_battery_level("87") == 87
+    assert backend._normalize_battery_level("87%") == 87
+    assert backend._normalize_battery_level(150) == 100
+    assert backend._normalize_battery_level(-5) == 0
+    assert backend._normalize_battery_level("bad") is None
+
+    assert backend._extract_battery_level(_Packet(battery=55)) == 55
+    assert backend._extract_battery_level(_Packet(Battery="61")) == 61
+    assert backend._extract_battery_level(_Packet(electricity=72.4)) == 72
+    assert backend._extract_battery_level(_Packet(power=88)) == 88
+    assert backend._extract_battery_level(_Packet(version="1.2")) is None
+    assert backend._extract_sdk_extend_battery(_Packet(battery="64%")) == 64
+    assert backend._extract_sdk_extend_battery(_Packet(Battery="61")) is None
+
+
+def test_backend_restores_brainlink_sdk_dll_search_path_setup():
+    backend_file = Path(__file__).resolve().parents[1] / "newBackend" / "main.py"
+    source = backend_file.read_text(encoding="utf-8")
+
+    assert "_BRAINLINK_PYD_DIR" in source
+    assert "add_dll_directory" in source
+
+
+def test_backend_prefers_cushyserial_message_transport_like_gui():
+    backend_file = Path(__file__).resolve().parents[1] / "newBackend" / "main.py"
+    source = backend_file.read_text(encoding="utf-8")
+
+    assert "CushySerial" in source
+    assert "_run_cushy_parser" in source
+    assert "_HAVE_CUSHY_SERIAL" in source
+
+
+def test_backend_sdk_path_has_tgam_sidecar_battery_fallback():
+    backend_file = Path(__file__).resolve().parents[1] / "newBackend" / "main.py"
+    source = backend_file.read_text(encoding="utf-8")
+
+    assert "_sdk_sidecar_on_packet" in source
+    assert "sdk_sidecar_tgam" in source

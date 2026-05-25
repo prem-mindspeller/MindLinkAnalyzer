@@ -10,6 +10,7 @@ venv
 reports/
 new-coverage/
 coverage/
+.pytest_cache/
 *.pyc
 __pycache__/
 .idea/
@@ -20,9 +21,12 @@ __pycache__/
 *.pem
 newBackend/mindlink/
 .playwright/
-
+ElectronFrontEnd/node_modules/
+ElectronFrontEnd/dist/
+ElectronFrontEnd/release/
 # MindLinkFocusCube generated artifacts
-MindLinkFocusCube/.venv/
+MindLinkFocusCube/backend/
+MindLinkFocusCube/.pytest_cache/
 MindLinkFocusCube/backend/__pycache__/
 MindLinkFocusCube/backend/.pytest_cache/
 MindLinkFocusCube/frontend/node_modules/

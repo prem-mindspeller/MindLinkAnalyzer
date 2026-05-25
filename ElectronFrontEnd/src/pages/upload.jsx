@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import LoggedInHeader from '../components/LoggedInHeader';
 import Footer from '../components/footer';
 import AnalysisResultsPanel from '../components/AnalysisResultsPanel';
-import { runAnalysis, seedReport, buildReportText } from '../service/analysisService';
+import { runAnalysis, seedReport } from '../service/analysisService';
+import { buildNeuroprofileReportDocument } from '../service/reportDocument.mjs';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faPlay, faSpinner, faDownload, faCloud,
@@ -55,12 +56,12 @@ const UploadPage = () => {
 
     const handleDownload = () => {
         if (!results) return;
-        const text = buildReportText(results);
-        const blob = new Blob([text], { type: 'text/plain' });
+        const text = buildNeuroprofileReportDocument(results);
+        const blob = new Blob([text], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Mindlink_report_${Date.now()}.txt`;
+        a.download = `neuroprofile_feature_export_${Date.now()}.json`;
         a.click();
         URL.revokeObjectURL(url);
     };

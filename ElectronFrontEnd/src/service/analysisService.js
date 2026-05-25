@@ -15,6 +15,7 @@
 import loginService from './loginService';
 import i18n from '../i18n';
 import { createCompressedReportEnvelope } from './reportEnvelope.mjs';
+import { buildNeuroprofileReportDocument } from './reportDocument.mjs';
 
 const BACKEND_HTTP = 'http://localhost:8000';
 
@@ -37,6 +38,9 @@ const TASK_NAMES = {
     curiosity: 'Curiosity Reveal',
     num_form: 'Numerical Preference',
     order_surprise: 'Order & Surprise',
+    semantic_memory: 'Semantic Memory Retrieval',
+    body_scan: 'Body Scan',
+    color_perception: 'Color Perception',
 };
 
 /**
@@ -139,11 +143,10 @@ export async function seedReport(email, protocolType, analysisResults) {
     const randPart = Math.random().toString(36).substring(2, 10);
     const sessionId = `session_${datePart}_${timePart}_${randPart}`;
 
-    // Compress the report text before seeding. The receiving backend should
-    // gunzip report_text when is_compressed=true.
-    const reportText = buildReportText(analysisResults);
-    const reportEnvelope = await createCompressedReportEnvelope(reportText, {
-        contentType: 'text/plain',
+    // Seed the canonical neuroprofile export as compressed JSON.
+    const reportJson = buildNeuroprofileReportDocument(analysisResults);
+    const reportEnvelope = await createCompressedReportEnvelope(reportJson, {
+        contentType: 'application/json',
         now: () => now,
     });
 
@@ -169,6 +172,7 @@ export async function seedReport(email, protocolType, analysisResults) {
             analyzer_version: '1.0',
             workflow: 'electron_frontend',
             task_count: taskCount,
+            report_contract: 'neuroprofile_feature_export',
             report_storage: {
                 storage_format: reportEnvelope.storage_format,
                 compression: reportEnvelope.compression,

@@ -18,13 +18,13 @@ export function particleParamsFromBands(normalized = {}) {
   return {
     blue: {
       activeCount: Math.round(2500 + alpha * 2500),
-      opacity: 0.16 + alpha * 0.74,
-      size: 0.012 + alpha * 0.028,
+      opacity: 0.48 + alpha * 0.48,
+      size: 2.2 + alpha * 3.8,
     },
     pink: {
       activeCount: Math.round(1800 + betaGamma * 3200),
-      opacity: 0.16 + betaGamma * 0.74,
-      size: 0.012 + betaGamma * 0.028,
+      opacity: 0.48 + betaGamma * 0.48,
+      size: 2.2 + betaGamma * 3.8,
     },
   };
 }

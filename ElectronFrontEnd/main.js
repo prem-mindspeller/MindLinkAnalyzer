@@ -14,7 +14,6 @@ let SerialPort = null
 try {
     SerialPort = require('serialport').SerialPort
 } catch (e) {
-    console.warn('[EEG] serialport not available:', e.message)
 }
 
 // ─── TGAM Protocol Parser ─────────────────────────────────────────────────────
@@ -160,14 +159,13 @@ const backendPath = app.isPackaged
 let backendProcess = null
 
 function startBackend() {
-    console.log('[Backend] Launching:', backendPath)
     backendProcess = spawn(backendPath, [], {
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
     })
-    backendProcess.stdout.on('data', d => console.log('[Backend]', d.toString().trim()))
-    backendProcess.stderr.on('data', d => console.error('[Backend]', d.toString().trim()))
-    backendProcess.on('exit', (code) => console.log('[Backend] exited with code', code))
+    backendProcess.stdout.on('data', () => { })
+    backendProcess.stderr.on('data', () => { })
+    backendProcess.on('exit', () => { })
 }
 
 function waitForBackend(retries = 30, delayMs = 500) {
@@ -200,7 +198,10 @@ const createWindow = () => {
     mainWin = new BrowserWindow({
         width: 1200,
         height: 800,
-        icon: path.join(__dirname, 'src', 'assets', 'logo-no-text.png'),
+        // Windows taskbar requires .ico; other platforms use the PNG
+        icon: process.platform === 'win32'
+            ? path.join(__dirname, 'icon.ico')
+            : path.join(__dirname, 'src', 'assets', 'logo-no-text.png'),
         autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: true,
@@ -223,9 +224,7 @@ app.whenReady().then(async () => {
     startBackend()
     try {
         await waitForBackend(40, 500)
-        console.log('[Backend] Ready')
     } catch (e) {
-        console.error('[Backend] Failed to start:', e.message)
         // Open anyway — user sees connection errors but app is usable
     }
     createWindow()
@@ -332,7 +331,6 @@ ipcMain.handle('eeg:connect', async (event, portPath) => {
         activePort.on('error', (err) => {
             clearInterval(silenceTimer)
             clearInterval(batchTimer)
-            console.error('[EEG] serial error:', err.message)
             mainWin.webContents.send('eeg:connection-status', 'disconnected')
             activePort = null
         })

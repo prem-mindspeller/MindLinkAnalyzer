@@ -72,6 +72,7 @@ class WsEegServiceClass {
 
         this._ws = null;
         this._reconnectTimer = null;
+        this._batteryPollTimer = null;
 
         // Open the WebSocket after the current JS tick so the browser
         // context (window.WebSocket) is fully available before connecting.
@@ -93,7 +94,6 @@ class WsEegServiceClass {
         }
 
         this._ws.onopen = () => {
-            console.log('[WsEegService] WebSocket connected to', BACKEND_WS);
             if (this._reconnectTimer) {
                 clearTimeout(this._reconnectTimer);
                 this._reconnectTimer = null;
@@ -123,11 +123,14 @@ class WsEegServiceClass {
             case 'status':
                 this._status = msg.value;
                 if (msg.value === 'disconnected') {
+                    this._stopBatteryPolling();
                     this._poorSignal = 200;
-                    this._battery = null;
                     this._attention = 0;
                     this._meditation = 0;
                     this._bandPowers = null;
+                } else if (msg.value === 'connected') {
+                    this.fetchStatus();
+                    this._startBatteryPolling();
                 }
                 this._notify('status', msg.value);
                 break;
@@ -164,7 +167,6 @@ class WsEegServiceClass {
                 break;
 
             case 'error':
-                console.warn('[WsEegService] backend error:', msg.message);
                 break;
 
             default:
@@ -194,6 +196,35 @@ class WsEegServiceClass {
     isConnected() { return this._status === CONNECTION_STATUS.CONNECTED; }
     isWorn() { return this._poorSignal < 200; }
     isGoodSignal() { return this._poorSignal < 25; }
+
+    _startBatteryPolling() {
+        this._stopBatteryPolling();
+        // Poll aggressively (1 s) while battery is unknown, then settle to 5 s.
+        const tick = () => {
+            if (this._status !== CONNECTION_STATUS.CONNECTED) {
+                this._stopBatteryPolling();
+                return;
+            }
+            this.fetchStatus();
+            const interval = this._battery == null ? 1000 : 5000;
+            this._batteryPollTimer = setTimeout(tick, interval);
+        };
+        this._batteryPollTimer = setTimeout(tick, 500); // first check after 500 ms
+    }
+
+    _stopBatteryPolling() {
+        if (this._batteryPollTimer) {
+            clearTimeout(this._batteryPollTimer);
+            this._batteryPollTimer = null;
+        }
+    }
+
+    _stopBatteryPolling() {
+        if (this._batteryPollTimer) {
+            clearInterval(this._batteryPollTimer);
+            this._batteryPollTimer = null;
+        }
+    }
 
     // ── Fetch user-specific allowed HWIDs from Mindspeller API ────────────
 
@@ -277,6 +308,7 @@ class WsEegServiceClass {
         try {
             await fetch(`${BACKEND_HTTP}/disconnect`, { method: 'POST' });
         } catch { /* ignore */ }
+        this._stopBatteryPolling();
         // State will be updated when the backend sends a 'status: disconnected' message
     }
 
@@ -287,7 +319,7 @@ class WsEegServiceClass {
             const res = await fetch(`${BACKEND_HTTP}/status`);
             if (!res.ok) return;
             const data = await res.json();
-            if (data.battery != null && this._battery == null) {
+            if (data.battery != null && data.battery !== this._battery) {
                 this._battery = data.battery;
                 this._notify('battery', data.battery);
             }

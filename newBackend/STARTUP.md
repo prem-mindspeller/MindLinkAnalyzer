@@ -54,23 +54,28 @@ frontend loads.
 
 ### Step 1 — start the Python backend (Terminal 1)
 
-```powershell
-cd newBackend
-.venv\Scripts\Activate.ps1          # skip if already active
+> **Important:** The backend must run with the `brainlink` Anaconda environment, **not** the
+> `.venv`.  `BrainLinkParser.pyd` is compiled for Python 3.11 (Anaconda) and requires
+> `CushySerial` and the SDK DLLs that live in that environment.  The `.venv` (Python 3.10)
+> cannot load the SDK and battery data will always be `null`.
 
-uvicorn main:app --host 0.0.0.0 --port 8000
+```powershell
+# Windows — use the brainlink conda environment directly
+C:\Users\conta\anaconda3\envs\brainlink\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --app-dir newBackend
 ```
 
 Expected output:
 ```
+[Backend] CushySerial: available
+[Backend] BrainLinkParser SDK: loaded
 INFO:     Started server process [...]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000
 ```
 
-> Add `--reload` during development to auto-restart on file changes:
-> `uvicorn main:app --host 0.0.0.0 --port 8000 --reload`
+> Add `--reload` during development to auto-restart on file changes (run from the `newBackend` folder):
+> `C:\Users\conta\anaconda3\envs\brainlink\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload`
 
 ### Step 2 — start the Electron frontend (Terminal 2)
 

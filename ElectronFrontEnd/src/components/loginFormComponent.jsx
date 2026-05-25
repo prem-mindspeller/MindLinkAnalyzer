@@ -24,14 +24,12 @@ const LoginFormComponent = ({ onLoginSuccess }) => {
             const result = await loginService.loginUser(email, password, region);
 
             if (result.success) {
-                console.log('Login successful');
                 wsEegService.init();
                 onLoginSuccess(email);
             } else {
                 setError(result.error || t('loginForm.errorFailed'));
             }
         } catch (err) {
-            console.error('Login exception:', err);
             setError(t('loginForm.errorGeneral'));
         } finally {
             setIsLoading(false);

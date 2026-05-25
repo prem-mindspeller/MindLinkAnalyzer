@@ -107,6 +107,7 @@ TASK_NAME_ALIASES: Dict[str, str] = {
     "interoception":               "body_scan",
     "colour_processing":           "visual_colour_processing",
     "color_processing":            "visual_colour_processing",
+    "color_perception":            "visual_colour_processing",
     "visual_colour_processing":    "visual_colour_processing",
     "visual_color_processing":     "visual_colour_processing",
     "semantic_memory":             "semantic_memory_retrieval",

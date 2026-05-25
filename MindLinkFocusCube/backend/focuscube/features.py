@@ -25,6 +25,25 @@ class BandFeatures:
     relative: dict[str, float]
     total_power: float
     quality: float
+    metrics: dict[str, float] | None = None
+
+
+@dataclass(frozen=True)
+class ChannelFocusFeatures:
+    channel_features: dict[int, BandFeatures]
+    regions: dict[str, BandFeatures]
+    metrics: dict[str, float]
+
+
+@dataclass(frozen=True)
+class FocusIndex:
+    attention: float
+    smoothed_attention: float
+    mode: str
+    components: dict[str, float]
+    baseline_progress: float
+    baseline_count: int
+    baseline_required: int
 
 
 class AdaptiveNormalizer:
@@ -70,6 +89,13 @@ def bandpower(psd: np.ndarray, freqs: np.ndarray, band: str) -> float:
     return float(simpson(psd[idx], x=freqs[idx]))
 
 
+def frequency_power(psd: np.ndarray, freqs: np.ndarray, low: float, high: float) -> float:
+    idx = np.logical_and(freqs >= low, freqs <= high)
+    if not np.any(idx):
+        return 0.0
+    return float(simpson(psd[idx], x=freqs[idx]))
+
+
 def signal_quality(data: np.ndarray) -> float:
     if len(data) == 0:
         return 0.0
@@ -98,11 +124,24 @@ def compute_band_features(raw_samples, config: FocusCubeConfig | None = None) ->
         noverlap=config.overlap_size,
     )
 
+    return band_features_from_psd(psd, freqs, filtered)
+
+
+def band_features_from_psd(psd: np.ndarray, freqs: np.ndarray, filtered: np.ndarray) -> BandFeatures:
     bands = {name: bandpower(psd, freqs, name) for name in EEG_BANDS}
     total_power = float(simpson(psd, x=freqs))
     relative = {
         name: (power / total_power if total_power > 0 else 0.0)
         for name, power in bands.items()
+    }
+    hf_power = frequency_power(psd, freqs, 30, 45)
+    line_power = frequency_power(psd, freqs, 49, 51) + frequency_power(psd, freqs, 59, 61)
+    metrics = {
+        "highFrequencyRatio": hf_power / (total_power + 1e-12),
+        "lineNoiseRatio": line_power / (total_power + 1e-12),
+        "alphaThetaRatio": bands["alpha"] / (bands["theta"] + 1e-12),
+        "betaAlphaRatio": bands["beta"] / (bands["alpha"] + 1e-12),
+        "engagement": bands["beta"] / (bands["alpha"] + bands["theta"] + 1e-12),
     }
 
     return BandFeatures(
@@ -110,11 +149,229 @@ def compute_band_features(raw_samples, config: FocusCubeConfig | None = None) ->
         relative=relative,
         total_power=total_power,
         quality=signal_quality(filtered),
+        metrics=metrics,
     )
+
+
+class ChannelBandFeatureExtractor:
+    def __init__(self, config: FocusCubeConfig | None = None) -> None:
+        self.config = config or FocusCubeConfig()
+
+    def compute(self, channel_samples: dict[int, list[float] | np.ndarray]) -> ChannelFocusFeatures:
+        channel_features = {
+            int(row): compute_band_features(samples, self.config)
+            for row, samples in channel_samples.items()
+            if len(samples) >= self.config.window_size
+        }
+        regions = {
+            "frontal": self._region_features(channel_samples, (0, 1)),
+            "occipital": self._region_features(channel_samples, (4, 5)),
+            "all": self._region_features(channel_samples, tuple(channel_samples.keys())),
+        }
+        metrics = self._metrics(regions)
+        return ChannelFocusFeatures(
+            channel_features=channel_features,
+            regions={name: feature for name, feature in regions.items() if feature is not None},
+            metrics=metrics,
+        )
+
+    def _region_features(
+        self,
+        channel_samples: dict[int, list[float] | np.ndarray],
+        rows: tuple[int, ...],
+    ) -> BandFeatures | None:
+        available = [
+            np.asarray(channel_samples[row], dtype=float)[-self.config.window_size * 3:]
+            for row in rows
+            if row in channel_samples and len(channel_samples[row]) >= self.config.window_size
+        ]
+        if not available:
+            return None
+        min_len = min(len(values) for values in available)
+        merged = np.mean([values[-min_len:] for values in available], axis=0)
+        return compute_band_features(merged, self.config)
+
+    def _metrics(self, regions: dict[str, BandFeatures | None]) -> dict[str, float]:
+        frontal = regions.get("frontal")
+        occipital = regions.get("occipital")
+        all_region = regions.get("all")
+        metrics = {
+            "frontalEngagement": _metric(frontal, "engagement"),
+            "frontalAlpha": _band(frontal, "alpha"),
+            "frontalTheta": _band(frontal, "theta"),
+            "frontalBeta": _band(frontal, "beta"),
+            "occipitalAlpha": _band(occipital, "alpha"),
+            "occipitalBeta": _band(occipital, "beta"),
+            "highFrequencyRatio": _metric(all_region, "highFrequencyRatio"),
+            "lineNoiseRatio": _metric(all_region, "lineNoiseRatio"),
+            "quality": all_region.quality if all_region else 0.0,
+        }
+        return metrics
+
+
+class FocusIndexEstimator:
+    def __init__(self, config: FocusCubeConfig | None = None) -> None:
+        self.config = config or FocusCubeConfig()
+        self._baseline: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=self.config.calibration_windows))
+        self._smoothed_attention = 0.0
+        self._calibrated = False
+
+    def update(self, features: ChannelFocusFeatures) -> FocusIndex:
+        metrics = features.metrics
+        if not self._calibrated:
+            for key in _baseline_metric_keys():
+                self._baseline[key].append(float(metrics.get(key, 0.0)))
+            baseline_count = min(len(values) for values in self._baseline.values())
+            baseline_required = max(1, self.config.calibration_windows)
+            progress = min(1.0, baseline_count / baseline_required)
+            if progress >= 1.0:
+                self._calibrated = True
+            return FocusIndex(
+                attention=0.0,
+                smoothed_attention=0.0,
+                mode="device" if self._calibrated else "device_calibrating",
+                components={
+                    "frontalEngagement": 0.0,
+                    "occipitalAlphaSuppression": 0.0,
+                    "frontalAlphaSuppression": 0.0,
+                    "occipitalAlphaActivation": 0.0,
+                    "artifactPenalty": self._artifact_penalty(metrics),
+                },
+                baseline_progress=progress,
+                baseline_count=baseline_count,
+                baseline_required=baseline_required,
+            )
+
+        components = self._score_components(metrics)
+        artifact_penalty = self._artifact_penalty(metrics)
+        focus_attention = clamp(
+            self.config.focus_engagement_weight * components["frontalEngagement"]
+            + self.config.focus_occipital_alpha_weight * components["occipitalAlphaSuppression"]
+            + self.config.focus_frontal_alpha_weight * components["frontalAlphaSuppression"]
+        )
+        alpha_attention = clamp(
+            self.config.focus_alpha_activation_weight
+            * components["occipitalAlphaActivation"]
+        )
+        raw_attention = max(focus_attention, alpha_attention)
+        attention = clamp(raw_attention * artifact_penalty)
+        self._smoothed_attention = (
+            self._smoothed_attention * (1.0 - self.config.focus_smoothing)
+            + attention * self.config.focus_smoothing
+        )
+        components["artifactPenalty"] = artifact_penalty
+        return FocusIndex(
+            attention=clamp(attention),
+            smoothed_attention=clamp(self._smoothed_attention),
+            mode="device",
+            components=components,
+            baseline_progress=1.0,
+            baseline_count=max(1, self.config.calibration_windows),
+            baseline_required=max(1, self.config.calibration_windows),
+        )
+
+    def reset(self) -> None:
+        self._baseline.clear()
+        self._smoothed_attention = 0.0
+        self._calibrated = False
+
+    def _score_components(self, metrics: dict[str, float]) -> dict[str, float]:
+        return {
+            "frontalEngagement": positive_z_score(
+                metrics.get("frontalEngagement", 0.0),
+                self._baseline_values("frontalEngagement"),
+                self.config,
+            ),
+            "occipitalAlphaSuppression": negative_z_score(
+                metrics.get("occipitalAlpha", 0.0),
+                self._baseline_values("occipitalAlpha"),
+                self.config,
+            ),
+            "occipitalAlphaActivation": positive_z_score(
+                metrics.get("occipitalAlpha", 0.0),
+                self._baseline_values("occipitalAlpha"),
+                self.config,
+            ),
+            "frontalAlphaSuppression": negative_z_score(
+                metrics.get("frontalAlpha", 0.0),
+                self._baseline_values("frontalAlpha"),
+                self.config,
+            ),
+        }
+
+    def _artifact_penalty(self, metrics: dict[str, float]) -> float:
+        hf = metrics.get("highFrequencyRatio", 0.0)
+        line = metrics.get("lineNoiseRatio", 0.0)
+        quality = metrics.get("quality", 0.0)
+        hf_penalty = 1.0 - clamp((hf - self.config.artifact_hf_ratio_threshold) / 0.25)
+        line_penalty = 1.0 - clamp((line - self.config.artifact_line_ratio_threshold) / 0.20)
+        quality_penalty = 0.35 + 0.65 * clamp(quality)
+        return clamp(min(hf_penalty, line_penalty, quality_penalty))
+
+    def _baseline_values(self, key: str) -> list[float]:
+        return list(self._baseline[key])
+
+
+def positive_z_score(value: float, baseline: list[float], config: FocusCubeConfig | None = None) -> float:
+    config = config or FocusCubeConfig()
+    center, spread = robust_center_spread(baseline)
+    z = (value - center) / spread
+    z_score = clamp((z - 0.25) / 1.75)
+    pct_score = positive_percent_change_score(value, center, config)
+    return max(z_score, pct_score)
+
+
+def negative_z_score(value: float, baseline: list[float], config: FocusCubeConfig | None = None) -> float:
+    config = config or FocusCubeConfig()
+    center, spread = robust_center_spread(baseline)
+    z = (center - value) / spread
+    z_score = clamp((z - 0.25) / 1.75)
+    pct_score = negative_percent_change_score(value, center, config)
+    return max(z_score, pct_score)
+
+
+def positive_percent_change_score(value: float, center: float, config: FocusCubeConfig) -> float:
+    denom = abs(center) + 1e-9
+    change = (value - center) / denom
+    return clamp((change - config.focus_deadband) / config.focus_percent_change_full_scale)
+
+
+def negative_percent_change_score(value: float, center: float, config: FocusCubeConfig) -> float:
+    denom = abs(center) + 1e-9
+    change = (center - value) / denom
+    return clamp((change - config.focus_deadband) / config.focus_percent_change_full_scale)
+
+
+def robust_center_spread(values: list[float]) -> tuple[float, float]:
+    data = np.asarray(values, dtype=float)
+    if data.size == 0:
+        return 0.0, 1.0
+    center = float(np.median(data))
+    mad = float(np.median(np.abs(data - center)))
+    spread = max(mad * 1.4826, abs(center) * 0.08, 1e-9)
+    return center, spread
+
+
+def _baseline_metric_keys() -> tuple[str, ...]:
+    return ("frontalEngagement", "frontalAlpha", "occipitalAlpha")
+
+
+def _band(feature: BandFeatures | None, band: str) -> float:
+    if feature is None:
+        return 0.0
+    return float(feature.bands.get(band, 0.0))
+
+
+def _metric(feature: BandFeatures | None, key: str) -> float:
+    if feature is None or feature.metrics is None:
+        return 0.0
+    return float(feature.metrics.get(key, 0.0))
 
 
 def attention_from_normalized(normalized: dict[str, float], config: FocusCubeConfig) -> float:
     source = config.attention_source
+    if source == "focus_index":
+        return clamp(normalized.get("focusIndex", normalized.get("alpha", 0.0)))
     alpha = clamp(normalized.get("alpha", 0.0))
     beta = clamp(normalized.get("beta", 0.0))
     gamma = clamp(normalized.get("gamma", 0.0))
@@ -139,6 +396,7 @@ def build_payload(
         "gamma": normalizer.normalize("gamma", features.bands["gamma"]),
     }
     normalized["betaGamma"] = clamp((normalized["beta"] + normalized["gamma"]) * 0.5)
+    normalized["focusIndex"] = normalized["alpha"]
 
     payload = {
         "timestamp": time.time(),
@@ -179,9 +437,14 @@ def demo_frame(t: float, config: FocusCubeConfig | None = None) -> dict:
         "mode": "demo",
         "device": {
             "connected": False,
-            "port": None,
+            "source": "demo",
+            "deviceName": "Synthetic MindRove",
+            "ipAddress": None,
+            "ipPort": None,
+            "serialPort": None,
             "battery": None,
-            "firmwareVersion": None,
+            "sampleRate": config.sample_rate,
+            "eegChannels": [],
             "sampleCount": 0,
         },
         "quality": 0.85,
@@ -213,9 +476,14 @@ def warming_frame(
     }
     status = {
         "connected": True,
-        "port": None,
+        "source": "mindrove",
+        "deviceName": "MindRove Bright",
+        "ipAddress": None,
+        "ipPort": None,
+        "serialPort": None,
         "battery": None,
-        "firmwareVersion": None,
+        "sampleRate": config.sample_rate,
+        "eegChannels": [],
         "sampleCount": int(sample_count),
     }
     if device_status:
@@ -242,3 +510,17 @@ def warming_frame(
         },
         "normalized": normalized,
     }
+
+
+def not_worn_frame(
+    config: FocusCubeConfig,
+    sample_count: int,
+    device_status: dict | None = None,
+) -> dict:
+    payload = warming_frame(config, sample_count, device_status)
+    payload["mode"] = "device_not_worn"
+    payload["attention"] = 0.0
+    payload["quality"] = 0.0
+    payload["sampleCount"] = int(sample_count)
+    payload["device"]["worn"] = False
+    return payload

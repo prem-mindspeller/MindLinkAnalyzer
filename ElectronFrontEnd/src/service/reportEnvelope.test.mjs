@@ -28,9 +28,9 @@ assert.match(envelope.sha256, /^[a-f0-9]{64}$/);
 assert.equal(envelope.generated_at, '2026-05-21T10:00:00.000Z');
 
 const compressedBytes = Buffer.from(envelope.report_blob, 'base64');
+assert.equal(compressedBytes[0], 0x1f);
+assert.equal(compressedBytes[1], 0x8b);
 const restoredText = gunzipSync(compressedBytes).toString('utf8');
 assert.equal(restoredText, reportText);
 
 assert.equal(uint8ArrayToBase64(new Uint8Array([77, 105, 110, 100])), 'TWluZA==');
-
-console.log('reportEnvelope tests passed');

@@ -35,7 +35,7 @@ function playCompletionBeeps() {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const PHASE_DURATION_S = 30;
+const PHASE_DURATION_S = 60;
 const COUNTDOWN_FROM = 5;
 
 const PHASE = {

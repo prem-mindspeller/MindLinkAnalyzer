@@ -62,7 +62,6 @@ const loginUser = async (email, password, region = 'en') => {
             data: data
         };
     } catch (error) {
-        console.error('Login error:', error);
         return {
             success: false,
             error: error.message
@@ -113,13 +112,11 @@ const _refreshToken = async () => {
         });
 
         if (response.status === 401) {
-            console.warn('[tokenRefresh] Refresh token expired, logging out.');
             logout();
             return;
         }
 
         if (!response.ok) {
-            console.error('[tokenRefresh] Refresh failed:', response.status);
             return;
         }
 
@@ -130,10 +127,7 @@ const _refreshToken = async () => {
         if (data['x-jwt-refresh-token']) {
             sessionStorage.setItem('jwtRefreshToken', data['x-jwt-refresh-token']);
         }
-        console.log('[tokenRefresh] Token refreshed successfully.');
-    } catch (err) {
-        console.error('[tokenRefresh] Error during refresh:', err);
-    }
+    } catch (err) {}
 };
 
 const _startRefreshInterval = () => {
@@ -165,7 +159,7 @@ const checkPartnerBookings = async (partnerId) => {
         );
 
         if (response.status === 404) {
-            return { success: false, notFound: true, hasAdvancedBooking: false };
+            return { success: false, notFound: true, hasAdvancedBooking: false, hasSessionThree: false };
         }
 
         if (!response.ok) {
@@ -175,18 +169,41 @@ const checkPartnerBookings = async (partnerId) => {
         const data = await response.json();
 
         let hasAdvancedBooking = false;
+        let bookingCount = 0;
+        const countBookings = (obj) => {
+            if (Array.isArray(obj?.partner_bookings)) return obj.partner_bookings.length;
+            if (Array.isArray(obj?.bookings)) return obj.bookings.length;
+            if (typeof obj?.booking_count === 'number') return obj.booking_count;
+            return 0;
+        };
         if (typeof data.has_booking !== 'undefined') {
             hasAdvancedBooking = Boolean(data.has_booking);
+            bookingCount = countBookings(data);
         } else if (Array.isArray(data.bookings)) {
             hasAdvancedBooking = data.bookings.length > 0;
+            bookingCount = data.bookings.length;
+        } else if (Array.isArray(data.partner_bookings)) {
+            hasAdvancedBooking = data.partner_bookings.length > 0;
+            bookingCount = data.partner_bookings.length;
         } else if (data.data && typeof data.data.has_booking !== 'undefined') {
             hasAdvancedBooking = Boolean(data.data.has_booking);
+            bookingCount = countBookings(data.data);
         }
 
-        return { success: true, notFound: false, hasAdvancedBooking };
+        return {
+            success: true,
+            notFound: false,
+            hasAdvancedBooking,
+            hasSessionThree: bookingCount >= 2,
+        };
     } catch (error) {
-        console.error('Error checking partner:', error);
-        return { success: false, notFound: false, hasAdvancedBooking: false, error: error.message };
+        return {
+            success: false,
+            notFound: false,
+            hasAdvancedBooking: false,
+            hasSessionThree: false,
+            error: error.message,
+        };
     }
 };
 

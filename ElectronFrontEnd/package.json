@@ -7,6 +7,7 @@
     "start": "electron .",
     "dev": "concurrently \"webpack --mode development --watch\" \"wait-on dist/bundle.js && cross-env NODE_ENV=development electron .\"",
     "build": "webpack --mode production",
+    "package": "npm run build && npx electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Augustine Asimhi",
@@ -42,9 +43,16 @@
   "build": {
     "appId": "com.mindspeller.Mindlink",
     "productName": "Mindlink Analyzer",
+    "forceCodeSigning": false,
+    "directories": {
+      "output": "release"
+    },
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"
+      "icon": "icon.ico",
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false,
+      "signExts": []
     },
     "extraResources": [
       {
@@ -54,8 +62,10 @@
     ],
     "files": [
       "dist/**",
+      "icon.ico",
       "main.js",
-      "package.json"
+      "package.json",
+      "!node_modules/**"
     ]
   }
 }

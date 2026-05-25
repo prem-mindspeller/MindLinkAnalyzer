@@ -226,7 +226,7 @@ For support and questions:
 
 ## Changelog
 
-### v1.0.0
+### v2.0.0
 - Initial release
 - Bluetooth connectivity for BrainLink devices
 - Real-time EEG visualization

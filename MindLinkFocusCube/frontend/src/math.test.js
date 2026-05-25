@@ -19,6 +19,8 @@ describe('particleParamsFromBands', () => {
 
     expect(params.blue.opacity).toBeGreaterThan(params.pink.opacity);
     expect(params.blue.activeCount).toBeGreaterThan(params.pink.activeCount);
+    expect(params.blue.size).toBeGreaterThan(2);
+    expect(params.pink.size).toBeGreaterThan(2);
   });
 });
 

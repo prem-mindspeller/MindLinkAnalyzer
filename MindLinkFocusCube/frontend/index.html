@@ -17,7 +17,7 @@
           <strong id="battery-value">--</strong>
         </div>
         <div>
-          <span class="label">Port</span>
+          <span class="label">Endpoint</span>
           <strong id="port-value">--</strong>
         </div>
         <div>
@@ -27,6 +27,34 @@
       </aside>
       <section class="panel game-panel" aria-label="Focus cube game">
         <canvas id="cube-canvas"></canvas>
+        <div class="status-panel" aria-label="Live EEG processing status">
+          <div class="status-row">
+            <span class="label">Calibration</span>
+            <strong id="calibration-value">--</strong>
+          </div>
+          <button id="reset-calibration" type="button">Reset</button>
+          <div class="progress-track">
+            <span id="calibration-bar"></span>
+          </div>
+          <div class="status-grid">
+            <div>
+              <span class="label">Contact</span>
+              <strong id="contact-value">--</strong>
+            </div>
+            <div>
+              <span class="label">Focus</span>
+              <strong id="focus-value">0.00</strong>
+            </div>
+            <div>
+              <span class="label">Frontal</span>
+              <strong id="frontal-value">0.00</strong>
+            </div>
+            <div>
+              <span class="label">Alpha</span>
+              <strong id="occipital-value">0.00</strong>
+            </div>
+          </div>
+        </div>
         <div class="hud">
           <div>
             <span class="label">Attention</span>

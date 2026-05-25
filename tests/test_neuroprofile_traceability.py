@@ -204,6 +204,12 @@ def test_session_3_depth():
     assert _infer_session_depth(canonical_ids) == "session_3"
 
 
+def test_frontend_session_3_task_aliases_resolve_to_canonical_ids():
+    assert resolve_canonical_task("body_scan") == "body_scan"
+    assert resolve_canonical_task("semantic_memory") == "semantic_memory_retrieval"
+    assert resolve_canonical_task("color_perception") == "visual_colour_processing"
+
+
 # ─── Test 17: single weak feature does not populate ability pool ──────────────
 
 def test_single_weak_feature_no_ability_pool():
@@ -499,3 +505,28 @@ def test_feature_rows_count_matches_nested():
     export = build_neuroprofile_export(per_task, existing)
     nested_count = sum(len(t["features"]) for t in export["tasks"])
     assert len(export["feature_rows"]) == nested_count
+
+
+def test_frontend_session_3_raw_task_ids_produce_session_3_export():
+    per_task = {}
+    per_task.update(_make_per_task("mental_math"))
+    per_task.update(_make_per_task("visual_imagery"))
+    per_task.update(_make_per_task("focused_attention"))
+    per_task.update(_make_per_task("static_emotion_grasp"))
+    per_task.update(_make_per_task("working_memory"))
+    per_task.update(_make_per_task("language_processing"))
+    per_task.update(_make_per_task("motor_imagery"))
+    per_task.update(_make_per_task("cognitive_load_multitasking"))
+    per_task.update(_make_per_task("divergent_thinking"))
+    per_task["body_scan"] = _make_per_task("body_scan")["body_scan"]
+    per_task["semantic_memory"] = _make_per_task("semantic_memory")["semantic_memory"]
+    per_task["color_perception"] = _make_per_task("color_perception")["color_perception"]
+
+    existing = _make_existing_analysis(per_task)
+    export = build_neuroprofile_export(per_task, existing)
+
+    assert export["protocol_session_depth"] == "session_3"
+    canonical_ids = {task["canonical_task_id"] for task in export["tasks"]}
+    assert "body_scan" in canonical_ids
+    assert "semantic_memory_retrieval" in canonical_ids
+    assert "visual_colour_processing" in canonical_ids

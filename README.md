@@ -48,5 +48,18 @@ cd ElectronFrontEnd
 npm install
 npm run dev
 ```
+### . Build Instruction
+
+Step 1 — build the backend (from workspace root, using conda Python):
+
+cd m:\CODEBASE\MindLinkAnalyzer
+C:\Users\conta\anaconda3\envs\brainlink\python.exe -m PyInstaller MindLinkBackend.spec --distpath newBackend/dist
+
+Step 2 — package the Electron app (electron-builder picks up the backend folder automatically via extraResources):
+
+cd ElectronFrontEnd
+npm run build      # webpack production bundle
+npx electron-builder
+
 
 See the linked documentation files above for full details, troubleshooting, and build instructions.

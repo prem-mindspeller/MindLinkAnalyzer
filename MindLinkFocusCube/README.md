@@ -1,19 +1,27 @@
 # MindLink Focus Cube
 
-Separate browser test app for BrainLink raw EEG neurofeedback.
+Separate browser test app for MindRove Bright raw EEG neurofeedback.
 
-The backend uses `BrainLinkParser` only to parse serial packets and receive raw EEG callbacks. It does not use the parser-provided `attention` or `meditation` values for gameplay or visualization. Alpha, beta, and gamma values are calculated locally from raw samples using live feature extraction.
+The backend uses the official `mindrove` Python SDK for acquisition and keeps feature extraction local to this app. Alpha, beta, gamma, and the cube-control focus index are calculated from raw EEG time-series samples; no vendor-provided attention score is used for cube control.
 
-BrainLink/Macrotellect is treated as a single-channel time-series device. The brain graphic is not ERP source localization or anatomical activation mapping. The pink "prefrontal" activity is a sensor-region visual anchor for the frontal headset position.
+MindRove Bright provides multiple EEG rows through the SDK. Focus Cube keeps the Bright layout channel-wise: frontal `Fp1/Fp2` and occipital `O1/O2`. The brain graphic is a visualization anchor, not clinical source localization.
 
 ## Setup
 
 ```powershell
 cd M:\CODEBASE\MindLinkAnalyzer\MindLinkFocusCube
-C:\Users\conta\anaconda3\envs\brainlink\python.exe -m pip install -r backend\requirements.txt
+python -m pip install -r backend\requirements.txt
 npm install
 npm --prefix frontend install
 npm --prefix frontend exec playwright install chromium
+```
+
+If your terminal auto-activates the wrong virtual environment, activate the Python environment where `mindrove` is installed first, then run the commands above.
+
+Quick SDK check:
+
+```powershell
+python -c "from mindrove.board_shim import BoardShim, BoardIds; print(BoardShim.get_sampling_rate(BoardIds.MINDROVE_WIFI_BOARD))"
 ```
 
 ## Demo Mode
@@ -32,18 +40,37 @@ Standalone cyberpunk brain demo:
 http://127.0.0.1:5174/brain-cyberpunk-demo.html
 ```
 
-That file is a complete single-file HTML/JavaScript demo using Three.js from a CDN and mock `window.currentAlpha` / `window.currentBeta` values.
-
 ## Device Mode
 
-Runs against the BrainLink headset and falls back to demo if no device is found:
+Connect your machine to the MindRove Bright WiFi network, then run the backend and frontend in two terminals:
 
 ```powershell
 npm run dev:backend:device
 npm run dev:frontend
 ```
 
-Use two terminals for device mode. The backend streams JSON frames at `ws://127.0.0.1:8765`.
+The backend streams JSON frames at `ws://127.0.0.1:8765`. By default it connects to the MindRove SDK WiFi endpoint `192.168.4.1:4210`.
+
+The app defaults to the MindRove Bright four EEG rows:
+
+```text
+0=Fp1, 1=Fp2, 4=O1, 5=O2
+```
+
+The MindRove SDK also exposes resistance/impedance rows. Focus Cube uses those rows as a worn/contact gate. If contact is not good enough, the backend emits `device_not_worn`, clears the EEG feature buffer, and sends `attention=0.0` so floating off-head electrode noise cannot lift the cube.
+
+By default, contact mode is `auto`: it trusts resistance/impedance when it is clearly good, but falls back to plausible active EEG row variance when the SDK resistance values are missing or not useful for the Bright headset. If the terminal says `not_worn`, inspect the printed `reason`, `resistance_ohms`, and `eeg_std` values.
+
+Tune or bypass the gate when testing:
+
+```powershell
+python -m backend.focuscube.server --worn-resistance-threshold 5000000 --worn-min-good-resistance-pairs 2 --require-device
+python -m backend.focuscube.server --contact-mode eeg --require-device
+python -m backend.focuscube.server --contact-mode auto --worn-min-eeg-std 0.2 --worn-max-eeg-std 100000 --require-device
+python -m backend.focuscube.server --disable-worn-gate --require-device
+```
+
+Use `--disable-worn-gate` only for debugging, because off-head floating EEG can look random but still produce band powers.
 
 Strict device mode fails instead of falling back to demo:
 
@@ -51,16 +78,26 @@ Strict device mode fails instead of falling back to demo:
 npm run dev:backend:device:strict
 ```
 
-Native parser requirement:
+Print raw channel-wise SDK EEG rows before feature extraction:
 
 ```powershell
-C:\Users\conta\anaconda3\envs\brainlink\python.exe -c "import sys; sys.path.insert(0, r'M:\CODEBASE\MindLinkAnalyzer'); import BrainLinkParser.BrainLinkParser; print('native parser ok')"
+python -m backend.focuscube.server --print-raw --require-device
+python -m backend.focuscube.server --print-raw --raw-print-rows 6 --raw-print-samples 12 --require-device
 ```
 
-If that import fails, the active Python environment cannot load `BrainLinkParser.pyd`. In that case, switch to the `brainlink` conda environment or rebuild/install the native parser for the active Python version. Protocol-only fallback is available for debugging, but native parser mode is the intended device path:
+The raw line is throttled by default and looks like:
+
+```text
+[FocusCube] raw_sdk shape=39x125 eeg_rows=[0, 1, 2, 3, 4, 5, 6, 7] row0=[...] row1=[...]
+```
+
+`shape` is the full SDK board matrix: rows are board channels and columns are samples returned by that drain cycle. `row0`, `row1`, etc. are the EEG rows before we average active rows into the feature pipeline.
+
+Override connection settings if needed:
 
 ```powershell
-npm run dev:backend:device:pure
+python -m backend.focuscube.server --mindrove-ip 192.168.4.1 --mindrove-port 4210 --require-device
+python -m backend.focuscube.server --mindrove-serial-port COM9 --require-device
 ```
 
 When the backend is working you should see startup lines like:
@@ -69,23 +106,40 @@ When the backend is working you should see startup lines like:
 [FocusCube] Starting MindLink Focus Cube backend.
 [FocusCube] Attention source: alpha
 [FocusCube] WebSocket server listening on ws://127.0.0.1:8765
-[FocusCube] Searching for BrainLink serial device...
+[FocusCube] Starting MindRove Bright stream ip=192.168.4.1 port=4210...
 ```
 
 If the frontend shows `device_warming`, the backend has opened the device and is waiting for enough raw samples to calculate bands. If it shows `demo`, the backend is using synthetic data because you started demo mode or device detection fell back.
 
 ## Attention Mapping
 
-Default behavior matches the test requirement:
+Default live-device behavior uses a calibrated focus index rather than raw alpha:
 
-- Higher normalized alpha lifts the cube.
-- Lower normalized alpha drops the cube.
+- First, the backend collects baseline windows in `device_calibrating` mode.
+- Then it scores frontal engagement: `frontal_beta / (frontal_alpha + frontal_theta)`.
+- It also scores alpha suppression in the occipital and frontal rows relative to baseline.
+- It applies an artifact penalty from high-frequency and line-noise ratios.
+- The cube follows the smoothed focus index, not instantaneous band power.
+
+This is intentionally conservative. Stable baseline-like windows should keep the cube low, while sustained frontal beta engagement plus posterior alpha suppression should lift it.
+
+The backend still streams alpha/beta/gamma bands for the particle visualization.
+
+Calibration and scoring knobs:
+
+```powershell
+python -m backend.focuscube.server --require-device
+python -m backend.focuscube.server --eeg-rows 0,1,4,5 --require-device
+python -m backend.focuscube.server --focus-deadband 0.02 --focus-full-scale 0.18 --require-device
+```
+
+The older mappings remain mainly for experiments and demo comparisons:
 
 Alternative mappings are available from the backend CLI:
 
 ```powershell
-C:\Users\conta\anaconda3\envs\brainlink\python.exe -m backend.focuscube.server --attention-source inverse_alpha
-C:\Users\conta\anaconda3\envs\brainlink\python.exe -m backend.focuscube.server --attention-source beta_alpha_ratio
+python -m backend.focuscube.server --attention-source inverse_alpha --demo
+python -m backend.focuscube.server --attention-source beta_alpha_ratio --demo
 ```
 
 ## Cortex Model
@@ -101,7 +155,7 @@ If that file is missing, the app renders a procedural cortex-like fallback so th
 ## Verification
 
 ```powershell
-C:\Users\conta\anaconda3\envs\brainlink\python.exe -m pytest backend\tests -q
+python -m pytest backend\tests -q -p no:cacheprovider
 npm --prefix frontend test -- --run
 npm --prefix frontend run build
 npm --prefix frontend run verify:canvas

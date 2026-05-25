@@ -20,6 +20,12 @@ const LoggedInHeader = () => {
         return () => { unsubBattery(); unsubEeg(); unsubStatus(); };
     }, []);
 
+    useEffect(() => {
+        if (status === CONNECTION_STATUS.CONNECTED) {
+            eegConnectService.fetchStatus();
+        }
+    }, [status]);
+
     const isConnected = status === CONNECTION_STATUS.CONNECTED;
 
     const deviceText = {
