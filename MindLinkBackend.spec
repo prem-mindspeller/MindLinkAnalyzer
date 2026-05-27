@@ -11,7 +11,7 @@ datas = [(_PARSER_DIR, 'BrainLinkParser')]
 binaries = []
 hiddenimports = ['serial.tools.list_ports', 'serial.tools.list_ports_windows']
 for _pkg in ('serial', 'fastapi', 'uvicorn', 'starlette', 'anyio',
-             'pydantic', 'numpy', 'scipy', 'cushy_serial'):
+             'pydantic', 'numpy', 'scipy', 'cushy_serial', 'mindrove'):
     _r = collect_all(_pkg)
     datas += _r[0]; binaries += _r[1]; hiddenimports += _r[2]
 

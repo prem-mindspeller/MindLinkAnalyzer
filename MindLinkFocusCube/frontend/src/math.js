@@ -7,6 +7,31 @@ export function cubeHeightFromAttention(attention) {
   return -1.4 + value * 3.8;
 }
 
+export function gameAttentionFromPayload(payload = {}) {
+  const device = payload.device ?? {};
+  const focus = payload.focus ?? {};
+  const progress = Number(focus.baselineProgress ?? device.baselineProgress ?? 0);
+  const stableFrames = Number(device.contactStableFrames ?? 0);
+  const requiredFrames = Math.max(1, Number(device.contactRequiredStableFrames ?? 1));
+  const quality = Number(payload.quality ?? 0);
+  const ready = payload.mode === 'device'
+    && device.worn === true
+    && progress >= 1
+    && stableFrames >= requiredFrames
+    && quality >= 0.35;
+
+  if (!ready) {
+    return 0;
+  }
+
+  const value = clamp(Number(payload.attention ?? 0));
+  const deadband = 0.22;
+  if (value <= deadband) {
+    return 0;
+  }
+  return clamp((value - deadband) / (1 - deadband));
+}
+
 export function lerp(current, target, amount) {
   return current + (target - current) * clamp(amount, 0, 1);
 }
@@ -17,14 +42,14 @@ export function particleParamsFromBands(normalized = {}) {
 
   return {
     blue: {
-      activeCount: Math.round(2500 + alpha * 2500),
-      opacity: 0.48 + alpha * 0.48,
-      size: 2.2 + alpha * 3.8,
+      activeCount: Math.round(3500 + alpha * 1500),
+      opacity: 0.62 + alpha * 0.36,
+      size: 3.2 + alpha * 3.4,
     },
     pink: {
-      activeCount: Math.round(1800 + betaGamma * 3200),
-      opacity: 0.48 + betaGamma * 0.48,
-      size: 2.2 + betaGamma * 3.8,
+      activeCount: Math.round(3000 + betaGamma * 2000),
+      opacity: 0.58 + betaGamma * 0.40,
+      size: 3.0 + betaGamma * 3.8,
     },
   };
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   brainShellPoint,
   cubeHeightFromAttention,
+  gameAttentionFromPayload,
   particleParamsFromBands,
   prefrontalWeight,
 } from './math.js';
@@ -21,6 +22,52 @@ describe('particleParamsFromBands', () => {
     expect(params.blue.activeCount).toBeGreaterThan(params.pink.activeCount);
     expect(params.blue.size).toBeGreaterThan(2);
     expect(params.pink.size).toBeGreaterThan(2);
+  });
+});
+
+describe('gameAttentionFromPayload', () => {
+  it('holds the cube down for non-ready device modes', () => {
+    expect(gameAttentionFromPayload({ mode: 'device_warming', attention: 0.8 })).toBe(0);
+    expect(gameAttentionFromPayload({ mode: 'device_calibrating', attention: 0.8 })).toBe(0);
+    expect(gameAttentionFromPayload({ mode: 'device_not_worn', attention: 0.8 })).toBe(0);
+  });
+
+  it('requires stable worn contact and completed calibration', () => {
+    const payload = {
+      mode: 'device',
+      attention: 0.8,
+      quality: 0.8,
+      device: {
+        worn: true,
+        contactStableFrames: 2,
+        contactRequiredStableFrames: 3,
+      },
+      focus: {
+        baselineProgress: 1,
+      },
+    };
+
+    expect(gameAttentionFromPayload(payload)).toBe(0);
+    payload.device.contactStableFrames = 3;
+    expect(gameAttentionFromPayload(payload)).toBeGreaterThan(0.5);
+  });
+
+  it('deadbands low attention instead of moving the cube randomly', () => {
+    const payload = {
+      mode: 'device',
+      attention: 0.18,
+      quality: 0.8,
+      device: {
+        worn: true,
+        contactStableFrames: 3,
+        contactRequiredStableFrames: 3,
+      },
+      focus: {
+        baselineProgress: 1,
+      },
+    };
+
+    expect(gameAttentionFromPayload(payload)).toBe(0);
   });
 });
 

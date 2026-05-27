@@ -154,7 +154,7 @@
         "signalNoisy": "Signal: Noisy"
     },
     "footer": {
-        "text": "Mindlink Analyzer v2.0.0 | © {{year}} Mindspeller"
+        "text": "Mindlink Analyzer v2.1.0 | 4-Channel | © {{year}} Mindspeller"
     },
     "nav": {
         "back": "Back",
@@ -416,7 +416,11 @@
         "selectPlaceholder": "Select a task from the list to see details.",
         "pathwayPersonal": "Personal Pathway",
         "pathwayConnection": "Connection",
-        "pathwayLifestyle": "Lifestyle"
+        "pathwayLifestyle": "Lifestyle",
+        "repeatabilityTitle": "All sessions must be completed before analysis",
+        "repeatabilityBody": "You have unlocked new session tasks. To ensure the repeatability of your neural profile measurements, all enabled tasks — including those from earlier sessions — must be completed each time you run a full assessment. You are welcome to tackle the new tasks first, but please return to any remaining earlier tasks before continuing to analysis.",
+        "stillNeeded": "Still needed:",
+        "allTasksDone": "All tasks completed — ready for analysis!"
     },
     "manual": {
         "0": {
@@ -441,7 +445,7 @@
         },
         "5": {
             "title": "Troubleshooting",
-            "content": "If the signal shows Not Worn: reposition the headset and press the forehead electrode firmly. If the signal stays Noisy: check Bluetooth connection and try moving away from other electronic devices. If the app cannot find the headset: ensure the device is paired via Windows Bluetooth settings first."
+            "content": "If the signal shows Not Worn: reposition the headset and ensure all four electrodes have firm skin contact — push any hair away from under the electrodes. If the signal stays Noisy: try moving away from other Wi-Fi-emitting devices such as routers or other computers. If the app cannot find the headset: check that the USB dongle is plugged in and the headset is powered on, then click Connect again. If problems persist, unplug the dongle, wait 5 seconds, re-plug it, and retry."
         },
         "6": {
             "title": "Contact and Support",
@@ -451,11 +455,11 @@
     "tips": {
         "0": {
             "title": "Slight noisy readings are normal",
-            "content": "EEG signals are very sensitive and can pick up minor movements or muscle activity. A few yellow (Noisy) readings during a session are normal. Focus on keeping the signal mostly green (Good) and avoid red (Not Worn) readings."
+            "content": "EEG signals are very sensitive and can pick up minor movements or muscle activity. A few yellow (Noisy) readings during a session are normal. Focus on keeping the signal mostly green (Good) and avoid red (Not Worn) readings. If you get persistent red readings, readjust the headset and push any hair away from under the electrodes."
         },
         "1": {
-            "title": "Ensure good skin contact",
-            "content": "The forehead electrode needs firm contact with clean, dry skin. Remove any hair from the electrode area and press the headset gently but firmly against your forehead before starting."
+            "title": "Ensure good electrode contact",
+            "content": "All four electrodes (the two flat white ones at the forehead and the two spiky black ones at the back of the head) plus the two behind-ear contacts need firm contact with clean, dry skin. Push any hair away from under the electrodes and tighten the headband slightly if needed. No gel is required."
         },
         "2": {
             "title": "Charge before a session",
@@ -476,52 +480,55 @@
     },
     "gettingStarted": {
         "power": {
-            "title": "1. Turning the Amplifier On / Off",
+            "title": "1. Turning the Headset On / Off",
             "onLabel": "To Turn ON:",
-            "on1": "Press and hold the power button for <1>2 seconds</1>.",
-            "on2": "The amplifier will <1>vibrate once</1> to confirm it is powered on.",
+            "on1": "Slide the power switch upwards to turn the headset on.",
+            "on2": "The headset is ready once the LED lights up.",
             "offLabel": "To Turn OFF:",
-            "off1": "Press the power button <1>once</1> (short press).",
-            "off2": "The amplifier will <1>vibrate twice</1> to confirm it is powered off.",
+            "off1": "Slide the power switch downwards to turn the headset off.",
             "batLabel": "Low Battery Warning:",
-            "bat1": "When the battery is empty, the amplifier will <1>vibrate multiple times continuously</1> and turn off automatically.",
-            "bat2": "Please charge the amplifier when this happens."
+            "bat1": "The LED will blink rapidly when the battery is low — charge the headset soon.",
+            "bat2": "The headset switches off automatically when the battery is fully depleted."
         },
-        "bluetooth": {
-            "title": "2. Pairing the Amplifier with Your Device",
-            "importantLabel": "Important:",
-            "introText": "Follow the standard Windows Bluetooth pairing process:",
-            "step1": "Turn on the amplifier (press and hold for 2 seconds).",
-            "step2": "Open <1>Settings → Bluetooth & devices → Add device</1> in Windows.",
-            "step3": "Select <1>\"Bluetooth\"</1> from the add-device options.",
-            "step4": "Wait for <1>\"Brainlink_Pro (Audio)\"</1> to appear in the list.",
-            "step5": "Click on <1>\"Brainlink_Pro (Audio)\"</1> to pair.",
-            "note": "<0>Note:</0> The headset will <2>briefly connect and then disconnect</2> automatically — this is normal! The pairing process only registers the headset with your device. The actual connection will be established automatically when you sign in to the application."
+        "wifi": {
+            "title": "2. Setting Up the Wi-Fi Dongle",
+            "intro": "The MindRove Bright connects to your computer through a small USB Wi-Fi dongle included in the box. You connect your computer to the headset's Wi-Fi network the same way you would connect to any Wi-Fi hotspot.",
+            "step1": "Plug the USB Wi-Fi dongle into any USB port on your computer.",
+            "step2": "In Windows, click the Wi-Fi icon in the taskbar. Click the dropdown arrow next to Wi-Fi and select Wi-Fi 2 — this is the network provided by the dongle.",
+            "step3": "Find and select the network named Mindrove_BRT... (the full name ends with your device's unique ID). Enter the password: #mindrove",
+            "step4": "Once connected, open the app and click Connect. The application will find the headset automatically.",
+            "noteLabel": "Note:",
+            "noteText": "Your regular internet connection (Wi-Fi 1) is not affected — Wi-Fi 2 is a private link exclusively for the headset. Windows will remember the Mindrove_BRT network after the first connection so you only need to enter the password once."
         },
         "wearing": {
-            "title": "3. Wearing the Headset Properly",
-            "amp": "<0>Amplifier Position:</0> Place the amplifier <2>above your left ear</2>.",
-            "light": "<0>Light Sensor Position:</0> The light sensor should be positioned <2>right between your eyebrows</2>.",
-            "electrode": "<0>Electrode Position:</0> The electrodes should be positioned <2>2 inches above your eyebrows</2> for optimal signal quality.",
-            "tip": "<0>Tip:</0> Proper positioning ensures accurate EEG readings. Take a moment to adjust the headset before starting calibration."
+            "title": "3. Wearing the Headset",
+            "frontLabel": "Forehead (flat white electrodes):",
+            "frontText": "The two flat white electrodes should sit across your forehead, just above your eyebrows.",
+            "backLabel": "Back of head (spiky black electrodes):",
+            "backText": "The two spiky black electrodes should rest against the back of your head.",
+            "earsLabel": "Behind-ear contacts:",
+            "earsText": "The small metal contacts on the side straps should rest just behind each ear.",
+            "nogel": "No gel is needed — the semi-dry electrodes work directly on clean, dry skin.",
+            "tipLabel": "Tip:",
+            "tipText": "Push any hair away from under the electrodes and ensure a snug but comfortable fit so all electrodes stay in contact with your skin."
         },
         "charging": {
-            "title": "4. Removing the Amplifier for Charging",
-            "intro": "To charge the amplifier, you need to remove it from the clip:",
-            "step1": "Locate the clip that holds the amplifier to the headband.",
-            "step2": "Gently pull the amplifier <1>out of the clip</1>.",
-            "step3": "Connect the charging cable to the amplifier.",
-            "step4": "Charge until the indicator shows a full battery.",
-            "note": "<0>Note:</0> The amplifier cannot be charged while attached to the headset clip."
+            "title": "4. Charging the Headset",
+            "intro": "The headset charges via a standard microUSB cable (included in the box):",
+            "step1": "Locate the microUSB port on the headset.",
+            "step2": "Connect the charging cable to any USB power source — a computer USB port or a phone charger both work.",
+            "step3": "Charge until the LED indicates a full battery.",
+            "noteLabel": "Note:",
+            "noteText": "Battery life is 4–6 hours per charge. A full charge takes approximately 2 hours. Avoid using the headset while it is charging."
         },
-        "reinsert": {
-            "title": "5. Inserting the Amplifier Back into the Clip",
-            "intro": "After charging, reattach the amplifier to the headset:",
-            "step1": "Hold the amplifier with the correct orientation.",
-            "step2": "Align the amplifier with the clip opening.",
-            "step3": "Gently push the amplifier into the clip until it <1>clicks securely</1>.",
-            "step4": "Ensure the amplifier is firmly attached before wearing the headset.",
-            "note": "<0>Important:</0> Make sure the amplifier is properly seated to maintain good electrode contact."
+        "appconnect": {
+            "title": "5. Connecting to the Application",
+            "intro": "Once the USB dongle is plugged in and the headset is powered on, connecting is straightforward:",
+            "step1": "Make sure the USB dongle is plugged into your computer.",
+            "step2": "Slide the power switch upwards to turn on the headset. Wait a few seconds for the Wi-Fi link to establish.",
+            "step3": "Open the app and click Connect on the Live EEG screen.",
+            "tipLabel": "Tip:",
+            "tipText": "If the app shows Not Connected, check that the headset is powered on and the USB dongle is plugged in, then click Connect again. If it still fails, unplug the dongle, wait 5 seconds, re-plug it, and retry."
         }
     },
     "stepInfo": {
@@ -540,7 +547,7 @@
             },
             "liveReading": {
                 "title": "Step 4 — Verify Live Signal",
-                "why": "A live Bluetooth connection to your EEG headset allows the app to stream raw brainwave signals in real time. A stable, quality connection is required before any recordings can begin."
+                "why": "A live Wi-Fi connection to your EEG headset allows the app to stream raw brainwave signals in real time. Make sure the USB dongle is plugged in and the headset is powered on before this step. A stable, quality connection is required before any recordings can begin."
             },
             "baseline": {
                 "title": "Step 5 — Baseline Calibration",

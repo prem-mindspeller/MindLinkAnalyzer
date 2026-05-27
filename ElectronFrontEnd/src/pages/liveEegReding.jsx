@@ -25,6 +25,60 @@ const LiveEegReading = () => {
     const isScanning = status === CONNECTION_STATUS.SEARCHING || status === CONNECTION_STATUS.CONNECTING;
     const isGoodSignal = isConnected && poorSignal < 25;
 
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const waitForConnectedStatus = (timeoutMs = 3500) => new Promise((resolve) => {
+        if (eegConnectService.getStatus() === CONNECTION_STATUS.CONNECTED) {
+            resolve(true);
+            return;
+        }
+
+        const timeout = setTimeout(() => {
+            unsubStatus();
+            resolve(eegConnectService.getStatus() === CONNECTION_STATUS.CONNECTED);
+        }, timeoutMs);
+
+        const unsubStatus = eegConnectService.on('status', (nextStatus) => {
+            if (nextStatus === CONNECTION_STATUS.CONNECTED) {
+                clearTimeout(timeout);
+                unsubStatus();
+                resolve(true);
+            }
+        });
+    });
+
+    const connectWithRetry = async (portPath, attempts = 3) => {
+        let lastError = '';
+        for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            const result = await eegConnectService.connect(portPath);
+            if (!result.success) {
+                lastError = result.error || t('errors.connectionFailed');
+            } else if (await waitForConnectedStatus()) {
+                return { success: true };
+            } else {
+                lastError = t('errors.connectionFailed');
+            }
+
+            if (attempt < attempts) {
+                await wait(1200);
+            }
+        }
+        return { success: false, error: lastError || t('errors.connectionFailed') };
+    };
+
+    const scanAndConnect = async () => {
+        setScanMessage('');
+        setConnectError('');
+        const hwids = await eegConnectService.fetchAllowedHwids();
+        const found = await eegConnectService.autoDetect(hwids);
+        if (found) {
+            const result = await connectWithRetry(found.path);
+            if (!result.success) setConnectError(result.error || t('errors.connectionFailed'));
+        } else {
+            setScanMessage(t('liveEeg.noDeviceDetected'));
+        }
+    };
+
     // ── Subscribe to status + signal quality ─────────────────────────────────
     useEffect(() => {
         const unsubStatus = eegConnectService.on('status', setStatus);
@@ -34,32 +88,18 @@ const LiveEegReading = () => {
 
     // ── Auto-scan on mount (always runs — never skip based on stale cached status) ──
     useEffect(() => {
+        let cancelled = false;
         const scan = async () => {
-            setScanMessage('');
-            setConnectError('');
-            const hwids = await eegConnectService.fetchAllowedHwids();
-            const found = await eegConnectService.autoDetect(hwids);
-            if (found) {
-                const result = await eegConnectService.connect(found.path);
-                if (!result.success) setConnectError(result.error || t('errors.connectionFailed'));
-            } else {
-                setScanMessage(t('liveEeg.noDeviceDetected'));
-            }
+            await scanAndConnect();
         };
-        scan();
+        scan().catch((error) => {
+            if (!cancelled) setConnectError(error?.message || t('errors.connectionFailed'));
+        });
+        return () => { cancelled = true; };
     }, [t]);
 
     const handleRescan = async () => {
-        setScanMessage('');
-        setConnectError('');
-        const hwids = await eegConnectService.fetchAllowedHwids();
-        const found = await eegConnectService.autoDetect(hwids);
-        if (found) {
-            const result = await eegConnectService.connect(found.path);
-            if (!result.success) setConnectError(result.error || t('errors.connectionFailed'));
-        } else {
-            setScanMessage(t('liveEeg.noDeviceDetected'));
-        }
+        await scanAndConnect();
     };
 
 
@@ -138,18 +178,18 @@ const LiveEegReading = () => {
                         </>
                     )}
 
-                    <div className="navigation-buttons-eeg">
-                        <button
-                            className="btn-next-eeg"
-                            onClick={() => navigate('/baselineCalibration1')}
-                            disabled={!isGoodSignal}
-                            title={!isGoodSignal ? t('liveEeg.waitForGoodSignal') : ''}
-                        >
-                            {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
-                        </button>
-                    </div>
                 </div>
             </main>
+            <div className="nav-sub-footer">
+                <button
+                    className="btn-next-eeg"
+                    onClick={() => navigate('/baselineCalibration1')}
+                    disabled={!isGoodSignal}
+                    title={!isGoodSignal ? t('liveEeg.waitForGoodSignal') : ''}
+                >
+                    {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                </button>
+            </div>
             <Footer />
         </div>
     );

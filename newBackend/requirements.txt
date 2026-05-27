@@ -3,3 +3,4 @@ uvicorn[standard]>=0.27.0
 pyserial>=3.5
 scipy>=1.11.0
 numpy>=1.24.0
+mindrove

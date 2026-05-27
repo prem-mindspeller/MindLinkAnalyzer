@@ -96,9 +96,22 @@ export function useTaskRunner(phases) {
         playBeep(800, 200);
 
         if (phase.record) {
-            unsubRef.current = wsEegService.on('raw', (sample) => {
+            let rawMultiActive = false;
+            let lastRawMultiAt = 0;
+            const unsubRawMulti = wsEegService.on('rawMulti', (sample) => {
+                rawMultiActive = true;
+                lastRawMultiAt = Date.now();
                 samplesRef.current.push(sample);
             });
+            const unsubRaw = wsEegService.on('raw', (sample) => {
+                if (!rawMultiActive || Date.now() - lastRawMultiAt > 1000) {
+                    samplesRef.current.push(sample);
+                }
+            });
+            unsubRef.current = () => {
+                unsubRawMulti();
+                unsubRaw();
+            };
         }
 
         timerRef.current = setInterval(() => {

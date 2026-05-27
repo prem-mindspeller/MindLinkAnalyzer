@@ -58,8 +58,11 @@ C:\Users\conta\anaconda3\envs\brainlink\python.exe -m PyInstaller MindLinkBacken
 Step 2 — package the Electron app (electron-builder picks up the backend folder automatically via extraResources):
 
 cd ElectronFrontEnd
-npm run build      # webpack production bundle
-npx electron-builder
+npm run package
+
+# Equivalent: npx electron-builder
+# The Electron Builder beforePack hook runs the webpack production build and
+# verifies dist/index.html and dist/bundle.js before packaging.
 
 
 See the linked documentation files above for full details, troubleshooting, and build instructions.

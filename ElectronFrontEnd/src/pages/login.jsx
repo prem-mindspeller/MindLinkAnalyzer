@@ -45,13 +45,13 @@ const LoginPage = () => {
                     {!loggedInUser && <WarningComponent />}
                     {loggedInUser && <PartnerIdComponent />}
 
-                    <div className="navigation-buttons2">
-                        <button className="btn-back" onClick={handleBack}>
-                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
-                        </button>
-                    </div>
                 </div>
             </main>
+            <div className="nav-sub-footer">
+                <button className="btn-back" onClick={handleBack}>
+                    <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
+                </button>
+            </div>
             <Footer />
         </div>
     );

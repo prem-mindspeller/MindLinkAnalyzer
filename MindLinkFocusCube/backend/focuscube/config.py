@@ -27,13 +27,15 @@ class FocusCubeConfig:
     mindrove_ip_port: int = 4210
     mindrove_serial_port: str | None = None
     mindrove_timeout: int = 10
-    mindrove_eeg_rows: tuple[int, ...] = (0, 1, 4, 5)
+    mindrove_eeg_rows: tuple[int, ...] | None = None
     worn_resistance_threshold: float = 5_000_000.0
     worn_min_good_resistance_pairs: int = 2
     contact_mode: str = "auto"
-    worn_min_active_eeg_rows: int = 2
+    worn_min_active_eeg_rows: int = 4
     worn_min_eeg_std: float = 0.5
     worn_max_eeg_std: float = 50_000.0
+    worn_max_abs_mean: float = 0.0
+    worn_required_consecutive_frames: int = 3
     disable_worn_gate: bool = False
     print_raw: bool = False
     raw_print_rows: int = 8

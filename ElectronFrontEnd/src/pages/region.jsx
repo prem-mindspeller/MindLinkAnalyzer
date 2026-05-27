@@ -33,13 +33,13 @@ const RegionPage = () => {
                             <RegionSelectionCard />
                         </div>
 
-                        <div className="navigation-buttons">
-                            <button className="btn-next" onClick={handleNext}>
-                                {t('region.getStarted')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
-                            </button>
-                        </div>
                     </div>
                 </main>
+                <div className="nav-sub-footer">
+                    <button className="btn-next" onClick={handleNext}>
+                        {t('region.getStarted')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                    </button>
+                </div>
                 <Footer />
             </div>
 

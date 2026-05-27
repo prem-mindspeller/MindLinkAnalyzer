@@ -1,0 +1,246 @@
+import argparse
+import time
+import traceback
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from mindrove.board_shim import BoardShim, MindRoveInputParams, BoardIds
+
+
+# Confirmed from MindRove Connect tapping test:
+# Python SDK rows are zero-based.
+# MindRove Connect channels are one-based.
+EEG_ROWS = [0, 1, 2, 3, 4, 5]
+
+CHANNEL_LABELS = [
+    "SDK row 0 / Ch 1 / Fp1 left forehead",
+    "SDK row 1 / Ch 2 / Fp2 right forehead",
+    "SDK row 2 / Ch 3 / C3 left central",
+    "SDK row 3 / Ch 4 / C4 right central",
+    "SDK row 4 / Ch 5 / O1 left occipital",
+    "SDK row 5 / Ch 6 / O2 right occipital",
+]
+
+
+def robust_demean(data):
+    """
+    Remove the median per channel so the large DC offset does not dominate the plot.
+    data shape: channels x samples
+    """
+    med = np.median(data, axis=1, keepdims=True)
+    return data - med
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Live plot MindRove Lucid EEG channels from the Python SDK."
+    )
+    parser.add_argument(
+        "--window",
+        type=float,
+        default=5.0,
+        help="Rolling plot window in seconds.",
+    )
+    parser.add_argument(
+        "--refresh",
+        type=float,
+        default=0.10,
+        help="Plot refresh interval in seconds.",
+    )
+    parser.add_argument(
+        "--ylim",
+        type=float,
+        default=1000.0,
+        help="Vertical range around each channel offset, in SDK units. Try 500, 1000, 3000.",
+    )
+    parser.add_argument(
+        "--show-rows-6-7",
+        action="store_true",
+        help="Also show SDK rows 6 and 7, expected to be zero/inactive.",
+    )
+
+    args = parser.parse_args()
+
+    board_id = BoardIds.MINDROVE_WIFI_BOARD
+    params = MindRoveInputParams()
+
+    BoardShim.enable_dev_board_logger()
+
+    rows_to_plot = EEG_ROWS.copy()
+    labels = CHANNEL_LABELS.copy()
+
+    if args.show_rows_6_7:
+        rows_to_plot += [6, 7]
+        labels += [
+            "SDK row 6 / inactive or reserved",
+            "SDK row 7 / inactive or reserved",
+        ]
+
+    board = None
+
+    try:
+        print("MindRove live EEG plot")
+        print("=" * 80)
+        print("Make sure:")
+        print("1. The tablet/PC is connected to the MindRove Wi-Fi.")
+        print("2. MindRove Connect is closed.")
+        print("3. The headset is powered on.")
+        print()
+        print("Channel mapping used in this plot:")
+        for label in labels:
+            print(f"  {label}")
+        print("=" * 80)
+
+        print("Creating BoardShim...")
+        board = BoardShim(board_id, params)
+
+        print("Preparing session...")
+        board.prepare_session()
+
+        print("Starting stream...")
+        board.start_stream()
+
+        sampling_rate = BoardShim.get_sampling_rate(board_id)
+        print(f"Sampling rate: {sampling_rate} Hz")
+
+        window_samples = int(args.window * sampling_rate)
+
+        print(f"Plot window: {args.window} seconds = {window_samples} samples")
+        print()
+        print("Waiting 2 seconds for data...")
+        time.sleep(2.0)
+
+        plt.ion()
+
+        fig, ax = plt.subplots(figsize=(14, 8))
+        fig.canvas.manager.set_window_title("MindRove live EEG SDK plot")
+
+        n_channels = len(rows_to_plot)
+
+        # Vertical spacing between traces.
+        offset_step = args.ylim * 2.5
+        offsets = np.arange(n_channels)[::-1] * offset_step
+
+        lines = []
+
+        x = np.linspace(-args.window, 0, window_samples)
+
+        for i in range(n_channels):
+            line, = ax.plot(x, np.zeros(window_samples) + offsets[i], linewidth=1)
+            lines.append(line)
+
+        ax.set_title(
+            "MindRove Lucid live EEG - tap one electrode at a time to verify channel mapping"
+        )
+        ax.set_xlabel("Time before now [s]")
+        ax.set_ylabel("Channels, median-subtracted and vertically stacked")
+
+        ax.set_yticks(offsets)
+        ax.set_yticklabels(labels)
+
+        ax.set_ylim(-args.ylim, offsets[0] + args.ylim)
+        ax.grid(True, alpha=0.3)
+
+        text = ax.text(
+            0.01,
+            0.98,
+            "",
+            transform=ax.transAxes,
+            va="top",
+            ha="left",
+            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+        )
+
+        plt.tight_layout()
+
+        print("Live plot started.")
+        print()
+        print("Tap test suggestion:")
+        print("1. Tap left forehead electrode  -> strongest spike should be Ch 1 / row 0 / Fp1")
+        print("2. Tap right forehead electrode -> strongest spike should be Ch 2 / row 1 / Fp2")
+        print("3. Tap left top electrode       -> strongest spike should be Ch 3 / row 2 / C3")
+        print("4. Tap right top electrode      -> strongest spike should be Ch 4 / row 3 / C4")
+        print("5. Tap left back electrode      -> strongest spike should be Ch 5 / row 4 / O1")
+        print("6. Tap right back electrode     -> strongest spike should be Ch 6 / row 5 / O2")
+        print()
+        print("Close the plot window or press Ctrl+C in the terminal to stop.")
+        print()
+
+        while plt.fignum_exists(fig.number):
+            data = board.get_current_board_data(window_samples)
+
+            if data.size == 0 or data.shape[1] < 10:
+                text.set_text("Waiting for data...")
+                plt.pause(args.refresh)
+                continue
+
+            # Keep only the latest window_samples.
+            data = data[:, -window_samples:]
+
+            eeg_data = data[rows_to_plot, :]
+
+            # Remove large DC offset per channel.
+            eeg_demeaned = robust_demean(eeg_data)
+
+            n_samples = eeg_demeaned.shape[1]
+            x = np.linspace(-n_samples / sampling_rate, 0, n_samples)
+
+            # Update lines.
+            for i, line in enumerate(lines):
+                y = eeg_demeaned[i, :] + offsets[i]
+                line.set_data(x, y)
+
+            ax.set_xlim(x[0], 0)
+
+            # Simple per-channel peak-to-peak info for tapping.
+            ptp_values = np.ptp(eeg_demeaned, axis=1)
+            strongest_idx = int(np.argmax(ptp_values))
+            strongest_label = labels[strongest_idx]
+
+            info = (
+                f"Sampling rate: {sampling_rate} Hz\n"
+                f"Window: {args.window:.1f} s\n"
+                f"Strongest recent movement/artifact:\n"
+                f"{strongest_label}\n"
+                f"Peak-to-peak: {ptp_values[strongest_idx]:.1f}"
+            )
+            text.set_text(info)
+
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+
+            time.sleep(args.refresh)
+
+    except KeyboardInterrupt:
+        print()
+        print("Stopped by user.")
+
+    except Exception as e:
+        print()
+        print("Live plot failed.")
+        print("=" * 80)
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error: {e}")
+        print()
+        traceback.print_exc()
+
+    finally:
+        if board is not None:
+            try:
+                print("Stopping stream...")
+                board.stop_stream()
+            except Exception:
+                pass
+
+            try:
+                print("Releasing session...")
+                board.release_session()
+            except Exception:
+                pass
+
+        print("Done.")
+
+
+if __name__ == "__main__":
+    main()

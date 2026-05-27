@@ -52,6 +52,25 @@ def test_channel_feature_extractor_keeps_bright_regions_separate():
     assert features.regions["occipital"].relative["alpha"] > 0.55
 
 
+def test_channel_feature_extractor_supports_sdk_positional_bright_rows():
+    extractor = ChannelBandFeatureExtractor(
+        FocusCubeConfig(),
+        frontal_rows=(0, 1),
+        occipital_rows=(2, 3),
+    )
+    samples = {
+        0: sine_wave(18, seconds=3),
+        1: sine_wave(18, seconds=3),
+        2: sine_wave(10, seconds=3),
+        3: sine_wave(10, seconds=3),
+    }
+
+    features = extractor.compute(samples)
+
+    assert features.regions["frontal"].relative["beta"] > 0.55
+    assert features.regions["occipital"].relative["alpha"] > 0.55
+
+
 def test_focus_index_requires_calibration_and_scores_engagement_against_baseline():
     config = FocusCubeConfig(calibration_windows=2, focus_smoothing=1.0)
     extractor = ChannelBandFeatureExtractor(config)
@@ -250,7 +269,7 @@ def test_warming_frame_is_not_demo_mode():
     assert payload["device"]["ipAddress"] == "192.168.4.1"
     assert payload["device"]["ipPort"] == 4210
     assert payload["device"]["battery"] == 88
-    assert payload["attention"] == 0.5
+    assert payload["attention"] == 0.0
     assert "parserAttention" not in payload
     assert "parserMeditation" not in payload
 

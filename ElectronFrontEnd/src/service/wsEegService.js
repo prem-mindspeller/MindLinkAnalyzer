@@ -34,6 +34,8 @@
  * ────────────────────────────────────────────────────
  * { type: 'status',    value: 'connected'|'disconnected'|'connecting' }
  * { type: 'raw_batch', samples: number[] }
+ * { type: 'raw_multi_batch', samples: Array<{ fp1, fp2, o1, o2 }> }
+ * { type: 'device_info', device, sampleRate, channels }
  * { type: 'eeg_data',  poorSignal, attention, meditation, bandPower, battery }
  * { type: 'battery',   level: number }
  * { type: 'error',     message: string }
@@ -68,11 +70,15 @@ class WsEegServiceClass {
         this._meditation = 0;
         this._bandPowers = null;
         this._rawBuffer = [];
+        this._rawMultiBuffer = [];
+        this._deviceInfo = null;
         this._listeners = {};
 
         this._ws = null;
         this._reconnectTimer = null;
         this._batteryPollTimer = null;
+        this._connectPromise = null;
+        this._connectPort = null;
 
         // Open the WebSocket after the current JS tick so the browser
         // context (window.WebSocket) is fully available before connecting.
@@ -128,6 +134,9 @@ class WsEegServiceClass {
                     this._attention = 0;
                     this._meditation = 0;
                     this._bandPowers = null;
+                    this._rawBuffer = [];
+                    this._rawMultiBuffer = [];
+                    this._deviceInfo = null;
                 } else if (msg.value === 'connected') {
                     this.fetchStatus();
                     this._startBatteryPolling();
@@ -144,6 +153,22 @@ class WsEegServiceClass {
                     if (this._rawBuffer.length > 6144)
                         this._rawBuffer = this._rawBuffer.slice(-6144);
                 }
+                break;
+
+            case 'raw_multi_batch':
+                if (Array.isArray(msg.samples)) {
+                    for (const sample of msg.samples) {
+                        this._rawMultiBuffer.push(sample);
+                        this._notify('rawMulti', sample);
+                    }
+                    if (this._rawMultiBuffer.length > 6144)
+                        this._rawMultiBuffer = this._rawMultiBuffer.slice(-6144);
+                }
+                break;
+
+            case 'device_info':
+                this._deviceInfo = { ...msg };
+                this._notify('deviceInfo', this._deviceInfo);
                 break;
 
             case 'eeg_data':
@@ -193,6 +218,8 @@ class WsEegServiceClass {
     getMeditation() { return this._meditation; }
     getBandPowers() { return this._bandPowers ? { ...this._bandPowers } : null; }
     getRawBuffer() { return [...this._rawBuffer]; }
+    getRawMultiBuffer() { return this._rawMultiBuffer.map(sample => ({ ...sample })); }
+    getDeviceInfo() { return this._deviceInfo ? { ...this._deviceInfo } : null; }
     isConnected() { return this._status === CONNECTION_STATUS.CONNECTED; }
     isWorn() { return this._poorSignal < 200; }
     isGoodSignal() { return this._poorSignal < 25; }
@@ -266,17 +293,28 @@ class WsEegServiceClass {
 
         const ports = await this.listPorts();
 
-        // 1. User-specific HWIDs from the Mindspeller API
+        // 1. Prefer the MindRove Wi-Fi adapter exposed by the Python backend.
+        const byMindRove = ports.find(p =>
+            p.available !== false &&
+            (
+                p.deviceType === 'mindrove' ||
+                (p.description || '').toLowerCase().includes('mindrove') ||
+                (p.path || '').startsWith('mindrove://')
+            )
+        );
+        if (byMindRove) return byMindRove;
+
+        // 2. User-specific BrainLink HWIDs from the Mindspeller API
         if (allowedHwids.length > 0) {
             const match = ports.find(p => allowedHwids.some(hw => p.pnpId.includes(hw)));
             if (match) return match;
         }
 
-        // 2. Default BrainLink HWID (Windows)
+        // 3. Default BrainLink HWID (Windows)
         const byHwid = ports.find(p => KNOWN_HWIDS.some(hw => p.pnpId.includes(hw)));
         if (byHwid) return byHwid;
 
-        // 3. Name / path fallback (macOS / Linux)
+        // 4. Name / path fallback (macOS / Linux)
         const byName = ports.find(p =>
             KNOWN_NAMES.some(n => (p.description || '').toLowerCase().includes(n)) ||
             p.path.startsWith('/dev/tty.usbserial') ||
@@ -290,16 +328,28 @@ class WsEegServiceClass {
     }
 
     async connect(portPath) {
-        try {
-            const res = await fetch(`${BACKEND_HTTP}/connect`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ port: portPath }),
-            });
-            return res.json();
-        } catch (e) {
-            return { success: false, error: e.message };
+        if (this._connectPromise && this._connectPort === portPath) {
+            return this._connectPromise;
         }
+
+        this._connectPort = portPath;
+        this._connectPromise = (async () => {
+            try {
+                const res = await fetch(`${BACKEND_HTTP}/connect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ port: portPath }),
+                });
+                return res.json();
+            } catch (e) {
+                return { success: false, error: e.message };
+            } finally {
+                this._connectPromise = null;
+                this._connectPort = null;
+            }
+        })();
+
+        return this._connectPromise;
     }
 
     // ── Disconnect ─────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 ﻿import React, { useState } from "react";
-import { useTranslation, Trans } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import Header from "../components/header";
 import Footer from "../components/footer";
 import { useNavigate } from "react-router-dom";
@@ -10,53 +10,46 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import "../styles/regionpage.css";
 import "../styles/help.css";
-import imgOnOff from "../assets/onoffinstructions.jpg";
-import imgWearing from "../assets/wearinstructions.jpg";
-import imgTakeOff from "../assets/takeoffinstructions.jpg";
-import imgInsert from "../assets/insertinstructions.jpg";
 
 const buildSections = (t) => [
     {
         id: "power",
         icon: faPowerOff,
         title: t('gettingStarted.power.title'),
-        img: imgOnOff,
         content: (
             <>
                 <p><strong>{t('gettingStarted.power.onLabel')}</strong></p>
                 <ul>
-                    <li><Trans i18nKey="gettingStarted.power.on1">Press and hold the power button for <strong>2 seconds</strong>.</Trans></li>
-                    <li><Trans i18nKey="gettingStarted.power.on2">The amplifier will <strong>vibrate once</strong> to confirm it is powered on.</Trans></li>
+                    <li>{t('gettingStarted.power.on1')}</li>
+                    <li>{t('gettingStarted.power.on2')}</li>
                 </ul>
                 <p className="help-p-gap"><strong>{t('gettingStarted.power.offLabel')}</strong></p>
                 <ul>
-                    <li><Trans i18nKey="gettingStarted.power.off1">Press the power button <strong>once</strong> (short press).</Trans></li>
-                    <li><Trans i18nKey="gettingStarted.power.off2">The amplifier will <strong>vibrate twice</strong> to confirm it is powered off.</Trans></li>
+                    <li>{t('gettingStarted.power.off1')}</li>
                 </ul>
                 <p className="help-p-gap"><strong>{t('gettingStarted.power.batLabel')}</strong></p>
                 <ul>
-                    <li><Trans i18nKey="gettingStarted.power.bat1">When the battery is empty, the amplifier will <strong>vibrate multiple times continuously</strong> and turn off automatically.</Trans></li>
+                    <li>{t('gettingStarted.power.bat1')}</li>
                     <li>{t('gettingStarted.power.bat2')}</li>
                 </ul>
             </>
         ),
     },
     {
-        id: "bluetooth",
+        id: "wifi",
         icon: faWifi,
-        title: t('gettingStarted.bluetooth.title'),
+        title: t('gettingStarted.wifi.title'),
         content: (
             <>
-                <p><strong>{t('gettingStarted.bluetooth.importantLabel')}</strong> {t('gettingStarted.bluetooth.introText')}</p>
+                <p>{t('gettingStarted.wifi.intro')}</p>
                 <ol className="help-list-gap">
-                    <li>{t('gettingStarted.bluetooth.step1')}</li>
-                    <li><Trans i18nKey="gettingStarted.bluetooth.step2">Open <strong>Settings &rarr; Bluetooth &amp; devices &rarr; Add device</strong> in Windows.</Trans></li>
-                    <li><Trans i18nKey="gettingStarted.bluetooth.step3">Select <strong>&quot;Bluetooth&quot;</strong> from the add-device options.</Trans></li>
-                    <li><Trans i18nKey="gettingStarted.bluetooth.step4">Wait for <strong>&quot;Brainlink_Pro (Audio)&quot;</strong> to appear in the list.</Trans></li>
-                    <li><Trans i18nKey="gettingStarted.bluetooth.step5">Click on <strong>&quot;Brainlink_Pro (Audio)&quot;</strong> to pair.</Trans></li>
+                    <li>{t('gettingStarted.wifi.step1')}</li>
+                    <li>{t('gettingStarted.wifi.step2')}</li>
+                    <li>{t('gettingStarted.wifi.step3')}</li>
+                    <li>{t('gettingStarted.wifi.step4')}</li>
                 </ol>
                 <p className="help-note help-note--blue">
-                    <Trans i18nKey="gettingStarted.bluetooth.note"><strong>Note:</strong> The headset will <strong>briefly connect and then disconnect</strong> automatically &mdash; this is normal! The pairing process only registers the headset with your device. The actual connection will be established automatically when you sign in to the application.</Trans>
+                    <strong>{t('gettingStarted.wifi.noteLabel')}</strong> {t('gettingStarted.wifi.noteText')}
                 </p>
             </>
         ),
@@ -65,16 +58,16 @@ const buildSections = (t) => [
         id: "wearing",
         icon: faHeadset,
         title: t('gettingStarted.wearing.title'),
-        img: imgWearing,
         content: (
             <>
                 <ul>
-                    <li><Trans i18nKey="gettingStarted.wearing.amp"><strong>Amplifier Position:</strong> Place the amplifier <strong>above your left ear</strong>.</Trans></li>
-                    <li className="help-li-gap"><Trans i18nKey="gettingStarted.wearing.light"><strong>Light Sensor Position:</strong> The light sensor should be positioned <strong>right between your eyebrows</strong>.</Trans></li>
-                    <li className="help-li-gap"><Trans i18nKey="gettingStarted.wearing.electrode"><strong>Electrode Position:</strong> The electrodes should be positioned <strong>2 inches above your eyebrows</strong> for optimal signal quality.</Trans></li>
+                    <li><strong>{t('gettingStarted.wearing.frontLabel')}</strong> {t('gettingStarted.wearing.frontText')}</li>
+                    <li className="help-li-gap"><strong>{t('gettingStarted.wearing.backLabel')}</strong> {t('gettingStarted.wearing.backText')}</li>
+                    <li className="help-li-gap"><strong>{t('gettingStarted.wearing.earsLabel')}</strong> {t('gettingStarted.wearing.earsText')}</li>
+                    <li className="help-li-gap">{t('gettingStarted.wearing.nogel')}</li>
                 </ul>
                 <p className="help-note help-note--green">
-                    <Trans i18nKey="gettingStarted.wearing.tip"><strong>Tip:</strong> Proper positioning ensures accurate EEG readings. Take a moment to adjust the headset before starting calibration.</Trans>
+                    <strong>{t('gettingStarted.wearing.tipLabel')}</strong> {t('gettingStarted.wearing.tipText')}
                 </p>
             </>
         ),
@@ -83,38 +76,34 @@ const buildSections = (t) => [
         id: "charging",
         icon: faBatteryEmpty,
         title: t('gettingStarted.charging.title'),
-        img: imgTakeOff,
         content: (
             <>
                 <p>{t('gettingStarted.charging.intro')}</p>
                 <ol className="help-list-gap">
                     <li>{t('gettingStarted.charging.step1')}</li>
-                    <li><Trans i18nKey="gettingStarted.charging.step2">Gently pull the amplifier <strong>out of the clip</strong>.</Trans></li>
+                    <li>{t('gettingStarted.charging.step2')}</li>
                     <li>{t('gettingStarted.charging.step3')}</li>
-                    <li>{t('gettingStarted.charging.step4')}</li>
                 </ol>
                 <p className="help-note help-note--yellow">
-                    <Trans i18nKey="gettingStarted.charging.note"><strong>Note:</strong> The amplifier cannot be charged while attached to the headset clip.</Trans>
+                    <strong>{t('gettingStarted.charging.noteLabel')}</strong> {t('gettingStarted.charging.noteText')}
                 </p>
             </>
         ),
     },
     {
-        id: "reinsert",
+        id: "appconnect",
         icon: faPlug,
-        title: t('gettingStarted.reinsert.title'),
-        img: imgInsert,
+        title: t('gettingStarted.appconnect.title'),
         content: (
             <>
-                <p>{t('gettingStarted.reinsert.intro')}</p>
+                <p>{t('gettingStarted.appconnect.intro')}</p>
                 <ol className="help-list-gap">
-                    <li>{t('gettingStarted.reinsert.step1')}</li>
-                    <li>{t('gettingStarted.reinsert.step2')}</li>
-                    <li><Trans i18nKey="gettingStarted.reinsert.step3">Gently push the amplifier into the clip until it <strong>clicks securely</strong>.</Trans></li>
-                    <li>{t('gettingStarted.reinsert.step4')}</li>
+                    <li>{t('gettingStarted.appconnect.step1')}</li>
+                    <li>{t('gettingStarted.appconnect.step2')}</li>
+                    <li>{t('gettingStarted.appconnect.step3')}</li>
                 </ol>
-                <p className="help-note help-note--green">
-                    <Trans i18nKey="gettingStarted.reinsert.note"><strong>Important:</strong> Make sure the amplifier is properly seated to maintain good electrode contact.</Trans>
+                <p className="help-note help-note--blue">
+                    <strong>{t('gettingStarted.appconnect.tipLabel')}</strong> {t('gettingStarted.appconnect.tipText')}
                 </p>
             </>
         ),

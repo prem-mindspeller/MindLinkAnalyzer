@@ -96,9 +96,22 @@ const BaselineCalibration1 = () => {
         bandSamplesRef.current = [];
         elapsedRef.current = 0;
 
-        unsubBpRef.current = wsEegService.on('raw', (sample) => {
+        let rawMultiActive = false;
+        let lastRawMultiAt = 0;
+        const unsubRawMulti = wsEegService.on('rawMulti', (sample) => {
+            rawMultiActive = true;
+            lastRawMultiAt = Date.now();
             bandSamplesRef.current.push(sample);
         });
+        const unsubRaw = wsEegService.on('raw', (sample) => {
+            if (!rawMultiActive || Date.now() - lastRawMultiAt > 1000) {
+                bandSamplesRef.current.push(sample);
+            }
+        });
+        unsubBpRef.current = () => {
+            unsubRawMulti();
+            unsubRaw();
+        };
 
         setPhase(isEC ? PHASE.RECORDING_EC : PHASE.RECORDING_EO);
         setStatusMsg(isEC ? t('baseline.recordingEC') : t('baseline.recordingEO'));
@@ -257,22 +270,22 @@ const BaselineCalibration1 = () => {
                     </div>
 
 
-                    <div className="navigation-buttons-baseline">
-                        <button className="btn-back-eeg" disabled={isBusy} onClick={() => navigate(-1)}>
-                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
-                        </button>
-                        <button
-                            className="btn-next-eeg"
-                            disabled={!bothDone}
-                            onClick={handleNext}
-                        >
-                            {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
-                        </button>
-                    </div>
                 </div>
             </main>
+            <div className="nav-sub-footer">
+                <button className="btn-back-eeg" disabled={isBusy} onClick={() => navigate(-1)}>
+                    <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
+                </button>
+                <button
+                    className="btn-next-eeg"
+                    disabled={!bothDone}
+                    onClick={handleNext}
+                >
+                    {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                </button>
+            </div>
 
-            {/* ── Prep modal ── */}
+            {/* ── Prep modal ── */}}
             {showPrepModal && (
                 <div className="cal-modal-overlay">
                     <div className="cal-modal-card">

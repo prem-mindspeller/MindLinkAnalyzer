@@ -1,5 +1,5 @@
 {
-  "name": "electronfrontend",
+  "name": "mindlink-analyzer",
   "version": "1.0.0",
   "description": "electron frontend for the Mindlink app",
   "main": "main.js",
@@ -7,7 +7,7 @@
     "start": "electron .",
     "dev": "concurrently \"webpack --mode development --watch\" \"wait-on dist/bundle.js && cross-env NODE_ENV=development electron .\"",
     "build": "webpack --mode production",
-    "package": "npm run build && npx electron-builder",
+    "package": "electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Augustine Asimhi",
@@ -54,10 +54,15 @@
       "signAndEditExecutable": false,
       "signExts": []
     },
+    "beforePack": "./scripts/beforePack.js",
     "extraResources": [
       {
         "from": "../newBackend/dist/MindlinkBackend",
         "to": "backend"
+      },
+      {
+        "from": "icon.ico",
+        "to": "icon.ico"
       }
     ],
     "files": [

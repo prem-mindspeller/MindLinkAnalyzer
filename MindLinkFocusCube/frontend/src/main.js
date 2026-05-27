@@ -4,14 +4,15 @@ import './styles.css';
 import {
   brainShellPoint,
   cubeHeightFromAttention,
+  gameAttentionFromPayload,
   lerp,
   particleParamsFromBands,
   prefrontalWeight,
 } from './math.js';
 
 const state = {
-  attention: 0.5,
-  targetAttention: 0.5,
+  attention: 0,
+  targetAttention: 0,
   quality: 0,
   mode: 'waiting',
   device: {},
@@ -63,7 +64,7 @@ function renderDeviceBadge() {
   ui.deviceState.textContent = label;
   ui.battery.textContent = device.battery == null ? '--' : `${device.battery}%`;
   ui.port.textContent = device.serialPort || (device.ipAddress ? `${device.ipAddress}:${device.ipPort ?? '--'}` : '--');
-  ui.samples.textContent = String(device.sampleCount ?? 0);
+  ui.samples.textContent = String(device.channelSampleCount ?? device.sampleCount ?? 0);
   document.body.dataset.mode = hasRealDevice ? 'device' : mode;
 }
 
@@ -77,6 +78,8 @@ function renderProcessingStatus(payload = {}) {
   const progressPercent = Math.round(Math.max(0, Math.min(1, progress)) * 100);
   const contactQuality = Number(device.contactQuality ?? 0);
   const contactReason = device.contactReason || (device.worn ? 'contact' : 'unknown');
+  const stableFrames = Number(device.contactStableFrames ?? 0);
+  const requiredFrames = Number(device.contactRequiredStableFrames ?? 1);
 
   ui.calibration.textContent = payload.mode === 'device_calibrating'
     ? `${progressPercent}% (${count}/${required})`
@@ -85,7 +88,9 @@ function renderProcessingStatus(payload = {}) {
       : '--';
   ui.calibrationBar.style.width = `${progressPercent}%`;
   ui.contact.textContent = device.worn === false
-    ? `not worn (${contactReason})`
+    ? contactReason.endsWith('_stabilizing')
+      ? `stabilizing ${stableFrames}/${requiredFrames}`
+      : `not worn (${contactReason})`
     : device.worn === true
       ? `${Math.round(contactQuality * 100)}% (${contactReason})`
       : '--';
@@ -103,9 +108,9 @@ function createRenderer(canvas) {
     canvas,
     antialias: true,
     alpha: false,
-    preserveDrawingBuffer: true,
+    preserveDrawingBuffer: false,
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   return renderer;
 }
@@ -182,7 +187,7 @@ function setupCubeScene() {
   };
 }
 
-const BRAIN_PARTICLE_COUNT = 5000;
+const BRAIN_PARTICLE_COUNT = 3000;
 
 function createParticleCloud(color, count, mode) {
   const positions = new Float32Array(count * 3);
@@ -217,10 +222,10 @@ function createParticleCloud(color, count, mode) {
 
   const material = new THREE.PointsMaterial({
     color,
-    size: 3,
+    size: 4,
     sizeAttenuation: false,
     transparent: true,
-    opacity: 0.78,
+    opacity: 0.9,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
@@ -388,7 +393,7 @@ function connectWebSocket() {
 
   socket.addEventListener('message', (event) => {
     const payload = JSON.parse(event.data);
-    state.targetAttention = Number(payload.attention ?? 0.5);
+    state.targetAttention = gameAttentionFromPayload(payload);
     state.quality = Number(payload.quality ?? 0);
     state.mode = payload.mode ?? 'unknown';
     state.device = payload.device ?? {};
@@ -405,7 +410,7 @@ function connectWebSocket() {
     state.mode = 'disconnected';
     state.device = {};
     ui.connection.textContent = 'disconnected';
-    state.targetAttention = 0.5;
+    state.targetAttention = 0;
     renderDeviceBadge();
     renderProcessingStatus();
     setTimeout(connectWebSocket, 1200);

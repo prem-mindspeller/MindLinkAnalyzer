@@ -85,13 +85,6 @@ main {
     animation: fadeIn 0.45s ease;
 }
 
-.navigation-buttons2 {
-    order: -1;
-    width: 100%;
-    max-width: 480px;
-    margin-bottom: 20px;
-}
-
 .btn-back {
     background: transparent;
     border: none;

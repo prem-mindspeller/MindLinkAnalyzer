@@ -51,15 +51,19 @@ npm run dev:frontend
 
 The backend streams JSON frames at `ws://127.0.0.1:8765`. By default it connects to the MindRove SDK WiFi endpoint `192.168.4.1:4210`.
 
-The app defaults to the MindRove Bright four EEG rows:
+The app now defaults to `--eeg-rows auto`, matching `newBackend\mindrove_terminal_capture.py`: it asks the MindRove SDK for EEG rows, scans for the first four active rows, and maps them positionally:
 
 ```text
-0=Fp1, 1=Fp2, 4=O1, 5=O2
+selected row 1 = Fp1, selected row 2 = Fp2, selected row 3 = O1, selected row 4 = O2
 ```
+
+This matters because some SDK configurations expose Bright as `0,1,2,3`, while others use `0,1,4,5`. If you know your exact mapping, lock it with `--eeg-rows 0,1,4,5` or `--eeg-rows 0,1,2,3`.
 
 The MindRove SDK also exposes resistance/impedance rows. Focus Cube uses those rows as a worn/contact gate. If contact is not good enough, the backend emits `device_not_worn`, clears the EEG feature buffer, and sends `attention=0.0` so floating off-head electrode noise cannot lift the cube.
 
-By default, contact mode is `auto`: it trusts resistance/impedance when it is clearly good, but falls back to plausible active EEG row variance when the SDK resistance values are missing or not useful for the Bright headset. If the terminal says `not_worn`, inspect the printed `reason`, `resistance_ohms`, and `eeg_std` values.
+By default, contact mode is `auto`: it trusts resistance/impedance when it is clearly good, but falls back to plausible active EEG row variance when the SDK resistance values are missing or not useful for the Bright headset. Focus Cube also requires three consecutive worn/contact frames before it accepts samples for calibration or cube control. Until then the UI shows `stabilizing`, and the backend remains in `device_not_worn`.
+
+If the terminal says `not_worn`, inspect the printed `reason`, `stable_frames`, `resistance_ohms`, and `eeg_std` values.
 
 Tune or bypass the gate when testing:
 
@@ -67,6 +71,7 @@ Tune or bypass the gate when testing:
 python -m backend.focuscube.server --worn-resistance-threshold 5000000 --worn-min-good-resistance-pairs 2 --require-device
 python -m backend.focuscube.server --contact-mode eeg --require-device
 python -m backend.focuscube.server --contact-mode auto --worn-min-eeg-std 0.2 --worn-max-eeg-std 100000 --require-device
+python -m backend.focuscube.server --worn-stable-frames 5 --require-device
 python -m backend.focuscube.server --disable-worn-gate --require-device
 ```
 
@@ -129,6 +134,7 @@ Calibration and scoring knobs:
 
 ```powershell
 python -m backend.focuscube.server --require-device
+python -m backend.focuscube.server --eeg-rows auto --require-device
 python -m backend.focuscube.server --eeg-rows 0,1,4,5 --require-device
 python -m backend.focuscube.server --focus-deadband 0.02 --focus-full-scale 0.18 --require-device
 ```

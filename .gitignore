@@ -25,7 +25,6 @@ ElectronFrontEnd/node_modules/
 ElectronFrontEnd/dist/
 ElectronFrontEnd/release/
 # MindLinkFocusCube generated artifacts
-MindLinkFocusCube/backend/
 MindLinkFocusCube/.pytest_cache/
 MindLinkFocusCube/backend/__pycache__/
 MindLinkFocusCube/backend/.pytest_cache/

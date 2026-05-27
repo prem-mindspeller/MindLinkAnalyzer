@@ -4,16 +4,11 @@
     width: 100%;
     max-width: 900px;
     margin: 0 auto;
-    padding: 24px 20px 48px;
+    padding: 24px 20px 32px;
     display: flex;
     flex-direction: column;
     gap: 24px;
     flex: 1;
-
-    .navigation-buttons-eeg {
-        margin-top: auto;
-        justify-content: space-between;
-    }
 }
 
 /* ── Action card ──────────────────────────────────────────────────────────── */

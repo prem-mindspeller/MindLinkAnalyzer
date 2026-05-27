@@ -154,8 +154,15 @@ def band_features_from_psd(psd: np.ndarray, freqs: np.ndarray, filtered: np.ndar
 
 
 class ChannelBandFeatureExtractor:
-    def __init__(self, config: FocusCubeConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: FocusCubeConfig | None = None,
+        frontal_rows: tuple[int, ...] = (0, 1),
+        occipital_rows: tuple[int, ...] = (4, 5),
+    ) -> None:
         self.config = config or FocusCubeConfig()
+        self.frontal_rows = tuple(int(row) for row in frontal_rows)
+        self.occipital_rows = tuple(int(row) for row in occipital_rows)
 
     def compute(self, channel_samples: dict[int, list[float] | np.ndarray]) -> ChannelFocusFeatures:
         channel_features = {
@@ -164,8 +171,8 @@ class ChannelBandFeatureExtractor:
             if len(samples) >= self.config.window_size
         }
         regions = {
-            "frontal": self._region_features(channel_samples, (0, 1)),
-            "occipital": self._region_features(channel_samples, (4, 5)),
+            "frontal": self._region_features(channel_samples, self.frontal_rows),
+            "occipital": self._region_features(channel_samples, self.occipital_rows),
             "all": self._region_features(channel_samples, tuple(channel_samples.keys())),
         }
         metrics = self._metrics(regions)
@@ -495,7 +502,7 @@ def warming_frame(
         "mode": "device_warming",
         "device": status,
         "quality": 0.0,
-        "attention": 0.5,
+        "attention": 0.0,
         "sampleCount": int(sample_count),
         "requiredSamples": config.window_size,
         "bands": {

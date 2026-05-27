@@ -7,8 +7,9 @@ import random
 import threading
 import time
 import warnings
+from collections import deque
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 try:
     from scipy import stats as _scipy_stats
@@ -37,11 +38,9 @@ from fastapi.middleware.cors import CORSMiddleware
 try:
     from cushy_serial import CushySerial as _CushySerial
     _HAVE_CUSHY_SERIAL = True
-    print("[Backend] CushySerial: available", flush=True)
 except Exception as _cushy_e:
     _CushySerial = None
     _HAVE_CUSHY_SERIAL = False
-    print(f"[Backend] CushySerial: unavailable ({_cushy_e})", flush=True)
 
 # Add workspace root to sys.path so BrainLinkParser package can be found
 _WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -57,16 +56,33 @@ if hasattr(os, "add_dll_directory") and os.path.isdir(_BRAINLINK_PYD_DIR):
     except Exception:
         pass
 
-try:
-    from BrainLinkParser.BrainLinkParser import BrainLinkParser as _BrainLinkParser
-    _USE_SDK = True
-    print("[Backend] BrainLinkParser SDK: loaded", flush=True)
-except Exception as _e:
-    _USE_SDK = False
-    _BrainLinkParser = None
-    print(f"[Backend] BrainLinkParser SDK: unavailable ({_e}), using TGAM fallback", flush=True)
+_USE_SDK = False
+_BrainLinkParser = None
+_SDK_IMPORT_ATTEMPTED = False
+
+
+def _load_brainlink_parser():
+    """Load the legacy BrainLink SDK only when the serial fallback path needs it."""
+    global _USE_SDK, _BrainLinkParser, _SDK_IMPORT_ATTEMPTED
+    if _SDK_IMPORT_ATTEMPTED:
+        return _BrainLinkParser
+    _SDK_IMPORT_ATTEMPTED = True
+    try:
+        from BrainLinkParser.BrainLinkParser import BrainLinkParser
+        _BrainLinkParser = BrainLinkParser
+        _USE_SDK = True
+    except Exception:
+        _BrainLinkParser = None
+        _USE_SDK = False
+    return _BrainLinkParser
 
 from eeg_processor import TGAMParser, create_eeg_filter
+from mindrove_device import (
+    MINDROVE_CHANNEL_LABELS,
+    MINDROVE_CHANNEL_ORDER,
+    MINDROVE_SDK_AVAILABLE,
+    MindRoveDevice,
+)
 from neuroprofile_traceability import build_neuroprofile_export
 
 # ─── Known BrainLink hardware identifiers ────────────────────────────────────
@@ -75,10 +91,17 @@ KNOWN_NAMES  = ["brainlink", "neurosky", "ftdi", "silabs", "ch340"]
 
 # ─── Global connection state ──────────────────────────────────────────────────
 _serial_port:   Optional[serial.Serial]   = None
+_device_session: Optional[Any]            = None
 _reader_thread: Optional[threading.Thread] = None
+_active_connection_target: Optional[str]  = None
 _stop_event:    threading.Event            = threading.Event()
 _status:        str                        = "disconnected"
 _battery_level: Optional[int]             = None    # last known battery % from 0x85 packet
+_EEG_LOGS_ENABLED = os.getenv("EEG_DEBUG_LOGS", "1").strip().lower() not in ("0", "false", "no", "off")
+_EEG_ANALYSIS_VERBOSE = os.getenv("EEG_ANALYSIS_VERBOSE", "0").strip().lower() in ("1", "true", "yes", "on")
+_MINDROVE_WORN_MIN_ACTIVE_ROWS = max(1, int(os.getenv("MINDROVE_WORN_MIN_ACTIVE_EEG_ROWS", "4") or "4"))
+_MINDROVE_WORN_MIN_EEG_STD = float(os.getenv("MINDROVE_WORN_MIN_EEG_STD", "0.5") or "0.5")
+_MINDROVE_WORN_MAX_EEG_STD = float(os.getenv("MINDROVE_WORN_MAX_EEG_STD", "50000.0") or "50000.0")
 
 # Asyncio queue bridging the serial-reader thread → WebSocket broadcaster
 _broadcast_queue:  Optional[asyncio.Queue] = None
@@ -87,6 +110,132 @@ _event_loop:       Optional[asyncio.AbstractEventLoop] = None
 
 # Connected WebSocket clients
 _ws_clients: Set[WebSocket] = set()
+
+
+def _eeg_log(component: str, message: str, *, verbose: bool = False) -> None:
+    if not _EEG_LOGS_ENABLED:
+        return
+    if verbose and not _EEG_ANALYSIS_VERBOSE:
+        return
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{stamp}] [MindLinkBackend] [{component}] {message}", flush=True)
+
+
+def _raw_sample_shape(samples: List) -> str:
+    if not samples:
+        return "empty"
+    counts = _raw_sample_kind_counts(samples)
+    if counts["multichannel"]:
+        keys: List[str] = []
+        for sample in samples:
+            if _is_multichannel_raw_sample(sample):
+                source = sample.get("channels") if isinstance(sample, dict) and isinstance(sample.get("channels"), dict) else sample
+                if isinstance(source, dict):
+                    keys = sorted(
+                        str(key)
+                        for key in source.keys()
+                        if str(key).lower().replace("_", "") in ("fp1", "fp2", "o1", "o2")
+                    )
+                else:
+                    keys = list(MINDROVE_CHANNEL_ORDER)
+                break
+        if counts["multichannel"] != len(samples):
+            return (
+                f"mixed_raw mindrove={counts['multichannel']} scalar={counts['scalar']} "
+                f"feature_dict={counts['feature_dict']} other={counts['other']} keys={keys}"
+            )
+        return f"mindrove_raw keys={keys}"
+    first = samples[0]
+    if isinstance(first, (int, float)):
+        return "scalar_raw"
+    if isinstance(first, dict):
+        source = first.get("channels") if isinstance(first.get("channels"), dict) else first
+        keys = sorted(str(key) for key in source.keys())
+        channel_keys = [key for key in keys if key.lower().replace("_", "") in ("fp1", "fp2", "o1", "o2")]
+        if channel_keys:
+            return f"mindrove_raw keys={channel_keys}"
+        return f"feature_dict keys={keys[:8]}{'...' if len(keys) > 8 else ''}"
+    return type(first).__name__
+
+
+def _mindrove_contact_state_from_samples(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not samples or not _NP_AVAILABLE:
+        return {
+            "worn": False,
+            "quality": 0.0,
+            "reason": "no_samples",
+            "poor_signal": 200,
+            "eeg_std": [],
+        }
+
+    stds: List[float] = []
+    for key in MINDROVE_CHANNEL_ORDER:
+        values = []
+        for sample in samples:
+            try:
+                value = float(sample.get(key))
+            except Exception:
+                continue
+            if math.isfinite(value):
+                values.append(value)
+        stds.append(float(_np.std(values)) if values else 0.0)
+
+    required = max(1, min(len(MINDROVE_CHANNEL_ORDER), _MINDROVE_WORN_MIN_ACTIVE_ROWS))
+    active_rows = sum(
+        _MINDROVE_WORN_MIN_EEG_STD <= std <= _MINDROVE_WORN_MAX_EEG_STD
+        for std in stds
+    )
+    worn = active_rows >= required
+    quality = min(1.0, active_rows / required)
+    reason = "eeg_variance_fallback" if worn else "low_variance"
+    return {
+        "worn": worn,
+        "quality": quality,
+        "reason": reason,
+        "poor_signal": 0 if worn else 200,
+        "eeg_std": stds,
+        "active_rows": active_rows,
+        "required_rows": required,
+    }
+
+
+class _MindRoveContactDebouncer:
+    def __init__(self, good_required: int = 3, bad_required: int = 1):
+        self.good_required = max(1, int(good_required))
+        self.bad_required = max(1, int(bad_required))
+        self._good_count = 0
+        self._bad_count = 0
+        self._current_worn = False
+        self._last_state: Dict[str, Any] = {
+            "worn": False,
+            "quality": 0.0,
+            "reason": "initial",
+            "poor_signal": 200,
+            "eeg_std": [],
+        }
+
+    def update(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        if bool(state.get("worn")):
+            self._good_count += 1
+            self._bad_count = 0
+            if self._good_count >= self.good_required:
+                self._current_worn = True
+        else:
+            self._bad_count += 1
+            self._good_count = 0
+            if self._bad_count >= self.bad_required:
+                self._current_worn = False
+
+        smoothed = dict(state)
+        smoothed["worn"] = self._current_worn
+        if self._current_worn:
+            smoothed["poor_signal"] = int(state.get("poor_signal", 0) or 0)
+        else:
+            smoothed["poor_signal"] = 200
+            if bool(state.get("worn")):
+                smoothed["reason"] = "debouncing_contact"
+        self._last_state = smoothed
+        return smoothed
 
 
 # ─── WebSocket broadcast helpers ─────────────────────────────────────────────
@@ -103,6 +252,14 @@ async def _broadcast(message: dict) -> None:
         except Exception:
             dead.add(ws)
     _ws_clients.difference_update(dead)
+
+
+async def _websocket_keepalive(ws: WebSocket, interval_seconds: float = 10.0) -> None:
+    while True:
+        try:
+            await asyncio.wait_for(ws.receive_text(), timeout=interval_seconds)
+        except asyncio.TimeoutError:
+            await ws.send_text(json.dumps({"type": "heartbeat", "ts": time.time()}))
 
 
 async def _broadcaster() -> None:
@@ -134,12 +291,201 @@ def _enqueue(message: dict) -> None:
 
 # ─── Serial reader (runs in a daemon thread) ──────────────────────────────────
 
+def _mindrove_reader_worker() -> None:
+    """
+    Connect to a MindRove Wi-Fi device and broadcast FP1/FP2/O1/O2 samples.
+
+    The frontend still receives a scalar raw stream for the oscilloscope, but
+    recordings use the four-channel rawMulti stream.
+    """
+    global _device_session, _status, _active_connection_target
+
+    device: Optional[MindRoveDevice] = None
+    raw_batch: List[int] = []
+    raw_multi_batch: List[Dict[str, int]] = []
+    quality_buffer = deque(maxlen=_RAW_WINDOW)
+    contact_buffer = deque(maxlen=_RAW_EEG_FS)
+    contact_debouncer = _MindRoveContactDebouncer()
+    filters: Dict[str, Any] = {}
+    last_channel_rows: Tuple[int, ...] = ()
+    last_flush = time.monotonic()
+    last_quality = time.monotonic()
+    last_data_time = time.monotonic()
+    last_stream_log = time.monotonic()
+    samples_since_log = 0
+    FLUSH_INTERVAL = 0.016
+    SILENCE_TIMEOUT = 5.0
+
+    def _flush_raw_batches() -> None:
+        nonlocal raw_batch, raw_multi_batch, last_flush
+        if raw_multi_batch:
+            _enqueue({
+                "type": "raw_multi_batch",
+                "samples": list(raw_multi_batch),
+                "channels": [
+                    {"key": key, "label": MINDROVE_CHANNEL_LABELS.get(key, key.upper())}
+                    for key in MINDROVE_CHANNEL_ORDER
+                ],
+            })
+            raw_multi_batch.clear()
+        if raw_batch:
+            _enqueue({"type": "raw_batch", "samples": list(raw_batch)})
+            raw_batch.clear()
+        last_flush = time.monotonic()
+
+    try:
+        _eeg_log("MindRove", "reader starting")
+        device = MindRoveDevice()
+        _device_session = device
+        _status = "connecting"
+        _enqueue({"type": "status", "value": "connecting"})
+
+        device.connect()
+        fs = int(device.sample_rate or _RAW_EEG_FS)
+        quality_window = _raw_window_samples(fs)
+        quality_buffer = deque(maxlen=quality_window)
+        contact_buffer = deque(maxlen=max(1, int(round(float(fs)))))
+        filters = {key: create_eeg_filter(fs=fs) for key in MINDROVE_CHANNEL_ORDER}
+        last_channel_rows = tuple(ch.row_index for ch in device.channels)
+        _eeg_log(
+            "MindRove",
+            f"connected fs={fs} rows={list(last_channel_rows)} channels={[ch.key for ch in device.channels]} "
+            f"battery_channel={device.battery_channel}",
+        )
+
+        _status = "connected"
+        _enqueue({"type": "status", "value": "connected"})
+        _enqueue({
+            "type": "device_info",
+            "device": "mindrove",
+            "sampleRate": fs,
+            "channels": [
+                {"key": ch.key, "label": ch.label, "row": ch.row_index}
+                for ch in device.channels
+            ],
+        })
+
+        while not _stop_event.is_set():
+            samples = device.read_samples(max_samples=None)
+            if samples:
+                last_data_time = time.monotonic()
+                samples_since_log += len(samples)
+            if device.battery_level is not None:
+                _set_battery_level(device.battery_level, "mindrove")
+
+            current_channel_rows = tuple(ch.row_index for ch in device.channels)
+            if current_channel_rows and current_channel_rows != last_channel_rows:
+                _flush_raw_batches()
+                filters = {key: create_eeg_filter(fs=fs) for key in MINDROVE_CHANNEL_ORDER}
+                quality_buffer.clear()
+                last_channel_rows = current_channel_rows
+                # _eeg_log("MindRove", f"active_rows_updated rows={list(current_channel_rows)} filters_reset=true")
+                _enqueue({
+                    "type": "device_info",
+                    "device": "mindrove",
+                    "sampleRate": fs,
+                    "channels": [
+                        {"key": ch.key, "label": ch.label, "row": ch.row_index}
+                        for ch in device.channels
+                    ],
+                })
+
+            for sample in samples:
+                filtered: Dict[str, int] = {}
+                values: List[float] = []
+                for key in MINDROVE_CHANNEL_ORDER:
+                    if key not in sample:
+                        continue
+                    value = filters[key](float(sample[key]))
+                    filtered[key] = int(round(value))
+                    values.append(value)
+
+                if not values:
+                    continue
+
+                aggregate = float(sum(values) / len(values))
+                contact_buffer.append({
+                    key: float(sample[key])
+                    for key in MINDROVE_CHANNEL_ORDER
+                    if key in sample
+                })
+                raw_multi_batch.append(filtered)
+                raw_batch.append(int(round(aggregate)))
+                quality_buffer.append(aggregate)
+
+            now = time.monotonic()
+            if now - last_flush >= FLUSH_INTERVAL:
+                _flush_raw_batches()
+
+            if now - last_stream_log >= 1.0:
+                # _eeg_log(
+                #     "MindRoveStream",
+                #     f"samples_last_sec={samples_since_log} rows={list(last_channel_rows)} "
+                #     f"quality_buffer={len(quality_buffer)}/{quality_window} "
+                #     f"battery={_battery_level if _battery_level is not None else 'n/a'} status={_status}",
+                # )
+                samples_since_log = 0
+                last_stream_log = now
+
+            if now - last_quality >= 1.0 and len(quality_buffer) >= quality_window:
+                contact_state = _mindrove_contact_state_from_samples(list(contact_buffer))
+                contact_state = contact_debouncer.update(contact_state)
+                qc_reason = None
+                if contact_state["worn"]:
+                    qc_reason = _raw_window_qc(list(quality_buffer), fs=fs)
+                poor_signal = int(contact_state["poor_signal"])
+                if contact_state["worn"] and qc_reason is not None:
+                    poor_signal = 80
+                reason = qc_reason or contact_state["reason"]
+                std_text = ",".join(f"{std:.2f}" for std in contact_state.get("eeg_std", []))
+                # _eeg_log(
+                #     "MindRoveQC",
+                #     f"worn={contact_state['worn']} reason={reason} poor_signal={poor_signal} "
+                #     f"active={contact_state.get('active_rows', 0)}/{contact_state.get('required_rows', 4)} "
+                #     f"eeg_std=[{std_text}]",
+                # )
+                _enqueue({
+                    "type": "eeg_data",
+                    "poorSignal": poor_signal,
+                    "attention": 0,
+                    "meditation": 0,
+                    "bandPower": None,
+                    "battery": _battery_level,
+                })
+                last_quality = now
+
+            if time.monotonic() - last_data_time > SILENCE_TIMEOUT:
+                _eeg_log("MindRove", "device silent for 5 s; stopping reader")
+                _enqueue({"type": "error", "message": "MindRove device silent for 5 s."})
+                break
+
+            if not samples:
+                time.sleep(0.01)
+
+        _flush_raw_batches()
+
+    except Exception as exc:
+        _eeg_log("MindRove", f"reader error: {exc}")
+        _enqueue({"type": "error", "message": str(exc)})
+    finally:
+        if device is not None:
+            try:
+                device.disconnect()
+            except Exception:
+                pass
+        _device_session = None
+        _active_connection_target = None
+        _status = "disconnected"
+        _eeg_log("MindRove", "reader stopped")
+        _enqueue({"type": "status", "value": "disconnected"})
+
+
 def _reader_worker(port_path: str) -> None:
     """
     Opens the serial port, feeds bytes into the TGAM parser, batches raw
     samples (~60 fps) and forwards all parsed data to the broadcast queue.
     """
-    global _serial_port, _status
+    global _serial_port, _status, _active_connection_target
 
     eeg_filter = create_eeg_filter()
     raw_batch: List[int] = []
@@ -233,8 +579,9 @@ def _reader_worker(port_path: str) -> None:
     def _noop(*args): pass
 
     # ── SDK parser path ──────────────────────────────────────────────────────
-    if _USE_SDK and _BrainLinkParser:
-        sdk_parser = _BrainLinkParser(_on_eeg, _on_extend_eeg, _noop, _noop, _on_raw)
+    BrainLinkParserClass = _load_brainlink_parser()
+    if BrainLinkParserClass:
+        sdk_parser = BrainLinkParserClass(_on_eeg, _on_extend_eeg, _noop, _noop, _on_raw)
 
         def _sdk_sidecar_on_packet(payload: List[int]) -> None:
             parsed = TGAMParser.parse_payload(payload)
@@ -356,6 +703,7 @@ def _reader_worker(port_path: str) -> None:
             except Exception:
                 pass
         _serial_port = None
+        _active_connection_target = None
         _status = "disconnected"
         _enqueue({"type": "status", "value": "disconnected"})
 
@@ -398,10 +746,20 @@ def health() -> Dict:
 
 @app.get("/ports")
 def list_ports() -> Dict:
-    """Return all available serial ports with metadata."""
+    """Return available EEG devices with metadata."""
+    mindrove_port = {
+        "path": "mindrove://wifi",
+        "pnpId": "MINDROVE_WIFI",
+        "manufacturer": "MindRove",
+        "description": "MindRove Wi-Fi EEG (FP1, FP2, O1, O2)",
+        "deviceType": "mindrove",
+        "available": MINDROVE_SDK_AVAILABLE,
+        "channels": list(MINDROVE_CHANNEL_ORDER),
+        "samplingRate": _RAW_EEG_FS,
+    }
     try:
         import serial.tools.list_ports  # ensure platform module is loaded
-        ports = []
+        ports = [mindrove_port]
         for p in serial.tools.list_ports.comports():
             hwid = getattr(p, "hwid", "") or ""
             ports.append({
@@ -409,10 +767,11 @@ def list_ports() -> Dict:
                 "pnpId":        hwid,
                 "manufacturer": p.manufacturer or "",
                 "description":  p.description  or p.device,
+                "deviceType":   "serial",
             })
         return {"ports": ports}
     except Exception:
-        return {"ports": []}
+        return {"ports": [mindrove_port]}
 
 
 
@@ -428,33 +787,58 @@ def status() -> Dict:
 @app.post("/connect")
 def connect(body: Dict) -> Dict:
     """
-    Open a serial connection to a BrainLink device.
+    Open a connection to the configured EEG device.
 
-    Request:  { "port": "COM3" }
+    Request:  { "port": "mindrove://wifi" } or { "port": "COM3" }
     Response: { "success": true } | { "success": false, "error": "..." }
     """
-    global _reader_thread, _status
+    global _reader_thread, _status, _active_connection_target
 
-    port_path = body.get("port", "").strip()
+    body = body or {}
+    port_path = str(body.get("port", "mindrove://wifi")).strip()
     if not port_path:
-        return {"success": False, "error": "port is required"}
+        port_path = "mindrove://wifi"
+
+    use_mindrove = port_path.startswith("mindrove://") or body.get("device") == "mindrove"
+    connection_target = "mindrove://wifi" if use_mindrove else port_path
+    _eeg_log("Connect", f"request target={connection_target} requested_port={port_path} status={_status}")
+
+    if (
+        _reader_thread
+        and _reader_thread.is_alive()
+        and _active_connection_target == connection_target
+        and _status in ("connecting", "connected")
+    ):
+        _eeg_log("Connect", f"idempotent target={connection_target} status={_status}")
+        return {"success": True, "status": _status, "alreadyConnected": True}
 
     # Disconnect existing connection first
     _stop_event.set()
     if _reader_thread and _reader_thread.is_alive():
         _reader_thread.join(timeout=2.0)
+        if _reader_thread.is_alive():
+            _eeg_log("Connect", f"blocked target={connection_target}; existing reader still alive after join")
+            return {
+                "success": False,
+                "error": "Existing EEG connection is still shutting down. Try again in a moment.",
+            }
     _stop_event.clear()
 
     _status = "connecting"
     _enqueue({"type": "status", "value": "connecting"})
 
+    target = _mindrove_reader_worker if use_mindrove else _reader_worker
+    args = () if use_mindrove else (port_path,)
+    _active_connection_target = connection_target
+
     _reader_thread = threading.Thread(
-        target=_reader_worker,
-        args=(port_path,),
+        target=target,
+        args=args,
         daemon=True,
         name="eeg-reader",
     )
     _reader_thread.start()
+    _eeg_log("Connect", f"reader_started target={connection_target} thread={_reader_thread.name}")
 
     return {"success": True}
 
@@ -462,11 +846,19 @@ def connect(body: Dict) -> Dict:
 
 @app.post("/disconnect")
 def disconnect() -> Dict:
-    """Close the active serial connection."""
-    global _status
+    """Close the active EEG device connection."""
+    global _status, _device_session, _active_connection_target
+    _eeg_log("Connect", f"disconnect request status={_status} target={_active_connection_target}")
     _stop_event.set()
     if _reader_thread and _reader_thread.is_alive():
         _reader_thread.join(timeout=2.0)
+    if _device_session is not None:
+        try:
+            _device_session.disconnect()
+        except Exception:
+            pass
+        _device_session = None
+    _active_connection_target = None
     _stop_event.clear()
     _status = "disconnected"
     _enqueue({"type": "status", "value": "disconnected"})
@@ -475,11 +867,14 @@ def disconnect() -> Dict:
 
 _BANDS = ["delta", "theta", "lowAlpha", "highAlpha", "lowBeta", "highBeta", "lowGamma", "midGamma"]
 
-# Raw EEG conversion helpers used when the frontend sends raw 512 Hz samples
-# instead of TGAM-chip band-power dicts.
-_RAW_EEG_FS      = 512    # BrainLink sample rate (Hz)
-_RAW_WINDOW      = 1024   # samples per FFT window (2.0 sec at 512 Hz)
-_RAW_STEP        = 1024   # non-overlapping offline windows for block statistics
+# Raw EEG conversion helpers used when the frontend sends raw MindRove samples
+# instead of TGAM-chip band-power dicts.  Keep the 2 s analysis design, but
+# derive sample counts from the device sample rate.
+_RAW_EEG_FS      = 500    # MindRove default sample rate (Hz)
+_LEGACY_RAW_EEG_FS = 512  # BrainLink scalar fallback sample rate (Hz)
+_RAW_WINDOW_SECONDS = 2.0
+_RAW_WINDOW      = round(_RAW_WINDOW_SECONDS * _RAW_EEG_FS)
+_RAW_STEP        = _RAW_WINDOW
 _MT_TAPERS       = 3      # DPSS multitaper count (matches legacy mt_tapers=3)
 _MT_NW           = 2.5    # time-bandwidth product (matches legacy NW=2.5)
 _INFERENTIAL_ABS_TOL = 1e-12
@@ -487,8 +882,57 @@ _INFERENTIAL_REL_TOL = 1e-9
 _BATTERY_ATTRS = ("battery", "Battery", "electricity", "power")
 
 
+def _raw_window_samples(fs: int = _RAW_EEG_FS) -> int:
+    try:
+        return max(1, int(round(_RAW_WINDOW_SECONDS * float(fs))))
+    except Exception:
+        return _RAW_WINDOW
+
+
+def _raw_step_samples(fs: int = _RAW_EEG_FS) -> int:
+    return _raw_window_samples(fs)
+
+
+_MONTAGE_REGION_CHANNELS: Dict[str, tuple] = {
+    "frontal": ("fp1", "fp2"),
+    "occipital": ("o1", "o2"),
+}
+_MONTAGE_CHANNEL_INDEX = {
+    key: idx for idx, key in enumerate(MINDROVE_CHANNEL_ORDER)
+}
+_MONTAGE_CHANNEL_DISPLAY = {
+    "fp1": "Fp1",
+    "fp2": "Fp2",
+    "o1": "O1",
+    "o2": "O2",
+}
+_MIN_PRIMARY_REGION_AGREEMENT = float(os.getenv("MINDROVE_MIN_PRIMARY_REGION_AGREEMENT", "0.15") or "0.15")
+
+_OCCIPITAL_PRIMARY_TASKS = {
+    "visual_imagery",
+    "color_perception",
+    "num_form",
+    "order_surprise",
+}
+_FRONTAL_PRIMARY_TASKS = {
+    "attention_focus",
+    "focused_attention",
+    "focus",
+    "mental_math",
+    "mental_arithmetic",
+    "working_memory",
+    "language_processing",
+    "cognitive_load",
+}
+_MIXED_REGION_TASKS = {
+    "emotion_face",
+    "reappraisal",
+    "curiosity",
+}
+
+
 def _debug_log(tag: str, message: str) -> None:
-    return None
+    _eeg_log(tag, message, verbose=True)
 
 
 def _feature_sample(names: List[str], limit: int = 8) -> str:
@@ -530,6 +974,7 @@ def _set_battery_level(level: Optional[int], source: str = "") -> None:
         return
     if level != _battery_level:
         _battery_level = level
+        _eeg_log("Battery", f"level={_battery_level} source={source or 'unknown'}")
         _enqueue({"type": "battery", "level": _battery_level})
 
 # TGAM frequency band ranges (Hz) for raw EEG conversion
@@ -557,34 +1002,36 @@ def _raw_to_bp_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Dict]:
     computed over the whole batch in numpy, then converted to the list-of-dicts
     format expected by the rest of the pipeline.
     """
-    if not _NP_AVAILABLE or len(raw_samples) < _RAW_WINDOW:
+    window_n = _raw_window_samples(fs)
+    step_n = _raw_step_samples(fs)
+    if not _NP_AVAILABLE or len(raw_samples) < window_n:
         return []
 
     arr    = _np.asarray(raw_samples, dtype=_np.float64)
     n      = len(arr)
-    freqs  = _np.fft.rfftfreq(_RAW_WINDOW, d=1.0 / fs)   # (n_freqs,)
+    freqs  = _np.fft.rfftfreq(window_n, d=1.0 / fs)   # (n_freqs,)
 
     # ── Build strided window matrix without copying data where possible ───────
-    n_win = max(0, (n - _RAW_WINDOW) // _RAW_STEP + 1)
+    n_win = max(0, (n - window_n) // step_n + 1)
     if n_win == 0:
         return []
-    idx        = (_np.arange(n_win)[:, None] * _RAW_STEP +
-                  _np.arange(_RAW_WINDOW)[None, :])       # (n_win, _RAW_WINDOW)
-    segs       = arr[idx]                                  # (n_win, _RAW_WINDOW)
+    idx        = (_np.arange(n_win)[:, None] * step_n +
+                  _np.arange(window_n)[None, :])       # (n_win, window_n)
+    segs       = arr[idx]                                  # (n_win, window_n)
     segs       = segs - segs.mean(axis=1, keepdims=True)  # DC removal per window
 
     # ── Multitaper PSD (all windows, all tapers in one batch FFT) ─────────────
-    hann   = _np.hanning(_RAW_WINDOW)                     # fallback taper
+    hann   = _np.hanning(window_n)                       # fallback taper
     psd_batch = None                                       # (n_win, n_freqs)
 
     if _DPSS_AVAILABLE:
         try:
-            tapers = _dpss(_RAW_WINDOW, NW=_MT_NW, Kmax=_MT_TAPERS, sym=False)
-            # tapers: (K, _RAW_WINDOW)
+            tapers = _dpss(window_n, NW=_MT_NW, Kmax=_MT_TAPERS, sym=False)
+            # tapers: (K, window_n)
             for k in range(_MT_TAPERS):
-                tapered = segs * tapers[k]                # (n_win, _RAW_WINDOW)
+                tapered = segs * tapers[k]                # (n_win, window_n)
                 Xk = _np.fft.rfft(tapered, axis=1)       # (n_win, n_freqs)
-                Pk = (_np.abs(Xk) ** 2) / (fs * _RAW_WINDOW + 1e-12)
+                Pk = (_np.abs(Xk) ** 2) / (fs * window_n + 1e-12)
                 psd_batch = Pk if psd_batch is None else psd_batch + Pk
             psd_batch = psd_batch / float(_MT_TAPERS)
         except Exception:
@@ -593,7 +1040,7 @@ def _raw_to_bp_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Dict]:
     if psd_batch is None:
         tapered   = segs * hann                           # (n_win, _RAW_WINDOW)
         Xk        = _np.fft.rfft(tapered, axis=1)        # (n_win, n_freqs)
-        psd_batch = (_np.abs(Xk) ** 2) / (_RAW_WINDOW * fs + 1e-12)
+        psd_batch = (_np.abs(Xk) ** 2) / (window_n * fs + 1e-12)
 
     # ── SNR noise-floor subtraction per window ─────────────────────────────────
     noise_floor = _np.percentile(psd_batch, 10, axis=1, keepdims=True)  # (n_win,1)
@@ -698,12 +1145,14 @@ def _trapz(y, x=None) -> float:
 
 
 def _iter_raw_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List:
-    if not _NP_AVAILABLE or len(raw_samples) < _RAW_WINDOW:
+    window_n = _raw_window_samples(fs)
+    step_n = _raw_step_samples(fs)
+    if not _NP_AVAILABLE or len(raw_samples) < window_n:
         return []
     arr = _np.asarray(raw_samples, dtype=_np.float64)
     windows = []
-    for start in range(0, len(arr) - _RAW_WINDOW + 1, _RAW_STEP):
-        windows.append(arr[start:start + _RAW_WINDOW])
+    for start in range(0, len(arr) - window_n + 1, step_n):
+        windows.append(arr[start:start + window_n])
     return windows
 
 
@@ -747,8 +1196,8 @@ def _raw_window_qc(window, fs: int = _RAW_EEG_FS) -> Optional[str]:
     try:
         freqs, psd, _ = _window_psd(x, fs)
         total = float(_np.sum(psd)) + 1e-12
-        neural_ratio = float(_np.sum(psd[(freqs >= 0.5) & (freqs <= 13.0)])) / total
-        hf_ratio = float(_np.sum(psd[freqs >= 30.0])) / total
+        neural_ratio = float(_np.sum(psd[(freqs >= 0.5) & (freqs <= 30.0)])) / total
+        hf_ratio = float(_np.sum(psd[freqs >= 35.0])) / total
         valid = (freqs >= 1.0) & (freqs <= 40.0) & (psd > 0)
         if int(_np.sum(valid)) > 10:
             slope, _ = _np.polyfit(_np.log10(freqs[valid]), _np.log10(psd[valid]), 1)
@@ -852,13 +1301,732 @@ def _raw_window_to_features(window, fs: int = _RAW_EEG_FS) -> Dict[str, float]:
     return features
 
 
+def _normalize_raw_channel_key(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "").replace("_", "")
+
+
+def _sample_channel_map(sample: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(sample, dict):
+        source = sample.get("channels") if isinstance(sample.get("channels"), dict) else sample
+        return {_normalize_raw_channel_key(k): v for k, v in source.items()}
+    if isinstance(sample, (list, tuple)) and len(sample) >= len(MINDROVE_CHANNEL_ORDER):
+        return {
+            key: sample[idx]
+            for idx, key in enumerate(MINDROVE_CHANNEL_ORDER)
+        }
+    return None
+
+
+def _is_multichannel_raw_sample(sample: Any) -> bool:
+    channel_map = _sample_channel_map(sample)
+    if not channel_map:
+        return False
+    return all(key in channel_map for key in MINDROVE_CHANNEL_ORDER)
+
+
+def _raw_sample_kind_counts(samples: List) -> Dict[str, int]:
+    counts = {
+        "multichannel": 0,
+        "scalar": 0,
+        "feature_dict": 0,
+        "other": 0,
+    }
+    for sample in samples or []:
+        if _is_multichannel_raw_sample(sample):
+            counts["multichannel"] += 1
+        elif isinstance(sample, (int, float)):
+            counts["scalar"] += 1
+        elif isinstance(sample, dict):
+            counts["feature_dict"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+def _multichannel_raw_subset(samples: List) -> List:
+    return [sample for sample in samples or [] if _is_multichannel_raw_sample(sample)]
+
+
+def _scalar_raw_subset(samples: List) -> List:
+    return [sample for sample in samples or [] if isinstance(sample, (int, float))]
+
+
+def _feature_dict_subset(samples: List) -> List[Dict]:
+    return [
+        sample for sample in samples or []
+        if isinstance(sample, dict) and not _is_multichannel_raw_sample(sample)
+    ]
+
+
+def _log_mixed_sample_use(component: str, samples: List, using: str, *, task_id: str = "") -> None:
+    counts = _raw_sample_kind_counts(samples)
+    total = sum(counts.values())
+    if total <= counts.get(using, 0):
+        return
+    task_part = f" task={task_id}" if task_id else ""
+    _eeg_log(
+        component,
+        (
+            f"mixed_sample_types{task_part} using={using} total={total} "
+            f"mindrove={counts['multichannel']} scalar={counts['scalar']} "
+            f"feature_dict={counts['feature_dict']} other={counts['other']}"
+        ),
+    )
+
+
+def _coerce_multichannel_raw_samples(samples: List) -> Optional[Any]:
+    if not _NP_AVAILABLE or not samples:
+        return None
+
+    rows = []
+    for sample in _multichannel_raw_subset(samples):
+        channel_map = _sample_channel_map(sample)
+        if not channel_map:
+            continue
+        row = []
+        valid = True
+        for key in MINDROVE_CHANNEL_ORDER:
+            try:
+                value = float(channel_map[key])
+            except Exception:
+                valid = False
+                break
+            if not math.isfinite(value):
+                valid = False
+                break
+            row.append(value)
+        if valid:
+            rows.append(row)
+
+    if not rows:
+        return None
+    return _np.asarray(rows, dtype=_np.float64)
+
+
+def _montage_profile_for_task(task_id: str = "") -> Dict[str, Any]:
+    tid = (task_id or "").lower()
+    if tid in _OCCIPITAL_PRIMARY_TASKS:
+        return {
+            "primary_region": "occipital",
+            "secondary_region": "frontal",
+            "region_weights": {"occipital": 0.80, "frontal": 0.20},
+        }
+    if tid in _FRONTAL_PRIMARY_TASKS:
+        return {
+            "primary_region": "frontal",
+            "secondary_region": "occipital",
+            "region_weights": {"frontal": 0.80, "occipital": 0.20},
+        }
+    if tid in _MIXED_REGION_TASKS:
+        return {
+            "primary_region": "frontal_occipital",
+            "secondary_region": "balanced_context",
+            "region_weights": {"frontal": 0.55, "occipital": 0.45},
+        }
+    return {
+        "primary_region": "balanced",
+        "secondary_region": "none",
+        "region_weights": {"frontal": 0.50, "occipital": 0.50},
+    }
+
+
+def _combine_feature_rows_weighted(row_weight_pairs: List[tuple]) -> Dict[str, float]:
+    row_weight_pairs = [
+        (row, float(weight))
+        for row, weight in row_weight_pairs
+        if row and math.isfinite(float(weight)) and float(weight) > 0.0
+    ]
+    if not row_weight_pairs or not _NP_AVAILABLE:
+        return {}
+
+    out: Dict[str, float] = {}
+    keys = set().union(*(row.keys() for row, _ in row_weight_pairs))
+    for key in keys:
+        weighted_values = []
+        weights = []
+        for row, weight in row_weight_pairs:
+            if key not in row:
+                continue
+            try:
+                value = float(row[key])
+            except Exception:
+                continue
+            if math.isfinite(value):
+                weighted_values.append(value * weight)
+                weights.append(weight)
+        if not weights:
+            continue
+
+        value = float(sum(weighted_values) / (sum(weights) + 1e-12))
+        if key in ("_emg_guard", "_gamma_evaluated"):
+            out[key] = float(1 if value >= 0.5 else 0)
+        else:
+            out[key] = value
+    if out.get("_emg_guard", 0.0) >= 1.0:
+        out["_gamma_evaluated"] = 0.0
+    return out
+
+
+def _safe_positive(value: Any, floor: float = 1e-12) -> float:
+    try:
+        value = float(value)
+    except Exception:
+        return floor
+    if not math.isfinite(value):
+        return floor
+    return max(floor, value)
+
+
+def _spatial_contrast_features(region_rows: Dict[str, Dict[str, float]]) -> Dict[str, float]:
+    frontal = region_rows.get("frontal")
+    occipital = region_rows.get("occipital")
+    if not frontal or not occipital:
+        return {}
+
+    fp_alpha = _safe_positive(frontal.get("alpha_power"))
+    o_alpha = _safe_positive(occipital.get("alpha_power"))
+    fp_beta = _safe_positive(frontal.get("beta_power"))
+    o_beta = _safe_positive(occipital.get("beta_power"))
+    fp_beta_alpha = _safe_positive(frontal.get("beta_alpha_ratio"))
+    o_beta_alpha = _safe_positive(occipital.get("beta_alpha_ratio"))
+    return {
+        "posterior_anterior_alpha": math.log(o_alpha) - math.log(fp_alpha),
+        "posterior_anterior_beta": math.log(fp_beta) - math.log(o_beta),
+        "occipital_alpha_advantage": o_alpha / fp_alpha,
+        "frontal_attention_advantage": fp_beta_alpha / o_beta_alpha,
+        "front_occipital_alpha_ratio": o_alpha / fp_alpha,
+        "front_occipital_beta_ratio": fp_beta / o_beta,
+    }
+
+
+def _aggregate_channel_feature_rows(rows: List[Dict[str, float]]) -> Dict[str, float]:
+    if not rows:
+        return {}
+    return _combine_feature_rows_weighted([(row, 1.0) for row in rows])
+
+
+def _region_feature_rows(channel_rows: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
+    regions: Dict[str, Dict[str, float]] = {}
+    for region, channels in _MONTAGE_REGION_CHANNELS.items():
+        pairs = [
+            (channel_rows[key], 1.0)
+            for key in channels
+            if key in channel_rows
+        ]
+        row = _combine_feature_rows_weighted(pairs)
+        if row:
+            regions[region] = row
+    return regions
+
+
+def _task_weighted_montage_features(
+    channel_rows: Dict[str, Dict[str, float]],
+    task_id: str = "",
+) -> Dict[str, float]:
+    region_rows = _region_feature_rows(channel_rows)
+    profile = _montage_profile_for_task(task_id)
+    pairs = []
+    for region, weight in profile["region_weights"].items():
+        if region in region_rows:
+            pairs.append((region_rows[region], weight))
+    if pairs:
+        row = _combine_feature_rows_weighted(pairs)
+    else:
+        row = _aggregate_channel_feature_rows(list(channel_rows.values()))
+
+    row.update(_spatial_contrast_features(region_rows))
+    primary = profile["primary_region"]
+    if primary in _MONTAGE_REGION_CHANNELS:
+        primary_channels = _MONTAGE_REGION_CHANNELS[primary]
+        present = [key for key in primary_channels if key in channel_rows]
+        row["_primary_region_valid_channel_count"] = float(len(present))
+        row["_primary_region_complete"] = float(1 if len(present) == len(primary_channels) else 0)
+        row["_evidence_region_weight"] = float(profile["region_weights"].get(primary, 0.0))
+        row["_evidence_region_code"] = float(1 if primary == "frontal" else 2 if primary == "occipital" else 0)
+    elif primary == "frontal_occipital":
+        frontal_count = sum(1 for key in _MONTAGE_REGION_CHANNELS["frontal"] if key in channel_rows)
+        occ_count = sum(1 for key in _MONTAGE_REGION_CHANNELS["occipital"] if key in channel_rows)
+        row["_primary_region_valid_channel_count"] = float(min(frontal_count, occ_count))
+        row["_primary_region_complete"] = float(1 if frontal_count >= 1 and occ_count >= 1 else 0)
+        row["_evidence_region_weight"] = 1.0
+        row["_evidence_region_code"] = 3.0
+    return row
+
+
+def _missing_required_region_reason(channel_rows: Dict[str, Dict[str, float]], task_id: str = "") -> Optional[str]:
+    profile = _montage_profile_for_task(task_id)
+    primary = profile["primary_region"]
+    if primary in ("frontal", "occipital"):
+        if any(key in channel_rows for key in _MONTAGE_REGION_CHANNELS[primary]):
+            return None
+        return f"missing_{primary}_region"
+    if primary == "frontal_occipital":
+        frontal_ok = any(key in channel_rows for key in _MONTAGE_REGION_CHANNELS["frontal"])
+        occipital_ok = any(key in channel_rows for key in _MONTAGE_REGION_CHANNELS["occipital"])
+        if frontal_ok and occipital_ok:
+            return None
+        return "missing_mixed_regions"
+    return None
+
+
+def _regional_channel_agreements(window, channel_rows: Dict[str, Dict[str, float]]) -> Dict[str, Optional[float]]:
+    agreements: Dict[str, Optional[float]] = {}
+    if not _NP_AVAILABLE:
+        return agreements
+    try:
+        arr = _np.asarray(window, dtype=_np.float64)
+    except Exception:
+        return agreements
+    if arr.ndim != 2:
+        return agreements
+
+    for region, channels in _MONTAGE_REGION_CHANNELS.items():
+        if not all(key in channel_rows for key in channels):
+            agreements[region] = None
+            continue
+        try:
+            a_idx = _MONTAGE_CHANNEL_INDEX[channels[0]]
+            b_idx = _MONTAGE_CHANNEL_INDEX[channels[1]]
+        except KeyError:
+            agreements[region] = None
+            continue
+        if arr.shape[1] <= max(a_idx, b_idx):
+            agreements[region] = None
+            continue
+        agreements[region] = _safe_corr(arr[:, a_idx], arr[:, b_idx])
+    return agreements
+
+
+def _low_primary_region_agreement(
+    window,
+    channel_rows: Dict[str, Dict[str, float]],
+    task_id: str = "",
+) -> Tuple[Optional[str], Set[str], Dict[str, Optional[float]]]:
+    agreements = _regional_channel_agreements(window, channel_rows)
+    profile = _montage_profile_for_task(task_id)
+    primary = profile["primary_region"]
+
+    def region_is_low(region: str) -> bool:
+        channels = _MONTAGE_REGION_CHANNELS[region]
+        if not all(key in channel_rows for key in channels):
+            return False
+        value = agreements.get(region)
+        return value is not None and value < _MIN_PRIMARY_REGION_AGREEMENT
+
+    if primary in _MONTAGE_REGION_CHANNELS and region_is_low(primary):
+        return (
+            f"low_{primary}_agreement",
+            set(_MONTAGE_REGION_CHANNELS[primary]),
+            agreements,
+        )
+    if primary == "frontal_occipital":
+        low_regions = [
+            region for region in ("frontal", "occipital")
+            if region_is_low(region)
+        ]
+        if low_regions:
+            affected = set()
+            for region in low_regions:
+                affected.update(_MONTAGE_REGION_CHANNELS[region])
+            return "low_mixed_region_agreement", affected, agreements
+    return None, set(), agreements
+
+
+def _add_agreement_metadata(
+    row: Dict[str, float],
+    channel_rows: Dict[str, Dict[str, float]],
+    agreements: Dict[str, Optional[float]],
+    task_id: str = "",
+) -> None:
+    profile = _montage_profile_for_task(task_id)
+    primary = profile["primary_region"]
+    for region in _MONTAGE_REGION_CHANNELS:
+        value = agreements.get(region)
+        if value is not None and math.isfinite(float(value)):
+            row[f"_{region}_channel_agreement"] = float(value)
+
+    primary_values: List[float] = []
+    if primary in _MONTAGE_REGION_CHANNELS:
+        value = agreements.get(primary)
+        if value is not None and math.isfinite(float(value)):
+            primary_values.append(float(value))
+    elif primary == "frontal_occipital":
+        for region in ("frontal", "occipital"):
+            value = agreements.get(region)
+            if value is not None and math.isfinite(float(value)):
+                primary_values.append(float(value))
+
+    if primary_values:
+        primary_agreement = float(sum(primary_values) / len(primary_values))
+        row["_primary_channel_agreement"] = primary_agreement
+        row["_primary_region_confidence"] = max(0.0, min(1.0, (primary_agreement + 1.0) / 2.0))
+    elif primary in _MONTAGE_REGION_CHANNELS:
+        present = sum(1 for key in _MONTAGE_REGION_CHANNELS[primary] if key in channel_rows)
+        row["_primary_region_confidence"] = 0.5 if present == 1 else 0.0
+    elif primary == "frontal_occipital":
+        frontal = any(key in channel_rows for key in _MONTAGE_REGION_CHANNELS["frontal"])
+        occipital = any(key in channel_rows for key in _MONTAGE_REGION_CHANNELS["occipital"])
+        row["_primary_region_confidence"] = 0.5 if frontal and occipital else 0.0
+
+
+def _rejection_reason_from_channel_reasons(reasons: List[str]) -> str:
+    if reasons and all(reason == "flatline" for reason in reasons):
+        return "flatline"
+    if "not_worn" in reasons:
+        return "not_worn"
+    if "artifact" in reasons:
+        return "artifact"
+    if "flatline" in reasons:
+        return "flatline"
+    return "artifact"
+
+
+def _montage_channel_rows_for_window(window, fs: int = _RAW_EEG_FS, apply_qc: bool = False) -> tuple:
+    if not _NP_AVAILABLE:
+        return {}, {key: "artifact" for key in MINDROVE_CHANNEL_ORDER}
+
+    arr = _np.asarray(window, dtype=_np.float64)
+    if arr.ndim != 2 or arr.shape[0] == 0 or arr.shape[1] < len(MINDROVE_CHANNEL_ORDER):
+        return {}, {key: "artifact" for key in MINDROVE_CHANNEL_ORDER}
+
+    channel_rows: Dict[str, Dict[str, float]] = {}
+    reasons: Dict[str, Optional[str]] = {}
+    for idx in range(len(MINDROVE_CHANNEL_ORDER)):
+        key = MINDROVE_CHANNEL_ORDER[idx]
+        channel_window = arr[:, idx]
+        reason = _raw_window_qc(channel_window, fs=fs) if apply_qc else None
+        reasons[key] = reason
+        if reason is None:
+            channel_rows[key] = _raw_window_to_features(channel_window, fs=fs)
+
+    return channel_rows, reasons
+
+
+def _multichannel_window_to_features(
+    window,
+    fs: int = _RAW_EEG_FS,
+    apply_qc: bool = False,
+    task_id: str = "",
+):
+    channel_rows, reasons_by_channel = _montage_channel_rows_for_window(window, fs, apply_qc)
+    missing_reason = _missing_required_region_reason(channel_rows, task_id)
+    if missing_reason is not None:
+        return None, "artifact", reasons_by_channel
+    agreement_reason, affected_channels, agreements = _low_primary_region_agreement(window, channel_rows, task_id)
+    if agreement_reason is not None:
+        for key in affected_channels:
+            reasons_by_channel[key] = "artifact"
+        return None, "artifact", reasons_by_channel
+    if channel_rows:
+        row = _task_weighted_montage_features(channel_rows, task_id)
+        _add_agreement_metadata(row, channel_rows, agreements, task_id)
+        return row, None, reasons_by_channel
+
+    rejected_reasons = [
+        reason for reason in reasons_by_channel.values()
+        if reason is not None
+    ]
+    return None, _rejection_reason_from_channel_reasons(rejected_reasons), reasons_by_channel
+
+
+def _empty_montage_summary(task_id: str = "") -> Dict[str, Any]:
+    profile = _montage_profile_for_task(task_id)
+    return {
+        "device": "MindRove",
+        "task_id": task_id or "",
+        "channels": [_MONTAGE_CHANNEL_DISPLAY[key] for key in MINDROVE_CHANNEL_ORDER],
+        "regions": {
+            region: [_MONTAGE_CHANNEL_DISPLAY[key] for key in channels]
+            for region, channels in _MONTAGE_REGION_CHANNELS.items()
+        },
+        "primary_evidence_region": profile["primary_region"],
+        "secondary_evidence_region": profile["secondary_region"],
+        "window_count": 0,
+        "channel_counts": {
+            key: {"valid": 0, "seen": 0, "flatline": 0, "not_worn": 0, "artifact": 0}
+            for key in MINDROVE_CHANNEL_ORDER
+        },
+        "region_counts": {
+            region: {"valid": 0, "seen": 0}
+            for region in _MONTAGE_REGION_CHANNELS
+        },
+        "spatial_values": {
+            "corr_Fp1_Fp2": [],
+            "corr_O1_O2": [],
+            "corr_Fp_mean_O_mean": [],
+        },
+        "multi_channel_gain": {
+            "used_frontal_consensus": False,
+            "used_occipital_evidence": False,
+            "used_spatial_contrast": False,
+            "fallback_to_single_channel": True,
+        },
+    }
+
+
+def _safe_corr(a, b) -> Optional[float]:
+    if not _NP_AVAILABLE:
+        return None
+    try:
+        ax = _np.asarray(a, dtype=_np.float64)
+        bx = _np.asarray(b, dtype=_np.float64)
+        if ax.size < 3 or bx.size < 3:
+            return None
+        if float(_np.std(ax)) <= 1e-12 or float(_np.std(bx)) <= 1e-12:
+            return None
+        value = float(_np.corrcoef(ax, bx)[0, 1])
+        return value if math.isfinite(value) else None
+    except Exception:
+        return None
+
+
+def _update_montage_summary(
+    summary: Dict[str, Any],
+    window,
+    channel_rows: Dict[str, Dict[str, float]],
+    reasons_by_channel: Dict[str, Optional[str]],
+) -> None:
+    if not summary or not _NP_AVAILABLE:
+        return
+
+    arr = _np.asarray(window, dtype=_np.float64)
+    summary["window_count"] += 1
+
+    for key in MINDROVE_CHANNEL_ORDER:
+        counts = summary["channel_counts"][key]
+        counts["seen"] += 1
+        reason = reasons_by_channel.get(key)
+        if key in channel_rows and reason is None:
+            counts["valid"] += 1
+        elif reason in ("flatline", "not_worn", "artifact"):
+            counts[reason] += 1
+        else:
+            counts["artifact"] += 1
+
+    for region, channels in _MONTAGE_REGION_CHANNELS.items():
+        counts = summary["region_counts"][region]
+        counts["seen"] += 1
+        if any(key in channel_rows for key in channels):
+            counts["valid"] += 1
+
+    if arr.ndim == 2 and arr.shape[1] >= len(MINDROVE_CHANNEL_ORDER):
+        fp_corr = _safe_corr(arr[:, 0], arr[:, 1])
+        occ_corr = _safe_corr(arr[:, 2], arr[:, 3])
+        fp_mean = _np.mean(arr[:, [0, 1]], axis=1)
+        occ_mean = _np.mean(arr[:, [2, 3]], axis=1)
+        fpo_corr = _safe_corr(fp_mean, occ_mean)
+        if fp_corr is not None:
+            summary["spatial_values"]["corr_Fp1_Fp2"].append(fp_corr)
+        if occ_corr is not None:
+            summary["spatial_values"]["corr_O1_O2"].append(occ_corr)
+        if fpo_corr is not None:
+            summary["spatial_values"]["corr_Fp_mean_O_mean"].append(fpo_corr)
+
+    frontal_valid = any(key in channel_rows for key in _MONTAGE_REGION_CHANNELS["frontal"])
+    occipital_valid = any(key in channel_rows for key in _MONTAGE_REGION_CHANNELS["occipital"])
+    spatial_contrast = bool(_spatial_contrast_features(_region_feature_rows(channel_rows)))
+    gain = summary["multi_channel_gain"]
+    gain["used_frontal_consensus"] = gain["used_frontal_consensus"] or frontal_valid
+    gain["used_occipital_evidence"] = gain["used_occipital_evidence"] or occipital_valid
+    gain["used_spatial_contrast"] = gain["used_spatial_contrast"] or spatial_contrast
+    gain["fallback_to_single_channel"] = False
+
+
+def _quality_label(rate: float) -> str:
+    if rate >= 0.80:
+        return "high"
+    if rate >= 0.50:
+        return "medium"
+    return "low"
+
+
+def _finalize_montage_summary(summary: Dict[str, Any]) -> Dict[str, Any]:
+    if not summary:
+        return {}
+    channel_quality: Dict[str, Dict[str, Any]] = {}
+    for key, counts in summary["channel_counts"].items():
+        seen = max(1, int(counts.get("seen", 0)))
+        valid = int(counts.get("valid", 0))
+        label = _MONTAGE_CHANNEL_DISPLAY[key]
+        channel_quality[label] = {
+            "valid_windows": valid,
+            "seen_windows": int(counts.get("seen", 0)),
+            "valid_rate": round(valid / seen, 4),
+            "flatline": int(counts.get("flatline", 0)),
+            "not_worn": int(counts.get("not_worn", 0)),
+            "artifact": int(counts.get("artifact", 0)),
+        }
+
+    regional_reliability: Dict[str, str] = {}
+    regional_quality: Dict[str, Dict[str, Any]] = {}
+    for region, counts in summary["region_counts"].items():
+        seen = max(1, int(counts.get("seen", 0)))
+        valid = int(counts.get("valid", 0))
+        rate = valid / seen
+        regional_reliability[region] = _quality_label(rate)
+        regional_quality[region] = {
+            "valid_windows": valid,
+            "seen_windows": int(counts.get("seen", 0)),
+            "valid_rate": round(rate, 4),
+        }
+
+    spatial_evidence = {}
+    for name, values in summary["spatial_values"].items():
+        spatial_evidence[name] = (
+            round(float(_np.mean(values)), 4)
+            if _NP_AVAILABLE and values else None
+        )
+
+    return {
+        "device": summary["device"],
+        "channels": summary["channels"],
+        "regions": summary["regions"],
+        "primary_evidence_region": summary["primary_evidence_region"],
+        "secondary_evidence_region": summary["secondary_evidence_region"],
+        "channel_quality": channel_quality,
+        "regional_quality": regional_quality,
+        "regional_reliability": regional_reliability,
+        "spatial_evidence": spatial_evidence,
+        "multi_channel_gain": dict(summary["multi_channel_gain"]),
+    }
+
+
+def _merge_montage_summaries(summaries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    summaries = [s for s in summaries if s]
+    if not summaries:
+        return {}
+
+    merged = _empty_montage_summary()
+    primary_regions = []
+    for summary in summaries:
+        primary_regions.append(summary.get("primary_evidence_region", "balanced"))
+        for key in MINDROVE_CHANNEL_ORDER:
+            target = merged["channel_counts"][key]
+            source = summary.get("channel_counts", {}).get(key)
+            if source is None:
+                source = summary.get("channel_quality", {}).get(_MONTAGE_CHANNEL_DISPLAY[key], {})
+                target["valid"] += int(source.get("valid_windows", 0))
+                target["seen"] += int(source.get("seen_windows", 0))
+                target["flatline"] += int(source.get("flatline", 0))
+                target["not_worn"] += int(source.get("not_worn", 0))
+                target["artifact"] += int(source.get("artifact", 0))
+            else:
+                for metric in target:
+                    target[metric] += int(source.get(metric, 0))
+        for region in _MONTAGE_REGION_CHANNELS:
+            target = merged["region_counts"][region]
+            source = summary.get("region_counts", {}).get(region)
+            if source is None:
+                source = summary.get("regional_quality", {}).get(region, {})
+                target["valid"] += int(source.get("valid_windows", 0))
+                target["seen"] += int(source.get("seen_windows", 0))
+            else:
+                for metric in target:
+                    target[metric] += int(source.get(metric, 0))
+        if "spatial_values" in summary:
+            for name, values in summary.get("spatial_values", {}).items():
+                merged["spatial_values"][name].extend(values)
+        else:
+            for name, value in summary.get("spatial_evidence", {}).items():
+                if value is not None:
+                    merged["spatial_values"][name].append(float(value))
+        merged["window_count"] += int(
+            summary.get(
+                "window_count",
+                max(
+                    [0]
+                    + [
+                        int(item.get("seen_windows", 0))
+                        for item in summary.get("channel_quality", {}).values()
+                    ]
+                ),
+            )
+        )
+        for key, value in summary.get("multi_channel_gain", {}).items():
+            if key == "fallback_to_single_channel":
+                merged["multi_channel_gain"][key] = merged["multi_channel_gain"][key] and bool(value)
+            else:
+                merged["multi_channel_gain"][key] = merged["multi_channel_gain"][key] or bool(value)
+
+    unique_primary = sorted(set(primary_regions))
+    merged["primary_evidence_region"] = unique_primary[0] if len(unique_primary) == 1 else "task_specific"
+    return _finalize_montage_summary(merged)
+
+
+def _montage_export_fields(montage_summary: Dict[str, Any]) -> Dict[str, Any]:
+    if not montage_summary:
+        return {}
+    return {
+        "headset_scope": "MindRove sparse montage: Fp1/Fp2 frontal + O1/O2 occipital",
+        "montage": {
+            "device": montage_summary["device"],
+            "channels": montage_summary["channels"],
+            "regions": montage_summary["regions"],
+        },
+        "channel_quality": montage_summary["channel_quality"],
+        "regional_reliability": montage_summary["regional_reliability"],
+        "primary_evidence_region": montage_summary["primary_evidence_region"],
+        "multi_channel_gain": montage_summary["multi_channel_gain"],
+        "spatial_evidence": montage_summary["spatial_evidence"],
+    }
+
+
+def _multichannel_to_feature_rows(
+    samples: List,
+    fs: int = _RAW_EEG_FS,
+    apply_qc: bool = False,
+    task_id: str = "",
+    return_montage: bool = False,
+) -> tuple:
+    counters = {
+        "kept": 0,
+        "rejected": 0,
+        "not_worn": 0,
+        "artifact": 0,
+        "flatline": 0,
+    }
+
+    arr = _coerce_multichannel_raw_samples(samples)
+    window_n = _raw_window_samples(fs)
+    step_n = _raw_step_samples(fs)
+    montage_summary = _empty_montage_summary(task_id) if return_montage else None
+    if arr is None or len(arr) < window_n:
+        if return_montage:
+            return [], counters, _finalize_montage_summary(montage_summary)
+        return [], counters
+
+    rows: List[Dict[str, float]] = []
+    for start in range(0, len(arr) - window_n + 1, step_n):
+        window = arr[start:start + window_n, :]
+        row, reason, reasons_by_channel = _multichannel_window_to_features(
+            window,
+            fs=fs,
+            apply_qc=apply_qc,
+            task_id=task_id,
+        )
+        if montage_summary is not None:
+            channel_rows, _ = _montage_channel_rows_for_window(window, fs, apply_qc)
+            _update_montage_summary(montage_summary, window, channel_rows, reasons_by_channel)
+        if row:
+            rows.append(row)
+            counters["kept"] += 1
+        else:
+            reason = reason if reason in counters else "artifact"
+            counters["rejected"] += 1
+            counters[reason] += 1
+
+    if return_montage:
+        return rows, counters, _finalize_montage_summary(montage_summary)
+    return rows, counters
+
+
 def _raw_to_feature_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Dict[str, float]]:
     if not _NP_AVAILABLE:
         return []
     return [_raw_window_to_features(window, fs) for window in _iter_raw_windows(raw_samples, fs)]
 
 
-def _baseline_feature_rows(samples: List) -> tuple:
+def _baseline_feature_rows(samples: List, task_id: str = "", return_montage: bool = False) -> tuple:
     counters = {
         "kept": 0,
         "rejected": 0,
@@ -867,30 +2035,111 @@ def _baseline_feature_rows(samples: List) -> tuple:
         "flatline": 0,
     }
     if not samples:
+        if return_montage:
+            return [], counters, {}
         return [], counters
-    if isinstance(samples[0], (int, float)):
+    multichannel_samples = _multichannel_raw_subset(samples)
+    if multichannel_samples:
+        _log_mixed_sample_use("Analyze", samples, "multichannel", task_id=task_id)
+        return _multichannel_to_feature_rows(
+            multichannel_samples,
+            apply_qc=True,
+            task_id=task_id,
+            return_montage=return_montage,
+        )
+    scalar_samples = _scalar_raw_subset(samples)
+    if scalar_samples:
+        _log_mixed_sample_use("Analyze", samples, "scalar", task_id=task_id)
         rows: List[Dict[str, float]] = []
-        for window in _iter_raw_windows(samples):
-            reason = _raw_window_qc(window)
+        for window in _iter_raw_windows(scalar_samples, fs=_LEGACY_RAW_EEG_FS):
+            reason = _raw_window_qc(window, fs=_LEGACY_RAW_EEG_FS)
             if reason is None:
-                rows.append(_raw_window_to_features(window))
+                rows.append(_raw_window_to_features(window, fs=_LEGACY_RAW_EEG_FS))
                 counters["kept"] += 1
             else:
                 counters["rejected"] += 1
                 counters[reason] += 1
+        if return_montage:
+            return rows, counters, {}
         return rows, counters
 
-    rows = _extract_features(samples)
+    feature_samples = _feature_dict_subset(samples)
+    if feature_samples:
+        _log_mixed_sample_use("Analyze", samples, "feature_dict", task_id=task_id)
+    rows = _extract_features(feature_samples or samples)
     counters["kept"] = len(rows)
+    if return_montage:
+        return rows, counters, {}
     return rows, counters
 
 
-def _samples_to_feature_rows(samples: List) -> List[Dict[str, float]]:
+def _merge_qc_counters(*counters_list: Dict[str, int]) -> Dict[str, int]:
+    merged = {
+        "kept": 0,
+        "rejected": 0,
+        "not_worn": 0,
+        "artifact": 0,
+        "flatline": 0,
+    }
+    for counters in counters_list:
+        for key in merged:
+            merged[key] += int((counters or {}).get(key, 0))
+    return merged
+
+
+def _baseline_feature_rows_from_phases(
+    ec_samples: List,
+    eo_samples: Optional[List] = None,
+    task_id: str = "",
+    return_montage: bool = False,
+) -> tuple:
+    ec_rows, ec_qc, ec_montage = _baseline_feature_rows(
+        ec_samples,
+        task_id=task_id,
+        return_montage=True,
+    )
+    eo_rows: List[Dict[str, float]] = []
+    eo_qc = {
+        "kept": 0,
+        "rejected": 0,
+        "not_worn": 0,
+        "artifact": 0,
+        "flatline": 0,
+    }
+    eo_montage: Dict[str, Any] = {}
+    if eo_samples:
+        eo_rows, eo_qc, eo_montage = _baseline_feature_rows(
+            eo_samples,
+            task_id=task_id,
+            return_montage=True,
+        )
+
+    rows = list(ec_rows) + list(eo_rows)
+    qc = _merge_qc_counters(ec_qc, eo_qc)
+    if return_montage:
+        montage = _merge_montage_summaries([
+            item for item in (ec_montage, eo_montage) if item
+        ])
+        return rows, qc, montage
+    return rows, qc
+
+
+def _samples_to_feature_rows(samples: List, task_id: str = "") -> List[Dict[str, float]]:
     if not samples:
         return []
-    if isinstance(samples[0], (int, float)):
-        return _raw_to_feature_windows(samples)
-    return _extract_features(samples)
+    multichannel_samples = _multichannel_raw_subset(samples)
+    if multichannel_samples:
+        _log_mixed_sample_use("Analyze", samples, "multichannel", task_id=task_id)
+        rows, _ = _multichannel_to_feature_rows(multichannel_samples, apply_qc=True, task_id=task_id)
+        return rows
+    scalar_samples = _scalar_raw_subset(samples)
+    if scalar_samples:
+        _log_mixed_sample_use("Analyze", samples, "scalar", task_id=task_id)
+        return _raw_to_feature_windows(scalar_samples, fs=_LEGACY_RAW_EEG_FS)
+    feature_samples = _feature_dict_subset(samples)
+    if feature_samples:
+        _log_mixed_sample_use("Analyze", samples, "feature_dict", task_id=task_id)
+    return _extract_features(feature_samples or samples)
 
 
 def _maybe_convert_raw(samples: List) -> List[Dict]:
@@ -898,9 +2147,19 @@ def _maybe_convert_raw(samples: List) -> List[Dict]:
     If already a list of dicts (band-power), return as-is."""
     if not samples:
         return samples
-    if isinstance(samples[0], (int, float)):
-        return _raw_to_feature_windows(samples)
-    return samples
+    multichannel_samples = _multichannel_raw_subset(samples)
+    if multichannel_samples:
+        _log_mixed_sample_use("Analyze", samples, "multichannel")
+        rows, _ = _multichannel_to_feature_rows(multichannel_samples, apply_qc=True)
+        return rows
+    scalar_samples = _scalar_raw_subset(samples)
+    if scalar_samples:
+        _log_mixed_sample_use("Analyze", samples, "scalar")
+        return _raw_to_feature_windows(scalar_samples, fs=_LEGACY_RAW_EEG_FS)
+    feature_samples = _feature_dict_subset(samples)
+    if feature_samples:
+        _log_mixed_sample_use("Analyze", samples, "feature_dict")
+    return feature_samples or samples
 _ALPHA              = 0.05
 _FDR_ALPHA          = 0.05
 _N_PERM             = 1000
@@ -908,7 +2167,7 @@ _MIN_PERCENT_CHANGE      = 10.0  # raw-power features
 _MIN_PERCENT_CHANGE_REL  =  5.0  # relative/ratio features (bounded 0-1, smaller natural range)
 
 # Block aggregation constants (mirrors legacy default block_seconds=8.0)
-# Window duration = window_samples / fs = 1024 / 512 = 2.0s (raw EEG path)
+# Window duration = window_samples / fs = 1000 / 500 = 2.0s (raw EEG path)
 # windows_per_block = 8.0 / 2.0 = 4 windows -> 8 seconds of EEG per block
 _BLOCK_SECONDS       = 8.0
 _WINDOW_DURATION_SEC = _RAW_WINDOW / _RAW_EEG_FS   # 2.0 s
@@ -1137,7 +2396,7 @@ def _km_fisher(fisher_stat: Optional[float], fnames: List[str],
     correlations via numpy.corrcoef in one call instead of k*(k-1)/2 Python loops.
     """
     k = len(fnames)
-    if fisher_stat is None or k <= 1 or not all_rows:
+    if fisher_stat is None or k <= 1 or len(all_rows) < 2:
         return fisher_stat, None, float(2 * max(k, 1)), None, None
 
     # ── Build feature matrix (k × n) and compute full correlation matrix ──────
@@ -1145,6 +2404,8 @@ def _km_fisher(fisher_stat: Optional[float], fnames: List[str],
         try:
             mat  = _np.array([[float(r.get(f, 0.0)) for r in all_rows]
                                for f in fnames], dtype=float)   # (k, n)
+            if mat.shape[1] < 2:
+                return fisher_stat, None, float(2 * k), None, None
             # Rank-transform rows for Spearman correlation (matches legacy pandas .corr(method='spearman'))
             _ranked = _np.argsort(_np.argsort(mat, axis=1), axis=1).astype(float) + 1.0
             corr = _np.corrcoef(_ranked)                        # (k, k)
@@ -1506,6 +2767,31 @@ def _pct_threshold(fname: str) -> float:
     return _MIN_PERCENT_CHANGE
 
 
+def _select_inference_feature_names(feature_names: List[str]) -> List[str]:
+    names = [name for name in feature_names if not str(name).startswith("_")]
+    name_set = set(names)
+    selected: List[str] = []
+    for name in names:
+        if name.endswith("_power_raw") and f"{name[:-10]}_power" in name_set:
+            continue
+        if name.endswith("_peak_amp") and f"{name[:-9]}_power" in name_set:
+            continue
+        selected.append(name)
+    return selected
+
+
+def _is_gamma_feature(name: str) -> bool:
+    normalized = str(name).replace("_", "").lower()
+    return "gamma" in normalized
+
+
+def _symmetric_percent_change(task_mean: float, baseline_mean: float) -> float:
+    denom = abs(task_mean) + abs(baseline_mean)
+    if denom <= 1e-12:
+        return 0.0
+    return max(-200.0, min(200.0, 200.0 * (task_mean - baseline_mean) / denom))
+
+
 def _build_blocks(rows: List[Dict], windows_per_block: int = _WINDOWS_PER_BLOCK) -> List[Dict]:
     """Group consecutive feature-rows into non-overlapping blocks and compute
     per-block feature means.  Mirrors legacy _build_blocks / block aggregation.
@@ -1552,6 +2838,8 @@ def _correlation_guard_factor(all_rows: List[Dict], features: List[str]) -> floa
             dtype=float,
         )
         # Spearman rank  ≈ Pearson on ranked rows
+        if mat.shape[0] < 2 or mat.shape[1] < 2:
+            return 1.0
         ranked = _np.argsort(_np.argsort(mat, axis=1), axis=1).astype(float)
         corr   = _np.corrcoef(ranked)
         corr   = _np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
@@ -1577,7 +2865,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     if not task_rows or not baseline_rows:
         return {}, {}
 
-    fnames = list(task_rows[0].keys())
+    fnames = _select_inference_feature_names(list(task_rows[0].keys()))
 
     # ── Gamma EMG guard: drop gamma features when consistently guarded in task ─
     gamma_guarded_all = all(r.get("_gamma_evaluated", 1.0) <= 0 for r in task_rows)
@@ -1612,7 +2900,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
         bm = sum(bv) / len(bv) if bv else 0.0
         t_val, p = _welch_t(tv, bv)
         d        = _cohens_d_vals(tv, bv)
-        pct      = ((tm - bm) / (abs(bm) + 1e-12)) * 100.0
+        pct      = _symmetric_percent_change(tm, bm)
         ratio    = tm / (abs(bm) + 1e-12)
         z        = (tm - bm) / ((sum((x - bm)**2 for x in bv) / max(len(bv)-1, 1))**0.5 + 1e-12) if len(bv) > 1 else 0.0
         # Std devs
@@ -1663,6 +2951,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
             "bin_sig":              0,
             "gamma_evaluated":      True,
             "reason":               reason,
+            "percent_change_method": "symmetric",
             "decision_flags":       {},
         }
 
@@ -1709,10 +2998,12 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
 
         pass_rule: Optional[str] = None
         sig = False
-        # Legacy rule: p alone is sufficient (not p+q); effect and pct are fallbacks
-        if p_sig:   sig = True; pass_rule = "p"
-        elif d_sig: sig = True; pass_rule = "d"
-        elif pct_sig: sig = True; pass_rule = "pct"
+        # Neuroprofile evidence is now statistical-gate first. Effect-size and
+        # percent-change flags remain traceability observations but no longer
+        # make a feature significant by themselves.
+        if q_sig:
+            sig = True
+            pass_rule = "q"
 
         entry["significant_change"] = sig
         entry["bin_sig"]             = 1 if sig else 0
@@ -1724,6 +3015,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
             "q_pass":             q_sig,
             "effect_pass":        d_sig,
             "percent_pass":       pct_sig,
+            "percent_change_method": entry.get("percent_change_method"),
             "bh_rejected":        bool(q_vals[i] <= local_fdr_alpha),
             "expected_direction": exp,
             "direction_ok":       dir_ok,
@@ -1740,6 +3032,62 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
             sig_count += 1
 
     # ── Fisher combined + KM correlation correction ────────────────────────────
+    montage_gamma_guard_active = any(
+        "_primary_channel_agreement" in row or "_primary_region_confidence" in row
+        for row in task_eq
+    )
+    if montage_gamma_guard_active:
+        def _mean_row_value(rows: List[Dict], key: str) -> Optional[float]:
+            values = []
+            for row in rows:
+                try:
+                    value = float(row[key])
+                except Exception:
+                    continue
+                if math.isfinite(value):
+                    values.append(value)
+            return (sum(values) / len(values)) if values else None
+
+        gamma_clean = (_mean_row_value(task_eq, "_gamma_evaluated") or 0.0) >= 0.8
+        primary_agreement = _mean_row_value(task_eq, "_primary_channel_agreement")
+        primary_confidence = _mean_row_value(task_eq, "_primary_region_confidence") or 0.0
+        agreement_ok = (
+            primary_agreement is not None
+            and primary_agreement >= max(0.5, _MIN_PRIMARY_REGION_AGREEMENT)
+            and primary_confidence >= 0.75
+        )
+        non_gamma_support = any(
+            not _is_gamma_feature(name) and bool(feat_data[name].get("significant_change"))
+            for name in fnames
+        )
+
+        for name in fnames:
+            if not _is_gamma_feature(name):
+                continue
+            entry = feat_data[name]
+            guard = {
+                "emg_guard_clean": gamma_clean,
+                "regional_agreement_ok": agreement_ok,
+                "primary_channel_agreement": (
+                    round(primary_agreement, 4)
+                    if primary_agreement is not None else None
+                ),
+                "primary_region_confidence": round(primary_confidence, 4),
+                "non_gamma_support": non_gamma_support,
+            }
+            entry["decision_flags"]["gamma_sparse_montage_guard"] = guard
+            if entry.get("significant_change") and not all(
+                (gamma_clean, agreement_ok, non_gamma_support)
+            ):
+                entry["significant_change"] = False
+                entry["bin_sig"] = 0
+                entry["decision_flags"]["pass_rule"] = None
+                reason = entry.get("reason")
+                guard_reason = "Sparse montage gamma requires clean EMG/high-frequency guard, regional agreement, and non-gamma support"
+                entry["reason"] = f"{reason}; {guard_reason}" if reason else guard_reason
+
+    sig_count = sum(1 for entry in feat_data.values() if entry.get("significant_change"))
+
     raw_fisher_stat, _, _ = _fisher_combined(raw_p)
     all_rows = task_eq + baseline_eq
     km_stat, km_p, km_df, km_mean_r, km_df_ratio = _km_fisher(
@@ -1911,6 +3259,7 @@ def analyze(body: Dict) -> Dict:
 
     Response mirrors EnhancedFeatureAnalysisEngine.multi_task_results structure.
     """
+    request_start = time.monotonic()
     baseline_raw: Dict[str, List] = body.get("baseline", {})
     tasks_raw:    Dict[str, List] = body.get("tasks",    {})
 
@@ -1936,33 +3285,84 @@ def analyze(body: Dict) -> Dict:
     # Record raw counts before conversion (for report header)
     ec_raw_count = len(ec_samples)
     eo_raw_count = len(eo_samples)
+    task_counts = {
+        str(task_id): len(samples if isinstance(samples, list) else [])
+        for task_id, samples in tasks_raw.items()
+    }
+    _eeg_log(
+        "Analyze",
+        f"request ec={ec_raw_count} eo={eo_raw_count} ec_shape={_raw_sample_shape(ec_samples)} "
+        f"eo_shape={_raw_sample_shape(eo_samples)} tasks={task_counts}",
+    )
 
     # Convert raw EEG directly to enhanced-style feature rows and apply
     # eyes-closed baseline QC before baseline statistics are finalized.
-    baseline_rows, baseline_qc = _baseline_feature_rows(ec_samples)
+    baseline_rows, baseline_qc, baseline_montage = _baseline_feature_rows_from_phases(
+        ec_samples,
+        eo_samples,
+        return_montage=True,
+    )
     eo_rows = _samples_to_feature_rows(eo_samples)
+    _eeg_log(
+        "Analyze",
+        f"baseline_features rows={len(baseline_rows)} qc={baseline_qc} "
+        f"eo_rows={len(eo_rows)} montage={bool(baseline_montage)}",
+    )
 
     if not baseline_rows:
+        _eeg_log("Analyze", f"failed no usable baseline after qc={baseline_qc}")
         return {"error": "No usable baseline data after quality control"}
 
     per_task:      Dict[str, Any] = {}
     per_task_rows: Dict[str, List[Dict]] = {}
     all_task_rows: List[Dict]     = []
+    montage_summaries: List[Dict[str, Any]] = [baseline_montage] if baseline_montage else []
 
     for task_id, samples in tasks_raw.items():
         if not samples:
             continue
         samples = list(samples)
-        task_rows = _samples_to_feature_rows(samples)
+        task_montage: Dict[str, Any] = {}
+        comparison_baseline_rows = baseline_rows
+        multichannel_samples = _multichannel_raw_subset(samples)
+        if multichannel_samples:
+            _log_mixed_sample_use("AnalyzeTask", samples, "multichannel", task_id=task_id)
+            task_rows, _, task_montage = _multichannel_to_feature_rows(
+                multichannel_samples,
+                apply_qc=True,
+                task_id=task_id,
+                return_montage=True,
+            )
+            task_baseline_rows, _, task_baseline_montage = _baseline_feature_rows_from_phases(
+                ec_samples,
+                eo_samples,
+                task_id=task_id,
+                return_montage=True,
+            )
+            comparison_baseline_rows = task_baseline_rows or baseline_rows
+            if task_montage:
+                montage_summaries.append(task_montage)
+            if task_baseline_montage:
+                montage_summaries.append(task_baseline_montage)
+        else:
+            task_rows = _samples_to_feature_rows(samples, task_id=task_id)
+        _eeg_log(
+            "AnalyzeTask",
+            f"task={task_id} raw={len(samples)} shape={_raw_sample_shape(samples)} "
+            f"feature_rows={len(task_rows)} baseline_rows={len(comparison_baseline_rows)} "
+            f"montage={bool(task_montage)}",
+        )
         per_task_rows[task_id] = task_rows
         summary, analysis = _analyze_task_vs_baseline(
-            task_rows, baseline_rows, task_id, win_per_block
+            task_rows, comparison_baseline_rows, task_id, win_per_block
         )
         per_task[task_id] = {
             "summary":      summary,
             "analysis":     analysis,
             "sample_count": len(task_rows),
         }
+        if task_montage:
+            per_task[task_id]["montage_evidence"] = task_montage
         all_task_rows.extend(task_rows)
 
     # ── Combined (all tasks pooled vs baseline) ───────────────────────────────
@@ -2061,12 +3461,29 @@ def analyze(body: Dict) -> Dict:
         },
     }
 
+    montage_summary = _merge_montage_summaries(montage_summaries)
+    _eeg_log(
+        "Analyze",
+        f"complete tasks={len(per_task)} all_task_rows={len(all_task_rows)} "
+        f"features={len(fnames)} montage={bool(montage_summary)} "
+        f"elapsed_ms={round((time.monotonic() - request_start) * 1000, 1)}",
+    )
+
     # ── Neuroprofile traceability export (additive, does not alter existing keys) ─
     try:
         response["neuroprofile_feature_export"] = build_neuroprofile_export(
             per_task, response
         )
+        response["neuroprofile_feature_export"].update(
+            _montage_export_fields(montage_summary)
+        )
+        export_keys = sorted(response["neuroprofile_feature_export"].keys())
+        _eeg_log(
+            "AnalyzeExport",
+            f"neuroprofile_keys={export_keys[:12]}{'...' if len(export_keys) > 12 else ''}",
+        )
     except Exception as _npe:
+        _eeg_log("AnalyzeExport", f"failed: {_npe}")
         response["neuroprofile_feature_export"] = {
             "error": f"Neuroprofile export failed: {_npe}"
         }
@@ -2081,20 +3498,21 @@ def analyze(body: Dict) -> Dict:
 async def websocket_endpoint(ws: WebSocket) -> None:
     await ws.accept()
     _ws_clients.add(ws)
+    _eeg_log("WebSocket", f"client connected clients={len(_ws_clients)}")
     # Immediately tell the new client the current connection state
     await ws.send_text(json.dumps({"type": "status", "value": _status}))
     # Also push the last known battery level so the UI doesn't wait for the next change
     if _battery_level is not None:
         await ws.send_text(json.dumps({"type": "battery", "level": _battery_level}))
     try:
-        while True:
-            # Keep the WebSocket alive; we only push from the server side.
-            # A 30-second ping prevents idle disconnection by proxies.
-            await asyncio.sleep(30)
+        await _websocket_keepalive(ws)
     except WebSocketDisconnect:
+        pass
+    except RuntimeError:
         pass
     finally:
         _ws_clients.discard(ws)
+        _eeg_log("WebSocket", f"client disconnected clients={len(_ws_clients)}")
 
 
 if __name__ == '__main__':

@@ -80,20 +80,23 @@ def log_payload_summary(payload: dict) -> None:
     battery = device.get("battery")
     battery_text = f"{battery}%" if battery is not None else "n/a"
     endpoint = _device_endpoint(device)
-    sample_count = device.get("sampleCount", payload.get("sampleCount", 0))
+    sample_count = device.get("channelSampleCount", device.get("sampleCount", payload.get("sampleCount", 0)))
     if mode == "device":
         bands = payload["bands"]
         normalized = payload["normalized"]
         focus = payload.get("focus", {})
         components = focus.get("components", {})
+        rows = device.get("eegChannels") or []
+        labels = device.get("eegLabels") or []
         log(
             "features "
-            f"mode=device endpoint={endpoint} battery={battery_text} samples={sample_count} "
+            f"mode=device endpoint={endpoint} battery={battery_text} rows={rows} labels={labels} samples={sample_count} "
             f"attention={payload['attention']:.2f} quality={payload['quality']:.2f} "
             f"alpha={bands['alpha']:.3f} beta={bands['beta']:.3f} gamma={bands['gamma']:.3f} "
             f"focus={normalized.get('focusIndex', 0):.2f} "
             f"frontal_engagement={components.get('frontalEngagement', 0):.2f} "
             f"occipital_alpha_suppression={components.get('occipitalAlphaSuppression', 0):.2f} "
+            f"occipital_alpha_activation={components.get('occipitalAlphaActivation', 0):.2f} "
             f"artifact_penalty={components.get('artifactPenalty', 0):.2f}"
         )
     elif mode == "device_calibrating":
@@ -119,6 +122,7 @@ def log_payload_summary(payload: dict) -> None:
         log(
             f"not_worn mode=device_not_worn endpoint={endpoint} battery={battery_text} "
             f"contact={contact:.2f} reason={device.get('contactReason', 'unknown')} "
+            f"stable_frames={device.get('contactStableFrames', 0)}/{device.get('contactRequiredStableFrames', 1)} "
             f"resistance_ohms=[{resistance_text}] eeg_std=[{eeg_std_text}] samples={sample_count}"
         )
     elif mode == "demo":
@@ -177,13 +181,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mindrove-port", type=int, default=4210, help="MindRove WiFi UDP/TCP port")
     parser.add_argument("--mindrove-serial-port", help="Optional MindRove serial port if your SDK setup needs one")
     parser.add_argument("--mindrove-timeout", type=int, default=10, help="MindRove SDK connection timeout in seconds")
-    parser.add_argument("--eeg-rows", default="0,1,4,5", help="Comma-separated MindRove Bright EEG rows, default Fp1,Fp2,O1,O2")
+    parser.add_argument("--eeg-rows", default="auto", help="MindRove EEG rows as auto or four comma-separated rows, for example 0,1,4,5")
     parser.add_argument("--worn-resistance-threshold", type=float, default=5_000_000.0, help="Max impedance/resistance considered good contact")
     parser.add_argument("--worn-min-good-resistance-pairs", type=int, default=2, help="Minimum good resistance pairs before headset is treated as worn")
     parser.add_argument("--contact-mode", choices=("auto", "resistance", "eeg"), default="auto", help="How to detect worn/contact state")
-    parser.add_argument("--worn-min-active-eeg-rows", type=int, default=2, help="Minimum plausible active EEG rows in auto/eeg contact mode")
+    parser.add_argument("--worn-min-active-eeg-rows", type=int, default=4, help="Minimum plausible active EEG rows in auto/eeg contact mode")
     parser.add_argument("--worn-min-eeg-std", type=float, default=0.5, help="Minimum per-row EEG standard deviation for contact fallback")
     parser.add_argument("--worn-max-eeg-std", type=float, default=50000.0, help="Maximum per-row EEG standard deviation for contact fallback")
+    parser.add_argument("--worn-max-abs-mean", type=float, default=0.0, help="Optional max absolute EEG row mean for contact fallback; 0 disables this guard")
+    parser.add_argument("--worn-stable-frames", type=int, default=3, help="Consecutive worn/contact frames required before samples can calibrate or control the cube")
     parser.add_argument("--focus-deadband", type=float, default=0.03, help="Fractional change ignored around baseline before focus scoring")
     parser.add_argument("--focus-full-scale", type=float, default=0.25, help="Fractional change that maps a component to full focus score")
     parser.add_argument("--disable-worn-gate", action="store_true", help="Disable contact gating and let raw EEG drive the cube")
@@ -219,6 +225,8 @@ def main() -> None:
         worn_min_active_eeg_rows=args.worn_min_active_eeg_rows,
         worn_min_eeg_std=args.worn_min_eeg_std,
         worn_max_eeg_std=args.worn_max_eeg_std,
+        worn_max_abs_mean=args.worn_max_abs_mean,
+        worn_required_consecutive_frames=args.worn_stable_frames,
         focus_deadband=args.focus_deadband,
         focus_percent_change_full_scale=args.focus_full_scale,
         disable_worn_gate=args.disable_worn_gate,
@@ -230,10 +238,12 @@ def main() -> None:
     asyncio.run(run_server(config, demo=args.demo, require_device=args.require_device))
 
 
-def parse_eeg_rows(value: str) -> tuple[int, ...]:
+def parse_eeg_rows(value: str) -> tuple[int, ...] | None:
+    if value.strip().lower() == "auto":
+        return None
     rows = tuple(int(part.strip()) for part in value.split(",") if part.strip())
-    if not rows:
-        raise argparse.ArgumentTypeError("At least one EEG row is required")
+    if len(rows) != 4:
+        raise argparse.ArgumentTypeError("Use --eeg-rows auto or exactly four comma-separated EEG rows")
     return rows
 
 

@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import eegConnectService from '../service/wsEegService';
 
-const DISPLAY_SAMPLES = 2048;   // visible window — ~4 s at 512 Hz
-const BUF_SIZE = 8192;   // ring buffer — ~16 s headroom
-const FS = 512;
+const DISPLAY_SAMPLES = 2000;   // visible window - ~4 s at 500 Hz
+const BUF_SIZE = 8000;   // ring buffer - ~16 s headroom
+const FS = 500;
 
 
 const EegWaveform = ({ status }) => {
