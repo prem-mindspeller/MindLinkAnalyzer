@@ -138,18 +138,18 @@ const LiveEegReading = () => {
                         </>
                     )}
 
-                    <div className="navigation-buttons-eeg">
-                        <button
-                            className="btn-next-eeg"
-                            onClick={() => navigate('/baselineCalibration1')}
-                            disabled={!isGoodSignal}
-                            title={!isGoodSignal ? t('liveEeg.waitForGoodSignal') : ''}
-                        >
-                            {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
-                        </button>
-                    </div>
                 </div>
             </main>
+            <div className="nav-sub-footer">
+                <button
+                    className="btn-next-eeg"
+                    onClick={() => navigate('/baselineCalibration1')}
+                    disabled={!isGoodSignal}
+                    title={!isGoodSignal ? t('liveEeg.waitForGoodSignal') : ''}
+                >
+                    {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                </button>
+            </div>
             <Footer />
         </div>
     );

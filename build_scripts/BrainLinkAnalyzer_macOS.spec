@@ -133,8 +133,8 @@ app = BUNDLE(
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': 'True',
-        'CFBundleShortVersionString': '1.0.0',
-        'CFBundleVersion': '1.0.0',
+        'CFBundleShortVersionString': '1.2.0',
+        'CFBundleVersion': '1.2.0',
         'NSHumanReadableCopyright': 'Copyright © 2025 MindSpeller',
         'LSMinimumSystemVersion': '10.13.0',
         'NSRequiresAquaSystemAppearance': 'False',

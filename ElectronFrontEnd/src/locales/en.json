@@ -154,7 +154,7 @@
         "signalNoisy": "Signal: Noisy"
     },
     "footer": {
-        "text": "Mindlink Analyzer v2.0.0 | © {{year}} Mindspeller"
+        "text": "Mindlink Analyzer v1.2.0 | © {{year}} Mindspeller"
     },
     "nav": {
         "back": "Back",
@@ -416,7 +416,11 @@
         "selectPlaceholder": "Select a task from the list to see details.",
         "pathwayPersonal": "Personal Pathway",
         "pathwayConnection": "Connection",
-        "pathwayLifestyle": "Lifestyle"
+        "pathwayLifestyle": "Lifestyle",
+        "repeatabilityTitle": "All sessions must be completed before analysis",
+        "repeatabilityBody": "You have unlocked new session tasks. To ensure the repeatability of your neural profile measurements, all enabled tasks - including those from earlier sessions - must be completed each time you run a full assessment. You are welcome to tackle the new tasks first, but please return to any remaining earlier tasks before continuing to analysis.",
+        "stillNeeded": "Still needed:",
+        "allTasksDone": "All tasks completed - ready for analysis!"
     },
     "manual": {
         "0": {

@@ -6,7 +6,7 @@ import Footer from '../components/footer';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faCircleCheck, faMoon, faEye, faStar, faClock,
-    faArrowLeft, faArrowRight, faPlay, faTriangleExclamation, faLock,
+    faArrowLeft, faArrowRight, faPlay, faTriangleExclamation, faLock, faCircleInfo,
 } from '@fortawesome/free-solid-svg-icons';
 
 
@@ -103,6 +103,16 @@ const TaskSelection = () => {
         catch { return []; }
     });
 
+    const enabledTaskIds = [
+        ...COGNITIVE_TASKS,
+        ...(hasAdvancedBooking ? advancedTaskIds : []),
+        ...(hasSessionThree ? SESSION_THREE_TASKS : []),
+    ];
+    const completedEnabledCount = enabledTaskIds.filter(id => completedIds.includes(id)).length;
+    const allEnabledCompleted = completedEnabledCount === enabledTaskIds.length;
+    const hasNewSessionUnlocked = hasAdvancedBooking || hasSessionThree;
+    const pendingEnabledIds = enabledTaskIds.filter(id => !completedIds.includes(id));
+
     const selectedMeta = selectedId ? TASK_META[selectedId] : null;
 
     const handleStartTask = useCallback(() => {
@@ -166,6 +176,31 @@ const TaskSelection = () => {
                         <h1 className="ts-page-title">{t('tasks.title')}</h1>
                         <p className="ts-page-subtitle">{t('taskSelection.subtitle', { pathway: pathwayLabel })}</p>
                     </div>
+
+                    {hasNewSessionUnlocked && (
+                        <div className={`ts-repeatability-notice${allEnabledCompleted ? ' ts-notice-complete' : ''}`}>
+                            <FontAwesomeIcon
+                                icon={allEnabledCompleted ? faCircleCheck : faCircleInfo}
+                                className="ts-notice-icon"
+                            />
+                            <div className="ts-notice-content">
+                                {allEnabledCompleted ? (
+                                    <strong>{t('taskSelection.allTasksDone', { defaultValue: 'All tasks completed - ready for analysis!' })}</strong>
+                                ) : (
+                                    <>
+                                        <strong>{t('taskSelection.repeatabilityTitle', { defaultValue: 'All sessions must be completed before analysis' })}</strong>
+                                        <p>{t('taskSelection.repeatabilityBody', { defaultValue: 'You have unlocked new session tasks. To ensure the repeatability of your neural profile measurements, all enabled tasks - including those from earlier sessions - must be completed each time you run a full assessment. You are welcome to tackle the new tasks first, but please return to any remaining earlier tasks before continuing to analysis.' })}</p>
+                                        {pendingEnabledIds.length > 0 && (
+                                            <p className="ts-notice-pending">
+                                                <strong>{t('taskSelection.stillNeeded', { defaultValue: 'Still needed:' })}</strong>{' '}
+                                                {pendingEnabledIds.map(id => t(`taskMeta.${id}.name`, { defaultValue: TASK_META[id]?.name })).join(', ')}
+                                            </p>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="ts-layout">
                         {/* ── Task list ── */}
@@ -238,11 +273,11 @@ const TaskSelection = () => {
                                         &nbsp;· {t('taskSelection.sessionThreeLock', { defaultValue: 'Requires 2nd partner booking to unlock' })}
                                     </span>
                                 )}
-                                {/* {hasSessionThree && (
+                                {hasSessionThree && (
                                     <span className="ts-group-progress">
                                         {SESSION_THREE_TASKS.filter(id => completedIds.includes(id)).length}/{SESSION_THREE_TASKS.length}
                                     </span>
-                                )} */}
+                                )}
                             </p>
                             {SESSION_THREE_TASKS.map(id => {
                                 const meta = TASK_META[id];
@@ -315,20 +350,20 @@ const TaskSelection = () => {
                         </div>
                     </div>
 
-                    <div className="navigation-buttons-eeg">
-                        <button className="btn-back-eeg" onClick={() => navigate(-1)}>
-                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
-                        </button>
-                        <button
-                            className="btn-next-eeg"
-                            disabled={completedIds.length <= 3}
-                            onClick={() => navigate('/upload')}
-                        >
-                            {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
-                        </button>
-                    </div>
                 </div>
             </main>
+            <div className="nav-sub-footer">
+                <button className="btn-back-eeg" onClick={() => navigate(-1)}>
+                    <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
+                </button>
+                <button
+                    className="btn-next-eeg"
+                    disabled={!allEnabledCompleted}
+                    onClick={() => navigate('/upload')}
+                >
+                    {t('nav.next')} ({completedEnabledCount}/{enabledTaskIds.length}) <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
+                </button>
+            </div>
             <Footer />
         </div>
     );

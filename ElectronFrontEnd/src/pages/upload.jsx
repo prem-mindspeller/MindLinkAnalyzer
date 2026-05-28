@@ -166,20 +166,20 @@ const UploadPage = () => {
 
                     {/* {results && <AnalysisResultsPanel results={results} />} */}
 
-                    <div className="navigation-buttons-eeg">
-                        <button className="btn-back-eeg" onClick={() => navigate('/taskSelection')}>
-                            <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
-                        </button>
-                        <button
-                            className="btn-next-eeg"
-                            disabled={notUploadedProfile}
-                            onClick={handleFinish}
-                        >
-                            {t('upload.finish')} <FontAwesomeIcon icon={faCheck} style={{ marginLeft: 6 }} />
-                        </button>
-                    </div>
                 </div>
             </main>
+            <div className="nav-sub-footer">
+                <button className="btn-back-eeg" onClick={() => navigate('/taskSelection')}>
+                    <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 6 }} />{t('nav.back')}
+                </button>
+                <button
+                    className="btn-next-eeg"
+                    disabled={notUploadedProfile}
+                    onClick={handleFinish}
+                >
+                    {t('upload.finish')} <FontAwesomeIcon icon={faCheck} style={{ marginLeft: 6 }} />
+                </button>
+            </div>
             <Footer />
 
 

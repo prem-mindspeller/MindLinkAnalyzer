@@ -10,9 +10,61 @@
 }
 
 
-.task-selection-page .navigation-buttons-eeg {
-    margin-top: auto;
-    justify-content: space-between;
+/* ── Repeatability notice banner ── */
+.ts-repeatability-notice {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px 18px;
+    background: #fefce8;
+    border: 1.5px solid #fde68a;
+    border-radius: 12px;
+    color: #92400e;
+}
+
+.ts-repeatability-notice.ts-notice-complete {
+    background: #f0fdf4;
+    border-color: #86efac;
+    color: #14532d;
+}
+
+.ts-notice-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #d97706;
+}
+
+.ts-notice-complete .ts-notice-icon {
+    color: #059669;
+}
+
+.ts-notice-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+.ts-notice-content strong {
+    font-weight: 700;
+    color: #78350f;
+}
+
+.ts-notice-complete .ts-notice-content strong {
+    color: #14532d;
+}
+
+.ts-notice-content p {
+    margin: 0;
+    color: #92400e;
+}
+
+.ts-notice-pending {
+    margin-top: 2px;
+    color: #b45309;
+    font-size: 0.825rem;
 }
 
 .ts-page-header {

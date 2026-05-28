@@ -70,7 +70,7 @@ from eeg_processor import TGAMParser, create_eeg_filter
 from neuroprofile_traceability import build_neuroprofile_export
 
 # ─── Known BrainLink hardware identifiers ────────────────────────────────────
-KNOWN_HWIDS  = ["5C361634682F", "5C3616327E59", "5C3616346938", "5C3616346838", "5C36163468D3", "5C3616327C21", "5C36163468D3", "90E2FC2C5F37", '90E2FC2C627C','90E2FC2C6378','90E2FC2C5E7D','90E2FC2C5FAA','90E2FC2C614B']
+KNOWN_HWIDS  = ["5C361634682F", "5C3616327E59", "5C3616346938", "5C3616346838", "5C36163468D3", "5C3616327C21", "90E2FC2C5F37", '90E2FC2C627C','90E2FC2C6378','90E2FC2C5E7D','90E2FC2C5FAA','90E2FC2C614B']
 KNOWN_NAMES  = ["brainlink", "neurosky", "ftdi", "silabs", "ch340"]
 
 # ─── Global connection state ──────────────────────────────────────────────────

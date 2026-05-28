@@ -56,6 +56,41 @@ body {
     flex-shrink: 0;
 }
 
+/* ── Navigation sub-footer (always visible, never scrolls away) ── */
+.nav-sub-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 12px 40px;
+    background: transparent !important;
+    border-top: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    gap: 16px;
+}
+
+/* Back buttons anchor to the left; next/finish buttons stay at the right */
+.nav-sub-footer .btn-back-eeg,
+.nav-sub-footer .btn-back {
+    margin-right: auto;
+}
+
+@media (max-width: 768px) {
+    .nav-sub-footer {
+        padding: 10px 16px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .nav-sub-footer .btn-back-eeg,
+    .nav-sub-footer .btn-back,
+    .nav-sub-footer .btn-next-eeg,
+    .nav-sub-footer .btn-next {
+        width: 100%;
+        justify-content: center;
+        margin-right: 0;
+    }
+}
+
 /* Header */
 
 .header-link {

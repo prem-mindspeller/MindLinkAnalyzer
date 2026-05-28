@@ -31,12 +31,12 @@ VSVersionInfo(
         u'040904B0',
         [StringStruct(u'CompanyName', u'MindSpeller'),
         StringStruct(u'FileDescription', u'BrainLink Companion App'),
-        StringStruct(u'FileVersion', u'1.0.0'),
+        StringStruct(u'FileVersion', u'1.2.0'),
         StringStruct(u'InternalName', u'BrainCompanion'),
         StringStruct(u'LegalCopyright', u'Copyright (c) 2025 MindSpeller'),
         StringStruct(u'OriginalFilename', u'BrainCompanion.exe'),
         StringStruct(u'ProductName', u'BrainLink Companion'),
-        StringStruct(u'ProductVersion', u'1.0.0')])
+        StringStruct(u'ProductVersion', u'1.2.0')])
       ]),
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]

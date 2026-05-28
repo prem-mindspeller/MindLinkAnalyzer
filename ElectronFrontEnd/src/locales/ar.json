@@ -154,7 +154,7 @@
         "signalNoisy": "الإشارة: صاخبة"
     },
     "footer": {
-        "text": "Mindlink Analyzerv2.0.0 | ©{{year}} Mindspeller"
+        "text": "Mindlink Analyzerv1.2.0 | ©{{year}} Mindspeller"
     },
     "nav": {
         "back": "العودة",
