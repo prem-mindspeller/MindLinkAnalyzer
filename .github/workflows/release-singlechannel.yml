@@ -46,28 +46,10 @@ jobs:
         run: npm ci
         working-directory: ElectronFrontEnd
 
-      # ── 4. Build & publish to public releases repo ────────────────────────────
-      # GH_TOKEN must be a PAT with write access to the public MindLink-Releases repo.
-      # Add it as a repository secret named RELEASES_PAT in your private source repo.
-      - name: Build and publish release
-        run: npm run package -- --publish always
-        working-directory: ElectronFrontEnd
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
-
-      # ── 5. Remove stale latest.yml from release (would cross-update MindRove users) ──
-      - name: Delete latest.yml from release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          $version = $env:TAG -replace '^v' -replace '-mindlink$'
-          gh release delete-asset v$version latest.yml --yes --repo Mindspeller/MindLink-Releases 2>$null
-          exit 0
-
-      # ── 6. Update download page (GitHub Pages) ────────────────────────────────
-      - name: Update download page
+      # ── 4. Pre-release page commit — must happen BEFORE publish so the GitHub
+      #       release tag points to a commit named "release: mindlink vX",
+      #       not the previous product's commit. ────────────────────────────────
+      - name: Pre-release page commit
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
@@ -78,19 +60,47 @@ jobs:
           $version = $env:TAG -replace '^v' -replace '-mindlink$'
           Set-Content -Path mindlink-version.txt -Value $version -Encoding UTF8
           powershell -ExecutionPolicy Bypass -File generate-page.ps1
+          git config user.email "ci@mindspeller.com"
+          git config user.name "MindLink CI"
+          git add mindlink-version.txt index.html
+          git diff --cached --quiet || git commit -m "release: mindlink v$version"
+          git push
 
-          # Write mindlink-updates/latest.yml with absolute download URLs.
-          # The generic electron-updater provider fetches this file directly from
-          # releases.mindspeller.com/mindlink-updates/latest.yml — independent of
-          # which GitHub release GitHub marks as "Latest".
+      # ── 5. Build & publish — release tag now points to the commit above ───────
+      # GH_TOKEN must be a PAT with write access to the public MindLink-Releases repo.
+      # Add it as a repository secret named RELEASES_PAT in your private source repo.
+      - name: Build and publish release
+        run: npm run package -- --publish always
+        working-directory: ElectronFrontEnd
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+
+      # ── 6. Remove stale latest.yml from release ───────────────────────────────
+      - name: Delete latest.yml from release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG -replace '^v' -replace '-mindlink$'
+          gh release delete-asset v$version latest.yml --yes --repo Mindspeller/MindLink-Releases 2>$null
+          exit 0
+
+      # ── 7. Upload update feed yml to GitHub Pages ─────────────────────────────
+      - name: Upload update feed yml
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cd releases-repo
+          git pull
+          $version = $env:TAG -replace '^v' -replace '-mindlink$'
           $baseUrl = "https://github.com/Mindspeller/MindLink-Releases/releases/download/v$version"
           $ymlSrc = [System.IO.File]::ReadAllText("$env:GITHUB_WORKSPACE\ElectronFrontEnd\release\mindlink.yml", [System.Text.Encoding]::UTF8)
           $ymlSrc = [regex]::Replace($ymlSrc, '(?m)^(  - url: |path: )(?!https://)', "`$1$baseUrl/")
           New-Item -ItemType Directory -Force -Path mindlink-updates | Out-Null
           [System.IO.File]::WriteAllText("$PWD\mindlink-updates\latest.yml", $ymlSrc, [System.Text.Encoding]::UTF8)
-
-          git config user.email "ci@mindspeller.com"
-          git config user.name "MindLink CI"
-          git add mindlink-version.txt index.html mindlink-updates/latest.yml
-          git diff --cached --quiet || git commit -m "release: mindlink v$version"
+          git add mindlink-updates/latest.yml
+          git diff --cached --quiet || git commit -m "update: mindlink v$version update feed"
           git push
