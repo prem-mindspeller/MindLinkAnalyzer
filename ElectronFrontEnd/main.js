@@ -253,12 +253,26 @@ function setupAutoUpdater() {
         })
     })
 
-    autoUpdater.on('error', () => { /* silent — update errors should not crash the app */ })
+    autoUpdater.on('update-available', () => {
+        if (mainWin) mainWin.webContents.send('update-status', 'downloading')
+    })
+
+    autoUpdater.on('update-not-available', () => {
+        if (mainWin) mainWin.webContents.send('update-status', 'up-to-date')
+    })
+
+    autoUpdater.on('error', () => {
+        if (mainWin) mainWin.webContents.send('update-status', 'error')
+    })
 
     // Check on launch, then every 4 hours
     autoUpdater.checkForUpdates()
     setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000)
 }
+
+ipcMain.handle('check-for-updates', () => {
+    if (app.isPackaged) autoUpdater.checkForUpdates()
+})
 
 app.whenReady().then(async () => {
     startBackend()
