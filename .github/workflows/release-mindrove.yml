@@ -47,11 +47,15 @@ jobs:
         working-directory: ElectronFrontEnd
 
       # Rename product so installer filename is distinct from single-channel
-      - name: Set MindRove product name
+      - name: Set MindRove product name and version
         shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
+          $version = $env:TAG -replace '^[vn]' -replace '-mindrove$'
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $pkg.build.productName = "Mindlink Analyzer 4C"
+          $pkg.version = $version
           $pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
         working-directory: ElectronFrontEnd
 
