@@ -1,13 +1,17 @@
 {
-  "name": "mindlink-analyzer",
-  "version": "1.0.0",
+  "name": "electronfrontend",
+  "version": "1.2.0",
   "description": "electron frontend for the Mindlink app",
   "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mindspeller/MindLink-Releases.git"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "concurrently \"webpack --mode development --watch\" \"wait-on dist/bundle.js && cross-env NODE_ENV=development electron .\"",
     "build": "webpack --mode production",
-    "package": "electron-builder",
+    "package": "npm run build && npx electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Augustine Asimhi",
@@ -16,6 +20,7 @@
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "@fortawesome/react-fontawesome": "^3.3.0",
+    "electron-updater": "^6.3.9",
     "i18next": "^26.0.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -44,6 +49,13 @@
     "appId": "com.mindspeller.Mindlink",
     "productName": "Mindlink Analyzer",
     "forceCodeSigning": false,
+    "publish": {
+      "provider": "github",
+      "owner": "Mindspeller",
+      "repo": "MindLink-Releases",
+      "draft": false,
+      "prerelease": false
+    },
     "directories": {
       "output": "release"
     },
@@ -54,15 +66,10 @@
       "signAndEditExecutable": false,
       "signExts": []
     },
-    "beforePack": "./scripts/beforePack.js",
     "extraResources": [
       {
         "from": "../newBackend/dist/MindlinkBackend",
         "to": "backend"
-      },
-      {
-        "from": "icon.ico",
-        "to": "icon.ico"
       }
     ],
     "files": [
