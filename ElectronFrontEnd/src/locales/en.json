@@ -1,24 +1,24 @@
-﻿{
+{
     "header": {
         "help": "Help",
         "logout": "Logout"
     },
     "home": {
-        "eyebrow": "Mindspeller Â· MindLink Analyzer",
+        "eyebrow": "Mindspeller · MindLink Analyzer",
         "title": "Understand your brain.",
         "titleAccent": "One session at a time.",
-        "subtitle": "MindLink Analyzer records your EEG activity during a series of cognitive tasks, compares it against your personal baseline, and generates a detailed neural profile â€” all from a consumer-grade headset.",
+        "subtitle": "MindLink Analyzer records your EEG activity during a series of cognitive tasks, compares it against your personal baseline, and generates a detailed neural profile — all from a consumer-grade headset.",
         "getStarted": "Get Started",
         "howItWorks": "How it works",
         "featuresTitle": "What MindLink Analyzer does",
         "stepsTitle": "Your session at a glance",
-        "stepsSubtitle": "A complete session takes around 20â€“30 minutes and is fully guided.",
+        "stepsSubtitle": "A complete session takes around 20–30 minutes and is fully guided.",
         "feature1Title": "Real-Time EEG Recording",
         "feature1Desc": "Capture live brainwave data from your EEG headset with millisecond precision.",
         "feature2Title": "Cognitive Task Analysis",
         "feature2Desc": "Run validated cognitive tasks and receive a statistical analysis of your brain activity across frequency bands.",
         "feature3Title": "Guided Workflow",
-        "feature3Desc": "A step-by-step process walks you through device setup, baseline calibration, tasks, and results â€” no expertise needed.",
+        "feature3Desc": "A step-by-step process walks you through device setup, baseline calibration, tasks, and results — no expertise needed.",
         "feature4Title": "Data Sovereignty",
         "feature4Desc": "Choose your regional server so your neurological data stays within your preferred jurisdiction."
     },
@@ -60,7 +60,7 @@
         "turnedOn": "Turned ON and placed on your head correctly",
         "sound": "Sound is turned ON (you will hear countdown beeps)",
         "note": "The device connection will be verified after sign in.",
-        "helpLink": "View setup guide â†’"
+        "helpLink": "View setup guide →"
     },
     "baseline": {
         "title": "Baseline Calibration",
@@ -116,10 +116,10 @@
         "subtitle": "Step 7 of 7: Analyse EEG data and send report",
         "desc": "Click Analyse All Tasks to see how your brain responded to each challenge. This just takes a few seconds! Once your results appear, click Upload to Mindspeller to securely upload your data and complete your assessment.",
         "analyse": "Analyse All Tasks",
-        "analysing": "Analysingâ€¦",
+        "analysing": "Analysing…",
         "analysisComplete": "Analysis Complete",
         "upload": "Upload to Mindspeller",
-        "uploading": "Uploadingâ€¦",
+        "uploading": "Uploading…",
         "uploaded": "Uploaded",
         "downloadReport": "Download Report",
         "analysisFailed": "Analysis failed:",
@@ -130,12 +130,12 @@
     "liveEeg": {
         "title": "Live EEG Reading",
         "subtitle": "Step 4 of 7: Connect your EEG device",
-        "connecting": "Connecting to deviceâ€¦",
-        "scanning": "Scanning for EEG deviceâ€¦",
+        "connecting": "Connecting to device…",
+        "scanning": "Scanning for EEG device…",
         "reconnect": "Reconnect",
         "signalGood": "Signal quality: Good | Data flowing normally",
-        "notWorn": "Headset not worn â€” place it firmly against your forehead",
-        "signalNoisy": "Signal quality: Noisy â€” hold still and press the headset against your forehead",
+        "notWorn": "Headset not worn — place it firmly against your forehead",
+        "signalNoisy": "Signal quality: Noisy — hold still and press the headset against your forehead",
         "infoConnected": "Do NOT proceed until you see Signal quality: Good in the header above.",
         "infoDisconnected": "Click on the Reconnect button above to connect to the device before proceeding",
         "noDeviceDetected": "No EEG device detected. Make sure the device is switched on, then try again.",
@@ -145,8 +145,8 @@
         "device": "Device:",
         "signal": "Signal:",
         "disconnected": "Disconnected",
-        "searching": "Searchingâ€¦",
-        "connecting": "Connectingâ€¦",
+        "searching": "Searching…",
+        "connecting": "Connecting…",
         "connected": "Connected",
         "noDevice": "No Device",
         "notWorn": "Not Worn",
@@ -154,7 +154,7 @@
         "signalNoisy": "Signal: Noisy"
     },
     "footer": {
-        "text": "Mindlink Analyzer v{{version}} | \u00a9 {{year}} Mindspeller"
+        "text": "Mindlink Analyzer v{{version}} | © {{year}} Mindspeller"
     },
     "nav": {
         "back": "Back",
@@ -169,10 +169,10 @@
     },
     "eegWaveform": {
         "time": "Time",
-        "chartTitle": "Raw EEG  Â·  1â€“45 Hz bandpass  Â·  50 Hz notch",
-        "waiting": "Waiting for EEG dataâ€¦",
-        "scanning": "Scanning for deviceâ€¦",
-        "noDevice": "No device â€” click Scan Again"
+        "chartTitle": "Raw EEG  ·  1–45 Hz bandpass  ·  50 Hz notch",
+        "waiting": "Waiting for EEG data…",
+        "scanning": "Scanning for device…",
+        "noDevice": "No device — click Scan Again"
     },
     "analysis": {
         "significant": "Significant",
@@ -229,49 +229,49 @@
         "soundNotice": "Make sure your sound is on before starting.",
         "countdownHint": "You will hear a 5-second countdown beep before the task starts, and a double beep when it ends.",
         "cancel": "Cancel",
-        "start": "â–¶ Start task",
-        "getReady": "Get readyâ€¦",
+        "start": "▶ Start task",
+        "getReady": "Get ready…",
         "listenBeeps": "Listen for the beeps",
         "recording": "Recording",
         "getReadyBadge": "Get Ready",
         "readInstructions": "Read Instructions",
         "eyesClosedHint": "Keep your eyes closed",
         "eyesOpenHint": "Keep your eyes open",
-        "abort": "âœ• Abort",
+        "abort": "✕ Abort",
         "complete": "{{taskName}} Complete!",
         "doneMsg": "EEG data has been recorded. You can now return to the task list.",
-        "backToTasks": "â† Back to Tasks",
+        "backToTasks": "← Back to Tasks",
         "emotionalFaceAlt": "Emotional face stimulus"
     },
     "taskContent": {
         "attentionFocus": {
             "name": "Focused Attention",
             "intro1": "Focus all attention on your breathing.",
-            "intro2": "Don't count your breaths â€” just feel the natural rhythm of your inhales and exhales.",
-            "intro3": "Silently count from 1 to 10 in your mind â€” it doesn't matter how fast or slow.",
+            "intro2": "Don't count your breaths — just feel the natural rhythm of your inhales and exhales.",
+            "intro3": "Silently count from 1 to 10 in your mind — it doesn't matter how fast or slow.",
             "intro4": "When you reach 10, start again at 1.",
             "intro5": "If your mind wanders, gently bring it back and restart from 1.",
             "intro6": "Continue for 52 seconds with your eyes closed.",
-            "phaseInstruction": "FOCUS: Attend only to breathing. Count breaths 1â€“10 and restart; gently return if distracted. Eyes closed."
+            "phaseInstruction": "FOCUS: Attend only to breathing. Count breaths 1–10 and restart; gently return if distracted. Eyes closed."
         },
         "visualImagery": {
             "name": "Visual Imagery",
             "intro1": "Close your eyes and vividly imagine walking through your home.",
-            "intro2": "Engage all your senses â€” sight, sound, smell, and touch.",
+            "intro2": "Engage all your senses — sight, sound, smell, and touch.",
             "intro3": "Try to make the imagery as detailed and continuous as possible.",
             "intro4": "Continue for 52 seconds without opening your eyes.",
             "phaseInstruction": "IMAGERY: Visualize walking through your home in rich sensory detail continuously."
         },
         "mentalMath": {
             "name": "Mental Math",
-            "intro": "Start at 200. In your mind, subtract 7 each time (200, 193, 186, 179, 172, â€¦). Continue mentally as quickly and accurately as you can for 52 seconds.",
-            "phaseInstruction": "COUNT: 200, 193, 186, 179â€¦ Keep counting backwards by 7s. Eyes closed."
+            "intro": "Start at 200. In your mind, subtract 7 each time (200, 193, 186, 179, 172, …). Continue mentally as quickly and accurately as you can for 52 seconds.",
+            "phaseInstruction": "COUNT: 200, 193, 186, 179… Keep counting backwards by 7s. Eyes closed."
         },
         "emotionFace": {
             "name": "Emotion Recognition",
             "introLine1": "In a moment, you will see a series of faces.",
             "introLine2": "Simply look at each face and allow yourself to naturally experience your reaction to it.",
-            "introLine3": "There is no need to label or analyze the emotion â€” just notice how the face affects you.",
+            "introLine3": "There is no need to label or analyze the emotion — just notice how the face affects you.",
             "introLine4": "Keep your gaze on the screen and respond naturally.",
             "cueInstruction": "INSTRUCTION: Prepare for the upcoming face."
         },
@@ -289,46 +289,46 @@
         "motorImagery": {
             "name": "Motor Imagery",
             "intro": "Mentally imagine throwing a ball with your right hand, then your left hand, alternating continuously. Feel each movement as vividly as possible for 52 seconds.",
-            "cueInstruction": "INSTRUCTION: Prepare to imagine throwing a ball â€” right hand then left, alternating. Close your eyes on the beep.",
+            "cueInstruction": "INSTRUCTION: Prepare to imagine throwing a ball — right hand then left, alternating. Close your eyes on the beep.",
             "phaseInstruction": "IMAGINE: Throw a ball with your right hand, then left hand, alternating. Feel the motion vividly. Eyes closed."
         },
         "cognitiveLoad": {
             "name": "Cognitive Load",
             "intro": "Perform two mental tasks simultaneously: count backwards from 50 by 3s AND visualise each number in bright blue. Continue for 52 seconds.",
-            "phaseInstruction": "COUNT & VISUALISE: 50, 47, 44, 41â€¦ Count backwards by 3s while seeing each number in blue. Eyes closed."
+            "phaseInstruction": "COUNT & VISUALISE: 50, 47, 44, 41… Count backwards by 3s while seeing each number in blue. Eyes closed."
         },
         "diverseThinking": {
             "name": "Creative Fluency",
             "intro": "You will receive 2 creative-thinking prompts. For each: read the prompt carefully, then think of as many creative and unusual uses as possible. Eyes open throughout. Total duration ~96 seconds.",
-            "getReady1": "Get ready for creative thinkingâ€¦",
-            "cue1": "PROMPT 1 â€” PAPERCLIP: Think of as many creative and unusual uses for a PAPERCLIP as you can.",
-            "phase1": "THINK: Creative uses for a PAPERCLIP. Be imaginative â€” go beyond the obvious!",
-            "getReady2": "Get ready for the next promptâ€¦",
-            "cue2": "PROMPT 2 â€” ARTIFICIAL INTELLIGENCE: Think of creative and innovative uses for AI.",
+            "getReady1": "Get ready for creative thinking…",
+            "cue1": "PROMPT 1 — PAPERCLIP: Think of as many creative and unusual uses for a PAPERCLIP as you can.",
+            "phase1": "THINK: Creative uses for a PAPERCLIP. Be imaginative — go beyond the obvious!",
+            "getReady2": "Get ready for the next prompt…",
+            "cue2": "PROMPT 2 — ARTIFICIAL INTELLIGENCE: Think of creative and innovative uses for AI.",
             "phase2": "THINK: Creative uses for ARTIFICIAL INTELLIGENCE. Consider current and future possibilities!"
         },
         "reappraisal": {
             "name": "Perspective Shift",
-            "intro": "You will receive 2 scenarios. For each: deliberately shift your perspective as instructed â€” first see positives, then focus on negatives. Eyes open throughout. Total duration ~96 seconds.",
-            "getReady1": "Get ready for the thinking taskâ€¦",
-            "cue1": "SCENARIO 1 â€” THINK POSITIVE: 'Receiving unexpected feedback from a close friend.' See the positive side.",
+            "intro": "You will receive 2 scenarios. For each: deliberately shift your perspective as instructed — first see positives, then focus on negatives. Eyes open throughout. Total duration ~96 seconds.",
+            "getReady1": "Get ready for the thinking task…",
+            "cue1": "SCENARIO 1 — THINK POSITIVE: 'Receiving unexpected feedback from a close friend.' See the positive side.",
             "phase1": "THINK POSITIVE: What good could come from this feedback? What are the silver linings?",
-            "getReady2": "Get ready for the next scenarioâ€¦",
-            "cue2": "SCENARIO 2 â€” FOCUS ON NEGATIVES: 'You are about to miss a flight.' Focus on what went wrong.",
+            "getReady2": "Get ready for the next scenario…",
+            "cue2": "SCENARIO 2 — FOCUS ON NEGATIVES: 'You are about to miss a flight.' Focus on what went wrong.",
             "phase2": "FOCUS ON NEGATIVES: Think about what went wrong and the negative consequences of missing the flight."
         },
         "curiosity": {
             "name": "Curiosity Reveal",
             "intro": "Watch a short reveal video with full attention and genuine curiosity. Let yourself be drawn in by what is revealed. Eyes open throughout. Total duration ~45 seconds.",
-            "getReady": "Get ready for the reveal videoâ€¦",
-            "cue": "Video starting soon â€” watch with full attention!",
-            "wait": "Video startingâ€¦",
+            "getReady": "Get ready for the reveal video…",
+            "cue": "Video starting soon — watch with full attention!",
+            "wait": "Video starting…",
             "phase": "WATCH: View the video reveal with full attention. Let your curiosity guide you."
         },
         "numForm": {
             "name": "Numerical Preference",
             "intro": "You will look at a stimulus image in two phases: first focus on NUMBERS, then on FORMS (shapes). Keep your gaze steady and minimise movement. Eyes open throughout. Total duration ~60 seconds.",
-            "getReady": "Get readyâ€¦",
+            "getReady": "Get ready…",
             "cue1": "NUMBERS: On the next screen, look for the numbers. Keep your gaze steady.",
             "phase1": "NUMBERS: Look at the numbers. Keep your gaze steady and minimise movement.",
             "cue2": "FORMS: On the next screen, look for the shapes. Keep your gaze steady.",
@@ -338,7 +338,7 @@
         "orderSurprise": {
             "name": "Order & Surprise",
             "intro": "You will look at a stimulus image in two phases: first count ORDER (symmetrical/normal shapes), then count SURPRISE (non-symmetrical/abnormal shapes). Eyes open throughout. Total duration ~60 seconds.",
-            "getReady": "Get readyâ€¦",
+            "getReady": "Get ready…",
             "cue1": "ORDER: Count symmetrical / normal shapes in the upcoming image. Keep your gaze steady.",
             "phase1": "ORDER: Count symmetrical / normal shapes. Keep your gaze steady and minimise movement.",
             "cue2": "SURPRISE: Count non-symmetrical / abnormal shapes in the upcoming image. Keep your gaze steady.",
@@ -401,10 +401,10 @@
         }
     },
     "taskSelection": {
-        "subtitle": "Step 6 of 7 Â· Pathway: {{pathway}}",
+        "subtitle": "Step 6 of 7 · Pathway: {{pathway}}",
         "taskSubtitle": "Step 6 of 7: Cognitive Task Recording",
         "generalTasks": "General Tasks",
-        "advancedTasks": "{{pathway}} â€” Advanced Tasks",
+        "advancedTasks": "{{pathway}} — Advanced Tasks",
         "completed": "Completed",
         "eyesClosed": "Eyes Closed",
         "eyesOpen": "Eyes Open",
@@ -425,7 +425,7 @@
     "manual": {
         "0": {
             "title": "Application Workflow",
-            "content": "The MindLink Analyzer guides you through a 7-step workflow: Region selection â†’ Login â†’ Live EEG verification â†’ Baseline calibration â†’ Task selection â†’ Task execution â†’ Results upload. Each step is shown in the page subtitle."
+            "content": "The MindLink Analyzer guides you through a 7-step workflow: Region selection → Login → Live EEG verification → Baseline calibration → Task selection → Task execution → Results upload. Each step is shown in the page subtitle."
         },
         "1": {
             "title": "Signal Quality Indicators",
@@ -496,11 +496,11 @@
             "importantLabel": "Important:",
             "introText": "Follow the standard Windows Bluetooth pairing process:",
             "step1": "Turn on the amplifier (press and hold for 2 seconds).",
-            "step2": "Open <1>Settings â†’ Bluetooth & devices â†’ Add device</1> in Windows.",
+            "step2": "Open <1>Settings → Bluetooth & devices → Add device</1> in Windows.",
             "step3": "Select <1>\"Bluetooth\"</1> from the add-device options.",
             "step4": "Wait for <1>\"Brainlink_Pro (Audio)\"</1> to appear in the list.",
             "step5": "Click on <1>\"Brainlink_Pro (Audio)\"</1> to pair.",
-            "note": "<0>Note:</0> The headset will <2>briefly connect and then disconnect</2> automatically â€” this is normal! The pairing process only registers the headset with your device. The actual connection will be established automatically when you sign in to the application."
+            "note": "<0>Note:</0> The headset will <2>briefly connect and then disconnect</2> automatically — this is normal! The pairing process only registers the headset with your device. The actual connection will be established automatically when you sign in to the application."
         },
         "wearing": {
             "title": "3. Wearing the Headset Properly",
@@ -535,27 +535,27 @@
         "stepBadge": "Step {{step}}",
         "steps": {
             "region": {
-                "title": "Step 1 â€” Region Selection",
+                "title": "Step 1 — Region Selection",
                 "why": "Selecting your region ensures your brainwave data is processed and stored in compliance with local data sovereignty laws. This keeps your personal neural data private and legally protected."
             },
             "login": {
-                "title": "Step 2&3 â€” Sign In and Partner ID",
+                "title": "Step 2&3 — Sign In and Partner ID",
                 "why": "Signing in links your EEG recordings to your Mindspeller account, enabling secure storage and comparison of your cognitive profiles over time. Without authentication, your session data cannot be saved or analysed. Entering your Partner ID connects your session to a specific partner."
             },
             "liveReading": {
-                "title": "Step 4 â€” Verify Live Signal",
+                "title": "Step 4 — Verify Live Signal",
                 "why": "A live Bluetooth connection to your EEG headset allows the app to stream raw brainwave signals in real time. A stable, quality connection is required before any recordings can begin."
             },
             "baseline": {
-                "title": "Step 5 â€” Baseline Calibration",
+                "title": "Step 5 — Baseline Calibration",
                 "why": "Your personal baseline captures your brain's resting-state activity. Every cognitive metric measured during tasks is compared against this baseline, making your analysis uniquely accurate rather than relying on generic averages."
             },
             "taskSelection": {
-                "title": "Step 6 â€” Task Selection & Recording",
-                "why": "Different cognitive tasks activate distinct brain regions. Choosing the right tasks maps specific mental abilities â€” focus, memory, creativity, and more â€” giving you a rich and personalised cognitive profile."
+                "title": "Step 6 — Task Selection & Recording",
+                "why": "Different cognitive tasks activate distinct brain regions. Choosing the right tasks maps specific mental abilities — focus, memory, creativity, and more — giving you a rich and personalised cognitive profile."
             },
             "upload": {
-                "title": "Step 7 â€” Upload & Analyse",
+                "title": "Step 7 — Upload & Analyse",
                 "why": "Uploading your recordings sends them to the Mindspeller AI analysis pipeline, which computes your cognitive scores and generates a detailed brainwave report you can download and share."
             }
         }
@@ -577,4 +577,3 @@
         "connectionFailed": "Connection failed."
     }
 }
-

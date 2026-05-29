@@ -1,6 +1,6 @@
 {
   "name": "electronfrontend",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "electron frontend for the Mindlink app",
   "main": "main.js",
   "repository": {
@@ -62,9 +62,7 @@
     "win": {
       "target": "nsis",
       "icon": "icon.ico",
-      "verifyUpdateCodeSignature": false,
-      "signAndEditExecutable": false,
-      "signExts": []
+      "verifyUpdateCodeSignature": false
     },
     "extraResources": [
       {
