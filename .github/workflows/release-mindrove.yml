@@ -113,7 +113,8 @@ jobs:
           $ymlSrc = [System.IO.File]::ReadAllText("$env:GITHUB_WORKSPACE\ElectronFrontEnd\release\mindrove.yml", [System.Text.Encoding]::UTF8)
           $ymlSrc = [regex]::Replace($ymlSrc, '(?m)^(  - url: |path: )(?!https://)', "`$1$baseUrl/")
           New-Item -ItemType Directory -Force -Path mindrove-updates | Out-Null
-          [System.IO.File]::WriteAllText("$PWD\mindrove-updates\latest.yml", $ymlSrc, [System.Text.Encoding]::UTF8)
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          [System.IO.File]::WriteAllText("$PWD\mindrove-updates\latest.yml", $ymlSrc, $utf8NoBom)
           git add mindrove-updates/latest.yml
           git diff --cached --quiet || git commit -m "update: mindrove v$version update feed"
           git push
