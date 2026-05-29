@@ -199,9 +199,9 @@ const createWindow = () => {
     mainWin = new BrowserWindow({
         width: 1200,
         height: 800,
-        // Windows taskbar requires .ico; other platforms use the PNG
+        // In packaged builds icon.ico lives in resources/ (extraResources), not inside the asar.
         icon: process.platform === 'win32'
-            ? path.join(__dirname, 'icon.ico')
+            ? (app.isPackaged ? path.join(process.resourcesPath, 'icon.ico') : path.join(__dirname, 'icon.ico'))
             : path.join(__dirname, 'src', 'assets', 'logo-no-text.png'),
         autoHideMenuBar: true,
         webPreferences: {
