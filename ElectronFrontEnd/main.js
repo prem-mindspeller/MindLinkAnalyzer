@@ -228,14 +228,14 @@ const createWindow = () => {
 function setupAutoUpdater() {
     if (!app.isPackaged) return   // skip in dev
 
-    // No extra server needed — electron-updater fetches {channel}.yml from GitHub releases
+    // Use generic provider pointing to GitHub Pages so each product has its own
+    // update feed independent of which GitHub release is marked "Latest".
+    // CI writes {channel}-updates/latest.yml with absolute download URLs on every release.
     const pkg = require('./package.json')
     const channel = pkg?.build?.publish?.channel || 'mindlink'
     autoUpdater.setFeedURL({
-        provider: 'github',
-        owner: 'Mindspeller',
-        repo: 'MindLink-Releases',
-        channel
+        provider: 'generic',
+        url: `https://releases.mindspeller.com/${channel}-updates`
     })
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true

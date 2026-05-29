@@ -63,7 +63,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           $version = $env:TAG -replace '^v' -replace '-mindlink$'
-          gh release delete-asset v$version latest.yml --yes --repo Mindspeller/MindLink-Releases 2>$null || true
+          gh release delete-asset v$version latest.yml --yes --repo Mindspeller/MindLink-Releases 2>$null
+          exit 0
 
       # ── 6. Update download page (GitHub Pages) ────────────────────────────────
       - name: Update download page
@@ -77,8 +78,19 @@ jobs:
           $version = $env:TAG -replace '^v' -replace '-mindlink$'
           Set-Content -Path mindlink-version.txt -Value $version -Encoding UTF8
           powershell -ExecutionPolicy Bypass -File generate-page.ps1
+
+          # Write mindlink-updates/latest.yml with absolute download URLs.
+          # The generic electron-updater provider fetches this file directly from
+          # releases.mindspeller.com/mindlink-updates/latest.yml — independent of
+          # which GitHub release GitHub marks as "Latest".
+          $baseUrl = "https://github.com/Mindspeller/MindLink-Releases/releases/download/v$version"
+          $ymlSrc = [System.IO.File]::ReadAllText("$env:GITHUB_WORKSPACE\ElectronFrontEnd\release\mindlink.yml", [System.Text.Encoding]::UTF8)
+          $ymlSrc = [regex]::Replace($ymlSrc, '(?m)^(  - url: |path: )(?!https://)', "`$1$baseUrl/")
+          New-Item -ItemType Directory -Force -Path mindlink-updates | Out-Null
+          [System.IO.File]::WriteAllText("$PWD\mindlink-updates\latest.yml", $ymlSrc, [System.Text.Encoding]::UTF8)
+
           git config user.email "ci@mindspeller.com"
           git config user.name "MindLink CI"
-          git add mindlink-version.txt index.html
+          git add mindlink-version.txt index.html mindlink-updates/latest.yml
           git diff --cached --quiet || git commit -m "release: mindlink v$version"
           git push
