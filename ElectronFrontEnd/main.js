@@ -228,11 +228,14 @@ const createWindow = () => {
 function setupAutoUpdater() {
     if (!app.isPackaged) return   // skip in dev
 
-    // No extra server needed — electron-updater fetches latest.yml from GitHub releases
+    // No extra server needed — electron-updater fetches {channel}.yml from GitHub releases
+    const pkg = require('./package.json')
+    const channel = pkg?.build?.publish?.channel || 'mindlink'
     autoUpdater.setFeedURL({
         provider: 'github',
         owner: 'Mindspeller',
-        repo: 'MindLink-Releases'
+        repo: 'MindLink-Releases',
+        channel
     })
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
