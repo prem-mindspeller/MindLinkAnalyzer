@@ -55,7 +55,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
 
-      # ── 5. Update download page (GitHub Pages) ────────────────────────────────
+      # ── 5. Remove stale latest.yml from release (would cross-update MindRove users) ──
+      - name: Delete latest.yml from release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG -replace '^v' -replace '-mindlink$'
+          gh release delete-asset v$version latest.yml --yes --repo Mindspeller/MindLink-Releases 2>$null || true
+
+      # ── 6. Update download page (GitHub Pages) ────────────────────────────────
       - name: Update download page
         shell: pwsh
         env:
