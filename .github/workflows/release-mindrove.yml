@@ -1,10 +1,10 @@
 name: Release – 4-Channel (MindRove)
 
-# Trigger: push a tag like v2.1.0-mindrove
+# Trigger: push a tag like n1.0.0-mindrove
 on:
   push:
     tags:
-      - 'v*-mindrove'
+      - 'n*-mindrove'
 
 jobs:
   build-and-release:
@@ -71,7 +71,7 @@ jobs:
         run: |
           git clone https://x-access-token:$env:GH_TOKEN@github.com/Mindspeller/MindLink-Releases.git releases-repo
           cd releases-repo
-          $version = $env:TAG -replace '^v' -replace '-mindrove$'
+          $version = $env:TAG -replace '^[vn]' -replace '-mindrove$'
           Set-Content -Path mindrove-version.txt -Value $version -Encoding UTF8
           powershell -ExecutionPolicy Bypass -File generate-page.ps1
           git config user.email "ci@mindspeller.com"
