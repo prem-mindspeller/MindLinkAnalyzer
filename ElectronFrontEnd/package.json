@@ -62,9 +62,7 @@
     "win": {
       "target": "nsis",
       "icon": "icon.ico",
-      "verifyUpdateCodeSignature": false,
-      "signAndEditExecutable": false,
-      "signExts": []
+      "verifyUpdateCodeSignature": false
     },
     "extraResources": [
       {
