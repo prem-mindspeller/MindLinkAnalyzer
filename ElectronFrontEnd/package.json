@@ -75,8 +75,7 @@
       "dist/**",
       "icon.ico",
       "main.js",
-      "package.json",
-      "!node_modules/**"
+      "package.json"
     ]
   }
 }
