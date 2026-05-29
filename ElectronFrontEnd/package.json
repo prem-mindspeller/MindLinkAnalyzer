@@ -14,7 +14,7 @@
     "package": "npm run build && npx electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Augustine Asimhi",
+  "author": "Mindspeller",
   "license": "ISC",
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
@@ -63,6 +63,11 @@
       "target": "nsis",
       "icon": "icon.ico",
       "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "allowToChangeInstallationDirectory": false,
+      "allowDowngrade": false,
+      "include": "installer.nsh"
     },
     "extraResources": [
       {

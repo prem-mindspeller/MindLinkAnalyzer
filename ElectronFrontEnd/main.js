@@ -240,12 +240,12 @@ function setupAutoUpdater() {
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
 
-    autoUpdater.on('update-downloaded', () => {
+    autoUpdater.on('update-downloaded', (info) => {
         dialog.showMessageBox(mainWin, {
             type: 'info',
             title: 'Update Ready',
-            message: 'A new version of Mindlink Analyzer has been downloaded.',
-            detail: 'The update will be installed when you restart the application.',
+            message: `Mindlink Analyzer v${info.version} is ready to install.`,
+            detail: 'After restarting, use your Desktop shortcut or Start Menu to open the app — not the original installer file you downloaded.',
             buttons: ['Restart Now', 'Later'],
             defaultId: 0
         }).then(({ response }) => {
