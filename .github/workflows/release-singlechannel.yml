@@ -1,10 +1,10 @@
 name: Release – Single Channel (BrainLink)
 
-# Trigger: push a tag like v1.2.0-brainlink
+# Trigger: push a tag like v1.2.0-mindlink
 on:
   push:
     tags:
-      - 'v*-brainlink'
+      - 'v*-mindlink'
 
 jobs:
   build-and-release:
@@ -64,12 +64,12 @@ jobs:
         run: |
           git clone https://x-access-token:$env:GH_TOKEN@github.com/Mindspeller/MindLink-Releases.git releases-repo
           cd releases-repo
-          # Strip tag suffix: v1.2.0-brainlink → 1.2.0
-          $version = $env:TAG -replace '^v' -replace '-brainlink$'
-          Set-Content -Path brainlink-version.txt -Value $version -Encoding UTF8
+          # Strip tag suffix: v1.2.0-mindlink → 1.2.0
+          $version = $env:TAG -replace '^v' -replace '-mindlink$'
+          Set-Content -Path mindlink-version.txt -Value $version -Encoding UTF8
           .\generate-page.ps1
           git config user.email "ci@mindspeller.com"
           git config user.name "MindLink CI"
-          git add brainlink-version.txt index.html
-          git diff --cached --quiet || git commit -m "release: BrainLink $version"
+          git add mindlink-version.txt index.html
+          git diff --cached --quiet || git commit -m "release: MindLink $version"
           git push
