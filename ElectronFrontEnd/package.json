@@ -70,11 +70,14 @@
       {
         "from": "../newBackend/dist/MindlinkBackend",
         "to": "backend"
+      },
+      {
+        "from": "icon.ico",
+        "to": "icon.ico"
       }
     ],
     "files": [
       "dist/**",
-      "icon.ico",
       "main.js",
       "package.json"
     ]
