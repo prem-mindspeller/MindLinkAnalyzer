@@ -71,20 +71,11 @@ jobs:
         run: |
           git clone https://x-access-token:$env:GH_TOKEN@github.com/Mindspeller/MindLink-Releases.git releases-repo
           cd releases-repo
-          # Strip tag suffix: v2.1.0-mindrove → 2.1.0
           $version = $env:TAG -replace '^v' -replace '-mindrove$'
           Set-Content -Path mindrove-version.txt -Value $version -Encoding UTF8
-          .\generate-page.ps1
+          powershell -ExecutionPolicy Bypass -File generate-page.ps1
           git config user.email "ci@mindspeller.com"
           git config user.name "MindLink CI"
           git add mindrove-version.txt index.html
-          git diff --cached --quiet || git commit -m "release: MindRove $version"
-          git push
-          </html>
-          "@
-          Set-Content -Path index.html -Value $html -Encoding UTF8
-          git config user.email "ci@mindspeller.com"
-          git config user.name "MindLink CI"
-          git add index.html
-          git diff --cached --quiet || git commit -m "docs: update download page for $env:TAG"
+          git diff --cached --quiet || git commit -m "release: mindrove v$version"
           git push
