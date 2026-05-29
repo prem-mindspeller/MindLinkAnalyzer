@@ -1,10 +1,10 @@
-name: Release – Single Channel (BrainLink)
+name: Release – 4-Channel (MindRove)
 
-# Trigger: push a tag like v1.2.0-brainlink
+# Trigger: push a tag like v2.1.0-mindrove
 on:
   push:
     tags:
-      - 'v*-brainlink'
+      - 'v*-mindrove'
 
 jobs:
   build-and-release:
@@ -12,11 +12,11 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # ── 1. Checkout the single-channel source branch ─────────────────────────
+      # ── 1. Checkout the MindRove source branch ────────────────────────────────
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          ref: feature/neuroprofile-traceability-v7
+          ref: mindrove-integration
 
       # ── 2. Python backend (PyInstaller) ───────────────────────────────────────
       - name: Set up Python
@@ -46,9 +46,16 @@ jobs:
         run: npm ci
         working-directory: ElectronFrontEnd
 
+      # Rename product so installer filename is distinct from single-channel
+      - name: Set MindRove product name
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $pkg.build.productName = "Mindlink Analyzer 4C"
+          $pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
+        working-directory: ElectronFrontEnd
+
       # ── 4. Build & publish to public releases repo ────────────────────────────
-      # GH_TOKEN must be a PAT with write access to the public MindLink-Releases repo.
-      # Add it as a repository secret named RELEASES_PAT in your private source repo.
       - name: Build and publish release
         run: npm run package -- --publish always
         working-directory: ElectronFrontEnd
