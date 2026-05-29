@@ -1,7 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('C:\\Users\\augus\\Documents\\Mindspeller\\MindLinkAnalyzer\\BrainLinkParser', 'BrainLinkParser')]
+# Resolve BrainLinkParser relative to this spec file so CI and local builds both work
+_repo_root = os.path.abspath(os.path.join(SPECPATH, '..'))
+datas = [(os.path.join(_repo_root, 'BrainLinkParser'), 'BrainLinkParser')]
 binaries = []
 hiddenimports = ['serial.tools.list_ports', 'serial.tools.list_ports_windows']
 tmp_ret = collect_all('serial')
