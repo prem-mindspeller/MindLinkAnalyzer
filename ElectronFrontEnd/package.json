@@ -48,7 +48,9 @@
     "publish": {
       "provider": "github",
       "owner": "Mindspeller",
-      "repo": "MindLink-Releases"
+      "repo": "MindLink-Releases",
+      "draft": false,
+      "prerelease": false
     },
     "directories": {
       "output": "release"
