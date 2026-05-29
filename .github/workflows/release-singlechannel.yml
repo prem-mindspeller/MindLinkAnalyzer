@@ -1,0 +1,56 @@
+name: Release – Single Channel (BrainLink)
+
+# Trigger: push a tag like v1.2.0 or v1.2.0-singlechannel
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    name: Build & Publish (Windows)
+    runs-on: windows-latest
+
+    steps:
+      # ── 1. Checkout the single-channel source branch ─────────────────────────
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: feature/neuroprofile-traceability-v7
+
+      # ── 2. Python backend (PyInstaller) ───────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build Python backend
+        shell: pwsh
+        run: |
+          cd newBackend
+          python -m venv .venv
+          .venv\Scripts\pip install --upgrade pip
+          .venv\Scripts\pip install -r requirements.txt
+          .venv\Scripts\pip install pyinstaller
+          .venv\Scripts\pyinstaller MindLinkBackend.spec
+
+      # ── 3. Electron frontend ──────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ElectronFrontEnd/package-lock.json
+
+      - name: Install Node dependencies
+        run: npm ci
+        working-directory: ElectronFrontEnd
+
+      # ── 4. Build & publish to public releases repo ────────────────────────────
+      # GH_TOKEN must be a PAT with write access to the public MindLink-Releases repo.
+      # Add it as a repository secret named RELEASES_PAT in your private source repo.
+      - name: Build and publish release
+        run: npm run package -- --publish always
+        working-directory: ElectronFrontEnd
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}

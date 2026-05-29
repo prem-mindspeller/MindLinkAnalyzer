@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
+const { autoUpdater } = require('electron-updater')
 
 if (process.env.NODE_ENV === 'development') {
     require('electron-reload')(__dirname, {
@@ -220,6 +221,42 @@ const createWindow = () => {
     return mainWin
 }
 
+// ─── Auto Updater ────────────────────────────────────────────────────────────
+// Reads update metadata directly from the public GitHub releases repo.
+// electron-builder publishes a latest.yml there automatically on each release.
+
+function setupAutoUpdater() {
+    if (!app.isPackaged) return   // skip in dev
+
+    // No extra server needed — electron-updater fetches latest.yml from GitHub releases
+    autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: 'Mindspeller',
+        repo: 'MindLink-Releases'
+    })
+    autoUpdater.autoDownload = true
+    autoUpdater.autoInstallOnAppQuit = true
+
+    autoUpdater.on('update-downloaded', () => {
+        dialog.showMessageBox(mainWin, {
+            type: 'info',
+            title: 'Update Ready',
+            message: 'A new version of Mindlink Analyzer has been downloaded.',
+            detail: 'The update will be installed when you restart the application.',
+            buttons: ['Restart Now', 'Later'],
+            defaultId: 0
+        }).then(({ response }) => {
+            if (response === 0) autoUpdater.quitAndInstall(false, true)
+        })
+    })
+
+    autoUpdater.on('error', () => { /* silent — update errors should not crash the app */ })
+
+    // Check on launch, then every 4 hours
+    autoUpdater.checkForUpdates()
+    setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000)
+}
+
 app.whenReady().then(async () => {
     startBackend()
     try {
@@ -228,6 +265,7 @@ app.whenReady().then(async () => {
         // Open anyway — user sees connection errors but app is usable
     }
     createWindow()
+    setupAutoUpdater()
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })

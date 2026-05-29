@@ -6,8 +6,8 @@ npm-debug.log*
 .venv/
 build
 venv
-.github/
 reports/
+.github/skills/
 new-coverage/
 coverage/
 .pytest_cache/
