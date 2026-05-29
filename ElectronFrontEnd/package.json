@@ -1,6 +1,6 @@
 {
   "name": "electronfrontend",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "electron frontend for the Mindlink app",
   "main": "main.js",
   "repository": {
