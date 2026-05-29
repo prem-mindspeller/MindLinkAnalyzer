@@ -53,7 +53,8 @@
       "provider": "github",
       "owner": "Mindspeller",
       "repo": "MindLink-Releases",
-      "releaseType": "release"
+      "releaseType": "release",
+      "channel": "mindlink"
     },
     "directories": {
       "output": "release"

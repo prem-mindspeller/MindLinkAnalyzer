@@ -56,6 +56,7 @@ jobs:
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $pkg.build.productName = "Mindlink Analyzer 4C"
           $pkg.version = $version
+          $pkg.build.publish.channel = "mindrove"
           $pkg | ConvertTo-Json -Depth 10 | Set-Content package.json
         working-directory: ElectronFrontEnd
 

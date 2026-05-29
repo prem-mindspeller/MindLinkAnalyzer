@@ -1,11 +1,6 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
-const fs = require('fs')
-
-app.setName('Mindlink Analyzer')
-if (process.platform === 'win32') {
-    app.setAppUserModelId('com.mindspeller.Mindlink')
-}
+const { autoUpdater } = require('electron-updater')
 
 if (process.env.NODE_ENV === 'development') {
     require('electron-reload')(__dirname, {
@@ -165,25 +160,13 @@ const backendPath = app.isPackaged
 let backendProcess = null
 
 function startBackend() {
-    const logPath = path.join(app.getPath('userData'), 'backend.log')
-    fs.mkdirSync(path.dirname(logPath), { recursive: true })
-    fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] starting backend: ${backendPath}\n`)
     backendProcess = spawn(backendPath, [], {
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
     })
-    backendProcess.stdout.on('data', (chunk) => {
-        fs.appendFileSync(logPath, chunk)
-    })
-    backendProcess.stderr.on('data', (chunk) => {
-        fs.appendFileSync(logPath, chunk)
-    })
-    backendProcess.on('error', (error) => {
-        fs.appendFileSync(logPath, `[${new Date().toISOString()}] backend spawn error: ${error.message}\n`)
-    })
-    backendProcess.on('exit', (code, signal) => {
-        fs.appendFileSync(logPath, `[${new Date().toISOString()}] backend exited code=${code} signal=${signal}\n`)
-    })
+    backendProcess.stdout.on('data', () => { })
+    backendProcess.stderr.on('data', () => { })
+    backendProcess.on('exit', () => { })
 }
 
 function waitForBackend(retries = 30, delayMs = 500) {
@@ -213,13 +196,13 @@ let mainWin = null
 let activePort = null
 
 const createWindow = () => {
-    const windowIcon = app.isPackaged
-        ? path.join(process.resourcesPath, 'icon.ico')
-        : path.join(__dirname, 'icon.ico')
     mainWin = new BrowserWindow({
         width: 1200,
         height: 800,
-        icon: windowIcon,
+        // Windows taskbar requires .ico; other platforms use the PNG
+        icon: process.platform === 'win32'
+            ? path.join(__dirname, 'icon.ico')
+            : path.join(__dirname, 'src', 'assets', 'logo-no-text.png'),
         autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: true,
@@ -227,18 +210,7 @@ const createWindow = () => {
             enableRemoteModule: true
         }
     })
-    const rendererIndex = path.join(__dirname, 'dist', 'index.html')
-    mainWin.loadFile(rendererIndex).catch((error) => {
-        mainWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
-            <html>
-              <body style="font-family: Segoe UI, sans-serif; padding: 32px;">
-                <h2>Mindlink Analyzer could not load the renderer.</h2>
-                <p>Missing or unreadable file: ${rendererIndex}</p>
-                <p>${error.message}</p>
-              </body>
-            </html>
-        `)}`)
-    })
+    mainWin.loadFile(path.join(__dirname, 'dist', 'index.html'))
     // Tell a fresh renderer it starts disconnected (prevents stale status from previous sessions)
     mainWin.webContents.on('did-finish-load', () => {
         mainWin.webContents.send('eeg:connection-status', 'disconnected')
@@ -249,6 +221,45 @@ const createWindow = () => {
     return mainWin
 }
 
+// ─── Auto Updater ────────────────────────────────────────────────────────────
+// Reads update metadata directly from the public GitHub releases repo.
+// electron-builder publishes a latest.yml there automatically on each release.
+
+function setupAutoUpdater() {
+    if (!app.isPackaged) return   // skip in dev
+
+    // No extra server needed — electron-updater fetches {channel}.yml from GitHub releases
+    const pkg = require('./package.json')
+    const channel = pkg?.build?.publish?.channel || 'mindlink'
+    autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: 'Mindspeller',
+        repo: 'MindLink-Releases',
+        channel
+    })
+    autoUpdater.autoDownload = true
+    autoUpdater.autoInstallOnAppQuit = true
+
+    autoUpdater.on('update-downloaded', () => {
+        dialog.showMessageBox(mainWin, {
+            type: 'info',
+            title: 'Update Ready',
+            message: 'A new version of Mindlink Analyzer has been downloaded.',
+            detail: 'The update will be installed when you restart the application.',
+            buttons: ['Restart Now', 'Later'],
+            defaultId: 0
+        }).then(({ response }) => {
+            if (response === 0) autoUpdater.quitAndInstall(false, true)
+        })
+    })
+
+    autoUpdater.on('error', () => { /* silent — update errors should not crash the app */ })
+
+    // Check on launch, then every 4 hours
+    autoUpdater.checkForUpdates()
+    setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000)
+}
+
 app.whenReady().then(async () => {
     startBackend()
     try {
@@ -257,6 +268,7 @@ app.whenReady().then(async () => {
         // Open anyway — user sees connection errors but app is usable
     }
     createWindow()
+    setupAutoUpdater()
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
