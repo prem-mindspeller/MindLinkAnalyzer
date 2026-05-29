@@ -71,33 +71,15 @@ jobs:
         run: |
           git clone https://x-access-token:$env:GH_TOKEN@github.com/Mindspeller/MindLink-Releases.git releases-repo
           cd releases-repo
-          $version = $env:TAG.TrimStart('v')
-          $html = @"
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>MindLink Analyzer – Downloads</title>
-            <style>
-              body { font-family: system-ui, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; }
-              .btn { display: inline-block; padding: 12px 24px; background: #0969da; color: #fff;
-                     text-decoration: none; border-radius: 6px; margin: 8px 4px; font-size: 15px; }
-              .btn:hover { background: #0860ca; }
-              .version { color: #57606a; font-size: 14px; }
-            </style>
-          </head>
-          <body>
-            <h1>MindLink Analyzer</h1>
-            <p class="version">Latest version: $version</p>
-            <a class="btn" href="https://github.com/Mindspeller/MindLink-Releases/releases/latest/download/Mindlink%20Analyzer%20Setup%20$version.exe">
-              Download – Single Channel (BrainLink)
-            </a>
-            <a class="btn" href="https://github.com/Mindspeller/MindLink-Releases/releases/latest/download/Mindlink%20Analyzer%204C%20Setup%20$version.exe">
-              Download – 4-Channel (MindRove)
-            </a>
-            <p><small>Windows 10/11 · 64-bit</small></p>
-          </body>
+          # Strip tag suffix: v2.1.0-mindrove → 2.1.0
+          $version = $env:TAG -replace '^v' -replace '-mindrove$'
+          Set-Content -Path mindrove-version.txt -Value $version -Encoding UTF8
+          .\generate-page.ps1
+          git config user.email "ci@mindspeller.com"
+          git config user.name "MindLink CI"
+          git add mindrove-version.txt index.html
+          git diff --cached --quiet || git commit -m "release: MindRove $version"
+          git push
           </html>
           "@
           Set-Content -Path index.html -Value $html -Encoding UTF8
