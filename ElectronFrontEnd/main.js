@@ -231,8 +231,11 @@ function setupAutoUpdater() {
     // Use generic provider pointing to GitHub Pages so each product has its own
     // update feed independent of which GitHub release is marked "Latest".
     // CI writes {channel}-updates/latest.yml with absolute download URLs on every release.
-    const pkg = require('./package.json')
-    const channel = pkg?.build?.publish?.channel || 'mindlink'
+    // NOTE: electron-builder strips the `build` section from the packaged package.json,
+    // so we cannot read pkg.build.publish.channel at runtime. Instead, detect by version:
+    // MindLink = 1.x.x (major < 100), MindRove = 100.x.x (major >= 100).
+    const appVersion = app.getVersion()
+    const channel = parseInt(appVersion.split('.')[0], 10) >= 100 ? 'mindrove' : 'mindlink'
     autoUpdater.setFeedURL({
         provider: 'generic',
         url: `https://releases.mindspeller.com/${channel}-updates`
