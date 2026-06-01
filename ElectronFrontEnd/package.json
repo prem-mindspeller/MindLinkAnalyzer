@@ -65,8 +65,7 @@
       "verifyUpdateCodeSignature": false
     },
     "nsis": {
-      "allowToChangeInstallationDirectory": false,
-      "include": "installer.nsh"
+      "allowToChangeInstallationDirectory": false
     },
     "extraResources": [
       {

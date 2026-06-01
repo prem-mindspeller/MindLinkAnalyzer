@@ -240,6 +240,12 @@ function setupAutoUpdater() {
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
 
+    let currentUpdateStatus = null
+    const broadcastStatus = (status) => {
+        currentUpdateStatus = status
+        if (mainWin) mainWin.webContents.send('update-status', status)
+    }
+
     autoUpdater.on('update-downloaded', (info) => {
         dialog.showMessageBox(mainWin, {
             type: 'info',
@@ -253,26 +259,26 @@ function setupAutoUpdater() {
         })
     })
 
-    autoUpdater.on('update-available', () => {
-        if (mainWin) mainWin.webContents.send('update-status', 'downloading')
-    })
-
-    autoUpdater.on('update-not-available', () => {
-        if (mainWin) mainWin.webContents.send('update-status', 'up-to-date')
-    })
-
-    autoUpdater.on('error', () => {
-        if (mainWin) mainWin.webContents.send('update-status', 'error')
-    })
+    autoUpdater.on('update-available', () => broadcastStatus('downloading'))
+    autoUpdater.on('update-not-available', () => broadcastStatus('up-to-date'))
+    autoUpdater.on('error', () => broadcastStatus('error'))
 
     // Check on launch, then every 4 hours
     autoUpdater.checkForUpdates()
     setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000)
-}
 
-ipcMain.handle('check-for-updates', () => {
-    if (app.isPackaged) autoUpdater.checkForUpdates()
-})
+    ipcMain.handle('get-update-status', () => currentUpdateStatus)
+
+    ipcMain.handle('check-for-updates', () => {
+        if (!app.isPackaged) return
+        // If already downloading, just report current status rather than starting a second check
+        if (currentUpdateStatus === 'downloading') {
+            broadcastStatus('downloading')
+            return
+        }
+        autoUpdater.checkForUpdates()
+    })
+}
 
 app.whenReady().then(async () => {
     startBackend()

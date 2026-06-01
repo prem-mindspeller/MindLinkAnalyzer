@@ -9,17 +9,19 @@ const Footer = () => {
     const [updateStatus, setUpdateStatus] = useState(null); // null | 'checking' | 'downloading' | 'up-to-date' | 'error'
 
     useEffect(() => {
+        // Listen for status updates from main process (including startup auto-check)
         const handler = (_event, status) => setUpdateStatus(status);
         ipcRenderer.on('update-status', handler);
+        // Ask main for current update state on mount (in case download already started)
+        ipcRenderer.invoke('get-update-status').then(s => { if (s) setUpdateStatus(s); });
         return () => ipcRenderer.removeListener('update-status', handler);
     }, []);
 
     const handleCheckUpdates = async () => {
         setUpdateStatus('checking');
         await ipcRenderer.invoke('check-for-updates');
-        // Status will be updated via 'update-status' IPC event from main
-        // Fall back to 'up-to-date' after 10s if no event received
-        setTimeout(() => setUpdateStatus(s => s === 'checking' ? 'up-to-date' : s), 10000);
+        // Fall back to 'up-to-date' after 60s if no event received (large download takes time)
+        setTimeout(() => setUpdateStatus(s => s === 'checking' ? 'up-to-date' : s), 60000);
     };
 
     const statusLabel = {
