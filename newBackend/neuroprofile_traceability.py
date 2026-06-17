@@ -101,6 +101,7 @@ TASK_NAME_ALIASES: Dict[str, str] = {
     "load_multitasking":           "cognitive_load_multitasking",
     "cognitive_load_multitasking": "cognitive_load_multitasking",
     "div_write":                   "divergent_thinking",
+    "diverse_thinking":            "divergent_thinking",
     "divergent_thinking":          "divergent_thinking",
     "creative_ideation":           "divergent_thinking",
     "body_scan":                   "body_scan",
