@@ -84,6 +84,44 @@ def _make_existing_analysis(per_task: dict) -> dict:
     }
 
 
+def _make_analysis_feature(
+    metric_name: str,
+    *,
+    q: float = 0.5,
+    d: float = 0.60,
+    pct: float = 12.0,
+    delta: float = 1.0,
+    direction_ok: bool = True,
+    p_pass: bool = False,
+    effect_pass: bool = True,
+    percent_pass: bool = True,
+    significant: bool = False,
+) -> dict:
+    """Build one /analyze-style feature stats dict with decision flags."""
+    return {
+        "p_value": 0.04,
+        "q_value": q,
+        "effect_size_d": d,
+        "percent_change": pct,
+        "delta": delta,
+        "task_mean": 2.0,
+        "baseline_mean": 1.0,
+        "n_blocks_task": 6,
+        "n_blocks_baseline": 6,
+        "significant_change": significant,
+        "decision_flags": {
+            "p_one_sided": 0.04,
+            "p_pass": p_pass,
+            "q_pass": q <= 0.0119377,
+            "effect_pass": effect_pass,
+            "percent_pass": percent_pass,
+            "expected_direction": "up",
+            "direction_ok": direction_ok,
+            "pass_rule": "q" if q <= 0.0119377 else None,
+        },
+    }
+
+
 # ─── Test 5–8: classify_feature_family ────────────────────────────────────────
 
 def test_classify_spectral_power():
@@ -323,6 +361,176 @@ def test_gamma_guard_feature_rejected():
         gamma_evaluated=0,
     )
     assert not passes_neuroprofile_gate(feat)
+
+
+def test_coherent_fallback_feature_is_reportable_but_cautious_and_weak():
+    per_task = {
+        "visual_imagery": {
+            "analysis": {
+                "alpha_relative": _make_analysis_feature("alpha_relative"),
+            },
+            "summary": {
+                "expectation": {"grade": "A"},
+            },
+            "sample_count": 6,
+        }
+    }
+    existing = _make_existing_analysis(per_task)
+    existing["baseline_kept"] = 20
+    existing["baseline_rejected"] = 0
+
+    export = build_neuroprofile_export(per_task, existing)
+    feature = export["tasks"][0]["features"][0]
+
+    assert feature["passes_statistical_gate"] is False
+    assert feature["significance_basis"] == "effect_size_percent_fallback"
+    assert feature["interpretation_safety"] == "use_with_caution"
+    assert feature["passes_neuroprofile_gate"] is True
+    assert feature["feature_strength_before_cap"] == "weak"
+    assert feature["feature_strength"] == "weak"
+
+
+def test_wrong_direction_fallback_stays_rejected():
+    feat = {
+        **_make_analysis_feature(
+            "alpha_relative",
+            direction_ok=False,
+            delta=-1.0,
+        ),
+        "metric_name": "alpha_relative",
+    }
+
+    gate = _gate_transparency("alpha_relative", feat)
+
+    assert gate["significance_basis"] == "none"
+    assert gate["interpretation_safety"] == "do_not_use"
+    assert passes_neuroprofile_gate(feat) is False
+
+
+def test_gamma_fallback_stays_rejected_without_non_gamma_support():
+    feat = {
+        **_make_analysis_feature(
+            "gamma_power",
+            q=0.5,
+            d=0.9,
+            pct=20.0,
+        ),
+        "metric_name": "gamma_power",
+    }
+    feat["decision_flags"]["gamma_sparse_montage_guard"] = {
+        "emg_guard_clean": True,
+        "regional_agreement_ok": True,
+        "non_gamma_support": False,
+    }
+
+    assert passes_neuroprofile_gate(feat) is False
+
+
+def test_cautious_only_task_cannot_reach_moderate_or_strong_confidence():
+    per_task = {
+        "visual_imagery": {
+            "analysis": {
+                "alpha_relative": _make_analysis_feature("alpha_relative", d=1.20),
+                "alpha_theta_ratio": _make_analysis_feature("alpha_theta_ratio", d=1.10),
+                "theta_relative": _make_analysis_feature("theta_relative", d=0.95),
+            },
+            "summary": {
+                "expectation": {"grade": "A"},
+            },
+            "sample_count": 6,
+        }
+    }
+    existing = _make_existing_analysis(per_task)
+    existing["baseline_kept"] = 20
+    existing["baseline_rejected"] = 0
+
+    export = build_neuroprofile_export(per_task, existing)
+    task = export["tasks"][0]
+
+    assert {f["feature_strength"] for f in task["features"]} == {"weak"}
+    assert all(f["passes_neuroprofile_gate"] for f in task["features"])
+    assert task["task_summary"]["confidence_before_cap"] == "weak"
+    assert task["task_summary"]["confidence"] == "weak"
+    assert export["global_reliability"] == "medium"
+
+
+def test_neuroprofile_export_schema_is_unchanged_for_tiered_evidence():
+    per_task = {
+        "visual_imagery": {
+            "analysis": {
+                "alpha_relative": _make_analysis_feature("alpha_relative"),
+            },
+            "summary": {
+                "expectation": {"grade": "A"},
+            },
+            "sample_count": 6,
+        }
+    }
+    existing = _make_existing_analysis(per_task)
+    existing["baseline_kept"] = 20
+    existing["baseline_rejected"] = 0
+
+    export = build_neuroprofile_export(per_task, existing)
+    row = export["feature_rows"][0]
+
+    assert set(export) == {
+        "feature_report_version",
+        "traceability_version",
+        "protocol_session_depth",
+        "headset_scope",
+        "global_reliability",
+        "baseline_qc",
+        "session_confidence_cap",
+        "allowed_ability_pool",
+        "moderator_only_characteristics",
+        "blocked_unsupported_labels",
+        "feature_rows",
+        "tasks",
+        "tasks_detected",
+        "global_quality",
+    }
+    assert set(row) == {
+        "task_number",
+        "canonical_task_id",
+        "canonical_task_name",
+        "task_role_matching_status",
+        "task_signal_quality",
+        "task_confidence",
+        "task_confidence_before_cap",
+        "metric_name",
+        "feature_family",
+        "band",
+        "direction",
+        "grade",
+        "effect_size_d",
+        "p_value",
+        "q_value",
+        "percent_change",
+        "passes_q_value",
+        "passes_effect_size_threshold",
+        "passes_percent_change_threshold",
+        "passes_statistical_gate",
+        "significance_basis",
+        "interpretation_safety",
+        "effect_size_threshold_used",
+        "percent_change_threshold_used",
+        "baseline_block_count",
+        "task_block_count",
+        "effective_sample_size",
+        "task_mean",
+        "baseline_mean",
+        "delta",
+        "passes_neuroprofile_gate",
+        "feature_strength",
+        "feature_strength_before_cap",
+        "role_matching_status",
+        "task_supported_characteristics",
+        "allowed_onet_ability_candidates",
+        "blocked_inferences",
+    }
+    assert "evidence_tier" not in row
+    assert "included_as_cautious_evidence" not in row
+    assert "neuroprofile_evidence_summary" not in export
 
 
 def test_feature_strength_strong():

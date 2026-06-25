@@ -9,7 +9,7 @@
 
 \begin{document}
 
-\title{MindLink Analyzer newBackend: An IEEE-Style Scientific Description of a Single-Channel EEG Acquisition, Filtering, Feature Extraction, and Neuroprofiling Pipeline}
+\title{Baseline-Referenced Feature Extraction for Task-Evoked Changes in Single-Channel EEG}
 
 \author{
 \IEEEauthorblockN{Author Name}
@@ -20,62 +20,38 @@ Email}
 \maketitle
 
 \begin{abstract}
-This paper describes the signal-processing and statistical neuroprofiling flow implemented in the MindLink Analyzer \texttt{newBackend}. The system acquires single-channel frontal EEG from a BrainLink/NeuroSky-compatible TGAM stream, validates packets, applies a live digital filtering chain, streams filtered samples to the user interface, and performs offline baseline-versus-task inference from raw EEG or precomputed TGAM band-power observations. The implemented processing stages include serial acquisition at 115200 baud, TGAM checksum validation, 512 Hz raw-sample handling, cascaded high-pass, low-pass, and 50 Hz notch filtering, two-second spectral windows, DPSS multitaper power spectral density estimation, signal-quality rejection, EMG-aware gamma suppression, spectral band-power and entropy features, block aggregation, Welch hypothesis tests, Cohen effect sizes, Benjamini-Hochberg false-discovery-rate adjustment, dependence-aware Fisher aggregation using the Kost-McDermott correction, SumP permutation testing, cosine-distance assessment, and across-task nonparametric comparison. The final output is a structured neuroprofile feature export with reliability caps, task gates, supported cognitive characteristics, allowed ability candidates, and blocked unsupported inferences. The method is grounded in established EEG spectral estimation, artifact-control, and statistical inference principles and follows the scientific flow described in the reference EEG neuroprofiling report.
+This paper presents a baseline-referenced method for extracting task-evoked changes from single-channel frontal electroencephalography (EEG). Raw EEG is segmented into two-second windows and transformed into spectral power, relative power, peak, entropy, and cross-band-ratio features using multitaper power spectral density estimation. After signal-quality screening and electromyographic artifact control, adjacent windows are aggregated into temporal blocks. For each feature, the principal task descriptor is the difference between the task mean and the participant-specific eyes-closed baseline mean. This feature delta is supplemented by percent change, standardized change, Cohen effect size, directional consistency, and inferential uncertainty. Welch tests, false-discovery-rate adjustment, dependence-aware Fisher aggregation, and permutation testing quantify the reliability of the observed baseline-to-task changes. The resulting representation emphasizes within-participant task modulation rather than absolute EEG magnitude, thereby reducing sensitivity to stable inter-individual and device-dependent differences.
 \end{abstract}
 
 \begin{IEEEkeywords}
-EEG, single-channel EEG, BrainLink, TGAM, multitaper spectral analysis, Welch's t-test, Fisher method, Kost-McDermott correction, neuroprofiling, cognitive-state analysis.
+EEG, single-channel EEG, baseline normalization, feature extraction, task-evoked change, multitaper spectral analysis, effect size, cognitive-state analysis.
 \end{IEEEkeywords}
 
 \section{Introduction}
-Consumer-grade single-channel EEG devices provide a practical route for repeated cognitive-state measurement, but they impose constraints that differ from laboratory multichannel EEG. The MindLink Analyzer \texttt{newBackend} addresses these constraints by separating live acquisition from offline statistical analysis. The live path emphasizes packet validation, filtering, low-latency transport, and device-state reporting. The analysis path emphasizes quality control, robust spectral features, baseline normalization, task-specific inference, dependence-aware aggregation, and traceable downstream neuroprofile export.
+Consumer-grade single-channel EEG provides a practical route for repeated cognitive-state measurement, but absolute spectral values vary substantially across participants, recording sessions, electrode contact conditions, and hardware gain. Consequently, an isolated task measurement is difficult to interpret. A participant-specific baseline provides a physiological reference against which task-related modulation can be expressed.
 
-The design follows the scientific rationale summarized in the provided reference report: short EEG segments are transformed into spectral descriptors, task windows are compared against a personal baseline, correlated feature-level evidence is aggregated with corrections, and interpretable evidence is exported with explicit limitations. Unlike a generic report, this paper documents the concrete implementation in \texttt{newBackend/main.py}, \texttt{newBackend/eeg\_processor.py}, and \texttt{newBackend/neuroprofile\_traceability.py}.
+The central quantity in this work is therefore not the absolute feature value, but its change from baseline. Let $\mu_f^{(B)}$ denote the mean baseline value of feature $f$ and $\mu_f^{(t)}$ the corresponding mean during task $t$. The primary extracted task feature is
+\begin{equation}
+\Delta_f^{(t)}=\mu_f^{(t)}-\mu_f^{(B)}.
+\end{equation}
+The vector $\boldsymbol{\Delta}^{(t)}$ summarizes the participant's task-evoked spectral response. Its sign indicates the direction of modulation, while its magnitude is characterized using absolute, relative, and standardized measures. Statistical procedures are used to assess whether the observed changes are reliable given temporal variability and correlation among EEG features.
 
-\section{System Overview}
-The backend exposes a FastAPI service with REST endpoints for health, serial-port listing, connection, disconnection, status, and analysis. A serial reader thread ingests device bytes, either through the BrainLinkParser SDK or a fallback TGAM parser. A WebSocket broadcaster sends live events to connected clients. Offline analysis is invoked through an \texttt{/analyze} request containing baseline samples and task samples.
-
-The overall processing sequence is:
+\section{Method Overview}
+The scientific processing sequence is:
 \begin{enumerate}
-\item detect and open the BrainLink serial port;
-\item parse SDK or TGAM byte frames;
-\item validate payload checksums and decode raw EEG, signal quality, attention, meditation, band powers, and battery fields;
-\item filter raw EEG samples for live display;
-\item accumulate baseline and task samples;
-\item convert raw samples to window-level feature rows;
-\item reject unusable baseline windows;
-\item aggregate windows into blocks;
-\item compare each task against the eyes-closed baseline;
-\item combine feature-level statistical evidence;
-\item compute across-task rankings and corrections;
-\item export a traceable neuroprofile evidence object.
+\item acquire single-channel frontal EEG at 512 Hz;
+\item segment baseline and task recordings into non-overlapping two-second windows;
+\item estimate spectral density and extract window-level features;
+\item reject unusable baseline windows and suppress artifact-sensitive gamma features;
+\item aggregate consecutive feature windows into temporal blocks;
+\item compute baseline and task feature means;
+\item derive baseline-referenced feature deltas and normalized change measures;
+\item quantify the reliability and direction of each change;
+\item compare delta profiles across cognitive tasks.
 \end{enumerate}
 
-\section{Signal Acquisition and Packet Decoding}
-\subsection{TGAM Stream Model}
-The fallback parser assumes the TGAM packet structure:
-\begin{equation}
-\texttt{0xAA},\texttt{0xAA},L,p_1,\ldots,p_L,c ,
-\end{equation}
-where $L$ is payload length, $p_i$ are payload bytes, and $c$ is the checksum. The checksum rule implemented by the parser is
-\begin{equation}
-c = \left(\sim \left(\sum_{i=1}^{L}p_i \bmod 256\right)\right)\bmod 256 .
-\end{equation}
-Only payloads satisfying this equality are decoded. The relevant TGAM codes are raw EEG (\texttt{0x80}), poor signal (\texttt{0x02}), attention (\texttt{0x04}), meditation (\texttt{0x05}), EEG band power (\texttt{0x83}), and extended battery/version data (\texttt{0x85}).
-
-\subsection{Raw EEG and Band-Power Decoding}
-Raw EEG samples are decoded as signed 16-bit big-endian values:
-\begin{equation}
-x[n] =
-\begin{cases}
-256p_i+p_{i+1}, & 256p_i+p_{i+1}\le 32767,\\
-256p_i+p_{i+1}-65536, & \text{otherwise}.
-\end{cases}
-\end{equation}
-TGAM band powers are decoded as eight unsigned 24-bit integers ordered as delta, theta, low alpha, high alpha, low beta, high beta, low gamma, and mid gamma. The backend treats raw EEG as a 512 Hz stream, using two-second windows of $N=1024$ samples.
-
-\section{Live Digital Filtering}
-Live raw samples are processed by a cascaded second-order IIR chain: 1 Hz high-pass, 45 Hz low-pass, and 50 Hz notch filtering. Each section is implemented as a direct-form I biquad:
+\section{Signal Acquisition and Filtering}
+Single-channel frontal EEG is sampled at $f_s=512$ Hz. For real-time visualization, raw samples are processed by a cascaded second-order IIR chain consisting of a 1 Hz high-pass filter, a 45 Hz low-pass filter, and a 50 Hz notch filter. Each section follows the direct-form I biquad:
 \begin{equation}
 y[n]=b_0x[n]+b_1x[n-1]+b_2x[n-2]-a_1y[n-1]-a_2y[n-2].
 \end{equation}
@@ -107,11 +83,11 @@ b_0=\frac{1}{a_0},\quad b_1=\frac{-2\cos \omega_0}{a_0},\quad b_2=\frac{1}{a_0},
 \begin{equation}
 a_1=\frac{-2\cos \omega_0}{a_0},\quad a_2=\frac{1-\alpha}{a_0}.
 \end{equation}
-Filtered samples are batched approximately every 16 ms for live WebSocket transport.
+Feature extraction is performed from the recorded raw samples using the spectral procedure described below.
 
 \section{Windowing and Spectral Estimation}
 \subsection{Segmentation}
-For raw offline analysis, the backend partitions the raw sequence into non-overlapping windows:
+The raw sequence is partitioned into non-overlapping windows:
 \begin{equation}
 \mathbf{x}_w=\{x[wN],x[wN+1],\ldots,x[wN+N-1]\},
 \end{equation}
@@ -121,7 +97,7 @@ where $N=1024$ and $f_s=512$ Hz. Each window therefore spans 2 s. The window is 
 \end{equation}
 
 \subsection{DPSS Multitaper PSD}
-When SciPy DPSS windows are available, the backend computes a multitaper PSD with $K=3$ tapers and time-bandwidth product $NW=2.5$. For taper $v_k[n]$, the tapered Fourier transform is
+A multitaper PSD is computed with $K=3$ discrete prolate spheroidal sequence tapers and time-bandwidth product $NW=2.5$. For taper $v_k[n]$, the tapered Fourier transform is
 \begin{equation}
 X_k[f]=\sum_{n=0}^{N-1}\tilde{x}_w[n]v_k[n]e^{-j2\pi fn/N}.
 \end{equation}
@@ -129,7 +105,7 @@ The PSD estimate is
 \begin{equation}
 \hat{S}[f]=\frac{1}{K}\sum_{k=1}^{K}\frac{|X_k[f]|^2}{f_sN+\epsilon},
 \end{equation}
-where $\epsilon$ prevents numerical division errors. If DPSS computation is unavailable, the implementation falls back to a Hann-tapered periodogram. This is consistent with the reference report's emphasis on multitaper spectral estimation for short, noisy EEG windows.
+where $\epsilon$ prevents numerical division errors. A Hann-tapered periodogram provides a fallback estimate when multitaper estimation is unavailable.
 
 \subsection{Noise-Floor Subtraction}
 For each PSD, a robust noise floor is estimated as the 10th percentile:
@@ -144,7 +120,7 @@ This reduces the influence of broadband floor shifts before band integration.
 
 \section{Quality Control and Artifact Handling}
 \subsection{Baseline Window Rejection}
-Baseline windows are screened before entering baseline statistics. The backend rejects a window as flatline when the robust scale is too small:
+Baseline windows are screened before the baseline reference distribution is estimated. A window is rejected as a flatline when the robust scale is too small:
 \begin{equation}
 \sigma_{\mathrm{MAD}}=1.4826\cdot\mathrm{median}\{|x[n]-\mathrm{median}(x)|\}<0.5.
 \end{equation}
@@ -157,7 +133,7 @@ R_{\mathrm{HF}}=\frac{\sum_{f\ge 30}\hat{S}[f]}{\sum_f\hat{S}[f]}.
 The log-log spectral slope $m$ is estimated over 1--40 Hz. A window is rejected when low-frequency neural content is insufficient, high-frequency power is excessive, or the spectrum is implausibly flat. Extreme amplitude outliers also trigger artifact rejection when more than 5 percent of samples exceed 20 robust scales.
 
 \subsection{EMG Guard for Gamma Features}
-Frontal single-channel EEG is vulnerable to facial EMG contamination, especially in beta/gamma ranges \cite{whitham2007,goncharova2003}. The backend computes
+Frontal single-channel EEG is vulnerable to facial EMG contamination, especially in beta/gamma ranges \cite{whitham2007,goncharova2003}. The artifact indicator is
 \begin{equation}
 R_{\mathrm{EMG}}=\frac{P_{35-45}}{P_{20-30}+\epsilon},
 \end{equation}
@@ -173,7 +149,7 @@ If triggered, gamma features are set to zero and marked as unevaluated, preventi
 
 \section{Feature Extraction}
 \subsection{Frequency Bands}
-The raw-analysis path computes features from the following bands:
+Spectral features are computed from the following bands:
 \begin{table}[h]
 \centering
 \caption{Raw EEG Feature Bands}
@@ -194,7 +170,7 @@ Beta2 & 20 & 30\\
 \end{tabular}
 \end{table}
 
-The TGAM-compatible path additionally preserves the chip's eight bands: delta, theta, low alpha, high alpha, low beta, high beta, low gamma, and mid gamma.
+When precomputed band-power observations are used, the available delta, theta, low-alpha, high-alpha, low-beta, high-beta, low-gamma, and mid-gamma components are preserved.
 
 \subsection{Band Power and Relative Power}
 For band $B=[f_1,f_2]$, raw and SNR-adjusted powers are
@@ -202,7 +178,7 @@ For band $B=[f_1,f_2]$, raw and SNR-adjusted powers are
 P_B^{\mathrm{raw}}=\int_{f_1}^{f_2}\hat{S}[f]\,df,\quad
 P_B=\int_{f_1}^{f_2}\hat{S}^{+}[f]\,df .
 \end{equation}
-The backend uses trapezoidal numerical integration. Relative power is
+Band power is estimated by trapezoidal numerical integration. Relative power is
 \begin{equation}
 P_B^{\mathrm{rel}}=\frac{P_B}{\sum_{B'}P_{B'}+\epsilon},
 \end{equation}
@@ -224,7 +200,7 @@ p_f=\frac{Z[f]}{\sum_{u\in B}Z[u]+\epsilon}.
 \end{equation}
 
 \subsection{Cross-Band Ratios}
-The implementation derives four cross-band ratios:
+Four cross-band ratios are derived:
 \begin{equation}
 \rho_{\alpha/\theta}=\frac{P_\alpha}{P_\theta+\epsilon},\quad
 \rho_{\beta/\alpha}=\frac{P_\beta}{P_\alpha+\epsilon},
@@ -235,9 +211,9 @@ The implementation derives four cross-band ratios:
 \end{equation}
 These ratios are used as interpretable markers of cognitive load, attention, and task engagement.
 
-\section{Block Aggregation and Baseline Comparison}
+\section{Baseline Reference and Block Aggregation}
 \subsection{Eyes-Closed Baseline}
-The \texttt{/analyze} endpoint uses eyes-closed baseline samples when available. Eyes-open samples are retained as metadata but are not the primary baseline for statistical testing. If no eyes-closed key exists, all baseline arrays are pooled as a fallback.
+Eyes-closed EEG is used as the participant-specific reference condition because it provides a stable resting comparison for alpha- and theta-related task modulation \cite{klimesch1999}. Eyes-open observations may be retained for descriptive comparison but are not included in the primary baseline estimate.
 
 \subsection{Effective Blocks}
 To reduce temporal dependence among adjacent 2 s windows, windows are averaged into non-overlapping blocks. The default block duration is 8 s, so each block contains four feature windows:
@@ -246,9 +222,50 @@ To reduce temporal dependence among adjacent 2 s windows, windows are averaged i
 \end{equation}
 All Welch tests, permutations, and task summaries are computed on these block-level feature means.
 
-\section{Per-Feature Statistical Inference}
+\subsection{Unequal Block Counts}
+Task and baseline blocks are not downsampled or randomly equalized. If the task produces $n_a$ blocks and the baseline produces $n_b$ blocks, all $n_a+n_b$ available blocks are retained. Unequal-sample statistical procedures preserve these original group sizes and avoid discarding valid observations when recording durations differ.
+
+\section{Baseline-Referenced Feature Delta}
+\subsection{Primary Delta Representation}
+For feature $f$, let $\{a_i\}_{i=1}^{n_a}$ denote task blocks and $\{b_j\}_{j=1}^{n_b}$ denote baseline blocks. Their means are
+\begin{equation}
+\mu_f^{(t)}=\frac{1}{n_a}\sum_{i=1}^{n_a}a_i,\quad
+\mu_f^{(B)}=\frac{1}{n_b}\sum_{j=1}^{n_b}b_j.
+\end{equation}
+The primary extracted task feature is the baseline-referenced delta
+\begin{equation}
+\Delta_f^{(t)}=\mu_f^{(t)}-\mu_f^{(B)}.
+\end{equation}
+A positive delta indicates an increase relative to baseline, whereas a negative delta indicates suppression. For task $t$, the complete response is represented by
+\begin{equation}
+\boldsymbol{\Delta}^{(t)}
+=\left[\Delta_1^{(t)},\Delta_2^{(t)},\ldots,\Delta_m^{(t)}\right]^\mathsf{T}.
+\end{equation}
+This within-participant differencing is intended to reduce the influence of stable absolute-power differences and emphasize task-related modulation.
+
+\subsection{Normalized Delta Measures}
+Because EEG features differ in scale and units, the absolute delta is accompanied by percent change, baseline-standardized change, and log-ratio change:
+\begin{equation}
+\Delta_{f,\%}^{(t)}
+=100\frac{\mu_f^{(t)}-\mu_f^{(B)}}{|\mu_f^{(B)}|+\epsilon},
+\end{equation}
+\begin{equation}
+z_f^{(t)}=\frac{\mu_f^{(t)}-\mu_f^{(B)}}{s_f^{(B)}+\epsilon},
+\quad
+L_f^{(t)}=\log_2\left(\frac{|\mu_f^{(t)}|}{|\mu_f^{(B)}|+\epsilon}+\epsilon\right).
+\end{equation}
+The absolute delta preserves the original feature units, percent change supports within-feature interpretation, and standardized measures support comparison across heterogeneous feature families.
+
+\subsection{Effect Size}
+Cohen's effect size characterizes the magnitude of the baseline-to-task shift relative to block variability \cite{cohen1988}:
+\begin{equation}
+d_f=\frac{\mu_f^{(t)}-\mu_f^{(B)}}{\sqrt{(s_t^2+s_B^2)/2}+\epsilon}.
+\end{equation}
+Feature-dependent practical-change thresholds are 0.25 for alpha effect sizes, 0.35 for beta effect sizes, and 0.30 otherwise. Percent-change thresholds are 5 percent for relative-power or ratio features and 10 percent for absolute-power features.
+
+\section{Statistical Reliability of Feature Deltas}
 \subsection{Welch's t-Test}
-For feature $f$, let $\{a_i\}_{i=1}^{n_a}$ denote task blocks and $\{b_j\}_{j=1}^{n_b}$ denote baseline blocks. The backend computes Welch's statistic:
+The reliability of $\Delta_f^{(t)}$ is assessed using Welch's statistic:
 \begin{equation}
 t_f=\frac{\bar{a}_f-\bar{b}_f}{\sqrt{s_a^2/n_a+s_b^2/n_b}}.
 \end{equation}
@@ -257,19 +274,11 @@ The Welch-Satterthwaite degrees of freedom are
 \nu_f=\frac{(s_a^2/n_a+s_b^2/n_b)^2}
 {\frac{(s_a^2/n_a)^2}{n_a-1}+\frac{(s_b^2/n_b)^2}{n_b-1}}.
 \end{equation}
-The two-sided $p$-value is obtained from the $t$ distribution when SciPy is available, otherwise from a normal approximation.
-
-\subsection{Effect Size and Percent Change}
-Cohen's effect size is
+At least two observations are required in each group. A group is treated as near-constant when its range is no greater than
 \begin{equation}
-d_f=\frac{\bar{a}_f-\bar{b}_f}{\sqrt{(s_a^2+s_b^2)/2}+\epsilon}.
+\tau=\max\left(10^{-12},10^{-9}\max(1,|x_{\min}|,|x_{\max}|,|\bar{x}|)\right).
 \end{equation}
-The percent change and baseline/task ratio are
-\begin{equation}
-\Delta_f(\%)=100\frac{\bar{a}_f-\bar{b}_f}{|\bar{b}_f|+\epsilon},
-\quad r_f=\frac{\bar{a}_f}{|\bar{b}_f|+\epsilon}.
-\end{equation}
-The backend uses feature-dependent thresholds: 0.25 for alpha effect sizes, 0.35 for beta effect sizes, 0.30 otherwise, 5 percent for relative or ratio features, and 10 percent for absolute raw-power features.
+If either group is near-constant, the feature is assigned $t_f=0$ and $p_f=1$, preventing unstable or artificial significance.
 
 \subsection{Directional Priors}
 Task-specific directional expectations are applied after the two-sided Welch test. For example, mental arithmetic expects alpha decrease and beta/gamma or beta-alpha-ratio increase; visual imagery expects alpha and alpha-theta-ratio increase; working memory expects theta increase, alpha decrease, and beta-ratio increase. If the expected direction is ``up'', then
@@ -284,13 +293,13 @@ and analogously for ``down'' with $t_f<0$. A feature is considered directionally
 
 \section{Multiple Comparisons and Feature Gating}
 \subsection{Benjamini-Hochberg FDR}
-The backend computes Benjamini-Hochberg $q$ values \cite{benjamini1995}. Given sorted $p$ values $p_{(1)}\le\cdots\le p_{(m)}$, adjusted values are obtained by the monotone rule
+Benjamini-Hochberg $q$ values are computed to characterize multiplicity across features \cite{benjamini1995}. Given sorted $p$ values $p_{(1)}\le\cdots\le p_{(m)}$, adjusted values are obtained by the monotone rule
 \begin{equation}
 q_{(i)}=\min_{j\ge i}\frac{m}{j}p_{(j)}.
 \end{equation}
 
 \subsection{Correlation Guard}
-Because EEG features are correlated, the backend computes a Spearman-rank feature correlation matrix and estimates an effective feature count using eigenvalues:
+Because EEG features are correlated, a Spearman-rank feature correlation matrix is estimated from the retained baseline blocks. An effective feature count is then estimated using eigenvalues:
 \begin{equation}
 m_{\mathrm{eff}}=\sum_{i=1}^{m}\min(\max(\lambda_i,0),1).
 \end{equation}
@@ -311,7 +320,7 @@ Feature-level $p$ values are combined with Fisher's statistic \cite{fisher1925}:
 \begin{equation}
 X=-2\sum_{f=1}^{m}\log p_f.
 \end{equation}
-Because spectral features are dependent, the backend applies the Kost-McDermott correction \cite{kost2002}. Pairwise feature correlations $r_{ij}$ are converted into covariance contributions:
+Because spectral features are dependent, the Kost-McDermott correction is applied \cite{kost2002}. Pairwise feature correlations $r_{ij}$ are converted into covariance contributions:
 \begin{equation}
 C_{ij}=3.263r_{ij}+0.710r_{ij}^2+0.027r_{ij}^3 .
 \end{equation}
@@ -323,14 +332,14 @@ The scale and degrees of freedom are
 \begin{equation}
 c=\frac{\sigma^2}{2\mu},\quad \nu_{\mathrm{KM}}=\frac{2\mu^2}{\sigma^2}.
 \end{equation}
-The adjusted statistic is $X_{\mathrm{KM}}=X/c$ and its $p$ value is evaluated with a chi-square survival function using $\nu_{\mathrm{KM}}$ degrees of freedom.
+The adjusted statistic is $X_{\mathrm{KM}}=X/c$ and its $p$ value is evaluated from the upper tail of a chi-square distribution with $\nu_{\mathrm{KM}}$ degrees of freedom.
 
 \subsection{SumP Permutation Test}
 The SumP statistic is
 \begin{equation}
 S_{\mathrm{obs}}=\sum_{f=1}^{m}p_f .
 \end{equation}
-Task and baseline blocks are pooled and labels are permuted with fixed seed 42 for $B=1000$ permutations. The empirical left-tail probability is
+Task and baseline blocks are pooled and labels are permuted with fixed seed 42 for $B=1000$ permutations. Each permutation restores the original task size $n_a$ and baseline size $n_b$; no equal-count subsampling is performed. Near-constant features contribute $p=1$ rather than an unstable test result. The empirical left-tail probability is
 \begin{equation}
 p_{\mathrm{perm}}=\frac{1+\sum_{b=1}^{B}\mathbf{1}\{S_b\le S_{\mathrm{obs}}\}}{B+1}.
 \end{equation}
@@ -341,7 +350,7 @@ The composite evidence score is
 \begin{equation}
 C=\sum_{f=1}^{m}-\log_{10}(\max(q_f,10^{-12})).
 \end{equation}
-The backend also computes cosine similarity between baseline and task mean feature vectors:
+Cosine similarity is also computed between baseline and task mean feature vectors:
 \begin{equation}
 \cos(\theta)=\frac{\mathbf{b}\cdot\mathbf{a}}
 {\|\mathbf{b}\|_2\|\mathbf{a}\|_2+\epsilon},
@@ -349,38 +358,39 @@ The backend also computes cosine similarity between baseline and task mean featu
 \end{equation}
 A permutation procedure shuffles the baseline vector to estimate a cosine-distance $p$ value.
 
-\section{Across-Task Inference}
-For sessions with multiple tasks, the backend ranks each feature across tasks using absolute median effect size. If at least two tasks contain data and SciPy is available, it applies the Kruskal-Wallis test per feature:
+\section{Across-Task Delta Comparison}
+When multiple tasks are recorded, each feature is ranked across tasks using the absolute task-versus-baseline effect size. This identifies which cognitive condition produces the largest modulation relative to the same participant-specific baseline. When at least two tasks contain data, the Kruskal-Wallis test compares per-window feature values grouped by task \cite{kruskal1952}:
 \begin{equation}
 H=\frac{12}{N(N+1)}\sum_{g=1}^{G}n_g(\bar{R}_g-\bar{R})^2 ,
 \end{equation}
-followed by BH-FDR adjustment over feature-level omnibus $p$ values. Cross-task task-level Fisher/KM $p$ values are additionally adjusted with Holm-Bonferroni:
+followed by BH-FDR adjustment over feature-level omnibus $p$ values. Cross-task task-level Fisher/KM $p$ values are additionally adjusted with Holm-Bonferroni \cite{holm1979}:
 \begin{equation}
 p_{(i)}^{\mathrm{Holm}}=\max_{j\le i}(m-j+1)p_{(j)}.
 \end{equation}
-This differs from the reference report's more general description of Friedman/Wilcoxon repeated-measures analysis; the current \texttt{newBackend} implementation uses Kruskal-Wallis and Holm-Bonferroni.
+The omnibus test evaluates whether at least one task condition differs from the others, while the baseline-referenced delta and effect-size rankings retain the direction and magnitude of each task response.
 
-\section{Neuroprofile Traceability Export}
-The final \texttt{neuroprofile\_feature\_export} is additive: it does not alter existing analysis keys. It maps statistical evidence into structured fields for downstream agents:
+\section{Scientific Interpretation}
+The resulting feature-delta profile is interpreted using the following evidence:
 \begin{itemize}
-\item canonical task IDs and session depth;
-\item feature family labels such as spectral power, relative power, band ratio, peak feature, entropy/complexity, transition/recovery, and signal quality;
-\item gate transparency including $p$, $q$, effect-size pass, percent-change pass, direction pass, and significance basis;
-\item baseline and task block counts;
-\item global reliability derived from baseline keep rate, feature keep rate, and gamma-guard activity;
-\item session confidence caps for partial protocols;
-\item allowed ability candidates, moderator-only characteristics, and blocked unsupported inferences.
+\item the sign and magnitude of $\Delta_f^{(t)}$;
+\item percent and standardized change relative to baseline;
+\item block-level variability and Cohen effect size;
+\item directional consistency with task-specific hypotheses;
+\item feature-level and global statistical reliability;
+\item baseline signal quality and gamma-artifact sensitivity.
 \end{itemize}
 
-The reliability cap prevents downstream interpretation from exceeding the quality supported by the recording. If global reliability is medium, strong feature confidence is capped at moderate; if reliability is low or unknown, confidence is capped at weak. Moderator-only tasks, such as static emotion grasp, body scan, and visual colour processing, are deliberately prevented from producing direct role-matching ability claims.
+The delta profile supports statements about task-related modulation of measured EEG features. It does not directly establish stable psychological traits, occupational abilities, source-localized neural activity, or clinical diagnoses.
 
 \section{Discussion}
-The implemented pipeline follows established principles in EEG signal analysis. Multitaper PSD reduces variance and leakage in short windows \cite{thomson1982,percival1993}; EMG-aware gamma suppression reflects known contamination of scalp EEG by muscle activity \cite{whitham2007,goncharova2003}; Welch testing handles unequal variance and unequal block counts \cite{welch1947}; BH-FDR controls feature-selection error rate \cite{benjamini1995}; Fisher aggregation summarizes distributed evidence \cite{fisher1925}; and Kost-McDermott correction addresses correlated feature evidence \cite{kost2002}. The backend's engineering contribution is the integration of these methods into a traceable, single-channel, real-time-to-offline EEG workflow.
+The principal contribution of this method is the construction of a task-specific feature representation from changes relative to a personal baseline. Absolute EEG power is affected by stable participant characteristics, sensor placement, impedance, and acquisition gain. Baseline differencing reduces the contribution of these stable offsets and shifts interpretation toward within-session task modulation. The extracted delta vector preserves feature-specific direction, while percent change, standardized change, and Cohen effect size provide complementary measures of magnitude.
 
-The main limitation is spatial specificity. A single frontal/frontopolar-compatible channel cannot support connectivity, source localization, lateralized motor claims, or clinical diagnosis. The traceability layer mitigates this limitation by reporting blocked inferences and by capping confidence according to session depth and signal reliability.
+Multitaper PSD reduces variance and leakage in short windows \cite{thomson1982,percival1993}; EMG-aware gamma suppression reflects known contamination of scalp EEG by muscle activity \cite{whitham2007,goncharova2003}; Welch testing handles unequal variance and unequal block counts \cite{welch1947}; BH-FDR characterizes multiplicity across features \cite{benjamini1995}; Fisher aggregation summarizes distributed evidence \cite{fisher1925}; and Kost-McDermott correction addresses correlated feature evidence \cite{kost2002}.
+
+The main limitation is spatial specificity. A single frontal/frontopolar-compatible channel cannot support connectivity, source localization, lateralized motor claims, or clinical diagnosis. Baseline differencing also does not remove transient artifacts or time-varying non-neural effects. Baseline raw windows therefore receive explicit signal-quality rejection, while gamma suppression and degenerate-series handling reduce selected risks during task analysis.
 
 \section{Conclusion}
-This paper presented the scientific flow implemented in MindLink Analyzer's \texttt{newBackend}: validated EEG acquisition, live digital filtering, spectral windowing, quality control, EMG-guarded feature extraction, baseline-referenced statistical inference, dependence-aware global testing, across-task ranking, and structured neuroprofile export. The system is designed for interpretable cognitive-state evidence from short single-channel EEG recordings while preserving statistical transparency and downstream inference boundaries.
+This paper presented a baseline-referenced feature-extraction method for single-channel EEG. Spectral and cross-band features are estimated from short EEG windows, aggregated into temporal blocks, and transformed into task-evoked deltas relative to an eyes-closed baseline. The primary output is a feature-delta vector whose direction and magnitude are characterized using percent change, standardized change, effect size, and statistical reliability. This formulation emphasizes within-participant task modulation while preserving explicit uncertainty and the limitations of single-channel measurement.
 
 \begin{thebibliography}{99}
 
@@ -414,23 +424,11 @@ J. T. Kost and M. P. McDermott, ``Combining dependent $p$-values,'' \emph{Journa
 \bibitem{klimesch1999}
 W. Klimesch, ``EEG alpha and theta oscillations reflect cognitive and memory performance: a review and analysis,'' \emph{Brain Research Reviews}, vol. 29, pp. 169--195, 1999.
 
-\bibitem{makeig2004}
-S. Makeig \emph{et al.}, ``Mining event-related brain dynamics,'' \emph{Trends in Cognitive Sciences}, vol. 8, no. 5, pp. 204--210, 2004.
-
-\bibitem{candia2023}
-D. Candia-Rivera and G. Valenza, ``Cluster permutation analysis for EEG series based on non-parametric Wilcoxon--Mann--Whitney statistical tests,'' \emph{Biomedical Signal Processing and Control}, vol. 86, 105233, 2023.
-
-\bibitem{friedman1937}
-M. Friedman, ``The use of ranks to avoid the assumption of normality implicit in the analysis of variance,'' \emph{Journal of the American Statistical Association}, vol. 32, no. 200, pp. 675--701, 1937.
-
 \bibitem{kruskal1952}
 W. H. Kruskal and W. A. Wallis, ``Use of ranks in one-criterion variance analysis,'' \emph{Journal of the American Statistical Association}, vol. 47, no. 260, pp. 583--621, 1952.
 
 \bibitem{holm1979}
 S. Holm, ``A simple sequentially rejective multiple test procedure,'' \emph{Scandinavian Journal of Statistics}, vol. 6, no. 2, pp. 65--70, 1979.
-
-\bibitem{tukey1977}
-J. W. Tukey, \emph{Exploratory Data Analysis}. Reading, MA, USA: Addison-Wesley, 1977.
 
 \end{thebibliography}
 

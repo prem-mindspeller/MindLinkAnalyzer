@@ -1,4 +1,4 @@
-﻿/* ── Baseline Calibration Page ─────────────────────────────────────────────── */
+/* ── Baseline Calibration Page ─────────────────────────────────────────────── */
 
 .calibration-page {
     width: 100%;
@@ -340,3 +340,86 @@
     background: #1d4ed8;
 }
 
+
+.cal-btn-start:disabled,
+.cal-btn-start:disabled:hover {
+    background: #e2e8f0;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+.cal-quality-overlay {
+    z-index: 2100;
+    padding: 18px;
+}
+
+.cal-quality-card {
+    max-width: 880px;
+    max-height: 92vh;
+    overflow: auto;
+    border-radius: 8px;
+}
+
+.cal-quality-body {
+    margin: 0;
+    color: #475569;
+    line-height: 1.55;
+    text-align: center;
+}
+
+.cal-quality-reason {
+    padding: 10px 12px;
+    border: 1.5px solid #fbbf24;
+    border-radius: 8px;
+    background: #fffbeb;
+    color: #92400e;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.cal-quality-chart {
+    height: 260px;
+    overflow: hidden;
+    border: 1px solid #172554;
+    border-radius: 8px;
+    background: #020617;
+}
+
+.cal-quality-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.cal-quality-steps div {
+    padding: 12px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.cal-quality-steps strong {
+    color: #1d4ed8;
+}
+
+@media (max-width: 760px) {
+    .cal-quality-card {
+        width: 100%;
+        padding: 22px 18px;
+    }
+
+    .cal-quality-chart {
+        height: 220px;
+    }
+
+    .cal-quality-steps {
+        grid-template-columns: 1fr;
+    }
+
+    .cal-modal-buttons {
+        flex-direction: column;
+    }
+}

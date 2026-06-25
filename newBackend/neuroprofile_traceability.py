@@ -434,6 +434,34 @@ def _apply_reliability_cap(strength: str, reliability: str) -> str:
     return _STRENGTH_ORDER[min(str_idx, cap_idx)]
 
 
+def _feature_decision_flags(feature: Dict[str, Any]) -> Dict[str, Any]:
+    flags = feature.get("decision_flags")
+    return flags if isinstance(flags, dict) else {}
+
+
+def _flag_or_threshold(
+    flags: Dict[str, Any],
+    flag_name: str,
+    threshold_value: bool,
+) -> bool:
+    if flag_name in flags:
+        return bool(flags.get(flag_name))
+    return threshold_value
+
+
+def _gamma_fallback_allowed(metric_name: str, flags: Dict[str, Any]) -> bool:
+    if "gamma" not in metric_name.lower():
+        return True
+    guard = flags.get("gamma_sparse_montage_guard")
+    if not isinstance(guard, dict):
+        return False
+    return bool(
+        guard.get("emg_guard_clean")
+        and guard.get("regional_agreement_ok")
+        and guard.get("non_gamma_support")
+    )
+
+
 def passes_neuroprofile_gate(feature: Dict[str, Any]) -> bool:
     """Return True if this feature is reportable downstream."""
     metric_name = feature.get("metric_name", "")
@@ -444,27 +472,28 @@ def passes_neuroprofile_gate(feature: Dict[str, Any]) -> bool:
     if "gamma" in m:
         if feature.get("_emg_guard", 0) == 1 or feature.get("_gamma_evaluated", 1) == 0:
             return False
-    sig_flag = feature.get("significant_change")
-    if sig_flag is True:
-        pass_sig = True
-    else:
-        q = feature.get("q_value")
-        p = feature.get("p_value")
-        if q is not None:
-            pass_sig = q <= 0.0119377
-        elif p is not None:
-            pass_sig = p <= 0.05
-        else:
+
+    gate = _gate_transparency(metric_name, feature)
+    if gate["passes_statistical_gate"]:
+        d = feature.get("effect_size_d")
+        if d is not None and abs(d) < _effect_size_threshold_for_metric(metric_name):
             return False
-    if not pass_sig:
+        pct = feature.get("percent_change")
+        if pct is not None and abs(pct) < _pct_threshold_for_metric(metric_name):
+            return False
+        return True
+
+    flags = _feature_decision_flags(feature)
+    direction_ok = bool(flags.get("direction_ok", True))
+    if not direction_ok or not _gamma_fallback_allowed(metric_name, flags):
         return False
-    d = feature.get("effect_size_d")
-    if d is not None and abs(d) < _effect_size_threshold_for_metric(metric_name):
-        return False
-    pct = feature.get("percent_change")
-    if pct is not None and abs(pct) < _pct_threshold_for_metric(metric_name):
-        return False
-    return True
+    return bool(
+        gate["passes_effect_size_threshold"]
+        and (
+            gate["passes_percent_change_threshold"]
+            or bool(flags.get("p_pass"))
+        )
+    )
 
 
 def classify_feature_strength(feature: Dict[str, Any]) -> str:
@@ -476,6 +505,9 @@ def classify_feature_strength(feature: Dict[str, Any]) -> str:
     """
     if not passes_neuroprofile_gate(feature):
         return "rejected"
+    gate = _gate_transparency(feature.get("metric_name", ""), feature)
+    if gate["significance_basis"] != "fdr_q_value":
+        return "weak"
     d = feature.get("effect_size_d")
     if d is None:
         return "weak"
@@ -653,21 +685,24 @@ def _gate_transparency(
     q_val   = feature_stats.get("q_value")
     d_abs   = abs(feature_stats.get("effect_size_d") or 0.0)
     pct_abs = abs(feature_stats.get("percent_change") or 0.0)
-    flags   = feature_stats.get("decision_flags", {})
+    flags   = _feature_decision_flags(feature_stats)
     pass_rule = flags.get("pass_rule")   # "p" | "d" | "pct" | None
 
     d_thr   = _effect_size_threshold_for_metric(metric_name)
     pct_thr = _pct_threshold_for_metric(metric_name)
 
     passes_q   = bool(q_val is not None and q_val <= 0.0119377)
-    passes_eff = bool(d_abs >= d_thr)
-    passes_pct = bool(pct_abs >= pct_thr)
+    passes_eff = _flag_or_threshold(flags, "effect_pass", bool(d_abs >= d_thr))
+    passes_pct = _flag_or_threshold(flags, "percent_pass", bool(pct_abs >= pct_thr))
+    direction_ok = bool(flags.get("direction_ok", True))
     # Strict statistical gate = FDR q-value only
     passes_stat_gate = passes_q
 
     # Determine what drove the significant_change flag
     if passes_q:
         sig_basis = "fdr_q_value"
+    elif not direction_ok:
+        sig_basis = "none"
     elif pass_rule == "p":
         sig_basis = "directional_p_value"
     elif passes_eff and passes_pct:
@@ -682,6 +717,8 @@ def _gate_transparency(
     # Interpretation safety
     if passes_q and passes_eff:
         interp = "standard"
+    elif not direction_ok:
+        interp = "do_not_use"
     elif passes_q or flags.get("p_pass") or (passes_eff and passes_pct):
         interp = "use_with_caution"
     elif passes_eff or passes_pct:
@@ -1032,9 +1069,17 @@ def compute_neuroprofile_global_quality(
         for t in neuroprofile_tasks
     )
     feat_keep_rate = total_usable / max(1, total_features)
+    strict_usable = sum(
+        1
+        for task in neuroprofile_tasks
+        for feature in task.get("features", [])
+        if feature.get("passes_neuroprofile_gate")
+        and feature.get("passes_statistical_gate")
+    )
+    strict_keep_rate = strict_usable / max(1, total_features)
 
     notes = []
-    if baseline_keep_rate >= 0.70 and feat_keep_rate >= 0.60 and gamma_guard_count <= 1:
+    if baseline_keep_rate >= 0.70 and strict_keep_rate >= 0.60 and gamma_guard_count <= 1:
         reliability = "high"
     elif baseline_keep_rate >= 0.40 and feat_keep_rate >= 0.30:
         reliability = "medium"

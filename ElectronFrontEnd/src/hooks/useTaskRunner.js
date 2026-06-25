@@ -49,6 +49,7 @@ export function useTaskRunner(phases) {
     const timerRef = useRef(null);
     const unsubRef = useRef(null);
     const samplesRef = useRef([]);
+    const signalStatsRef = useRef({ total: 0, good: 0, noisy: 0, notWorn: 0, worstPoorSignal: null });
     const elapsedRef = useRef(0);
     const phaseIdxRef = useRef(0);
     const onCompleteRef = useRef(null);
@@ -75,7 +76,8 @@ export function useTaskRunner(phases) {
             playCompletionBeeps();
             setRunState('done');
             setCollectedSamples([...samplesRef.current]);
-            if (onCompleteRef.current) onCompleteRef.current([...samplesRef.current]);
+            const signalStats = { ...signalStatsRef.current };
+            if (onCompleteRef.current) onCompleteRef.current([...samplesRef.current], signalStats);
             return;
         }
         startPhase(nextIdx);
@@ -96,6 +98,20 @@ export function useTaskRunner(phases) {
         playBeep(800, 200);
 
         if (phase.record) {
+            const recordSignal = (poorSignal) => {
+                const value = Number(poorSignal);
+                if (!Number.isFinite(value)) return;
+                const stats = signalStatsRef.current;
+                stats.total += 1;
+                stats.worstPoorSignal = stats.worstPoorSignal == null
+                    ? value
+                    : Math.max(stats.worstPoorSignal, value);
+                if (value >= 200) stats.notWorn += 1;
+                else if (value < 25) stats.good += 1;
+                else stats.noisy += 1;
+            };
+            recordSignal(wsEegService.getPoorSignal());
+            const unsubSignal = wsEegService.on('eegData', (data) => recordSignal(data?.poorSignal));
             let rawMultiActive = false;
             let lastRawMultiAt = 0;
             const unsubRawMulti = wsEegService.on('rawMulti', (sample) => {
@@ -108,9 +124,11 @@ export function useTaskRunner(phases) {
                     samplesRef.current.push(sample);
                 }
             });
+
             unsubRef.current = () => {
                 unsubRawMulti();
                 unsubRaw();
+                unsubSignal();
             };
         }
 
@@ -129,6 +147,7 @@ export function useTaskRunner(phases) {
     // ── Public: start the task ────────────────────────────────────────────
     const start = useCallback((onComplete) => {
         samplesRef.current = [];
+        signalStatsRef.current = { total: 0, good: 0, noisy: 0, notWorn: 0, worstPoorSignal: null };
         onCompleteRef.current = onComplete;
         setRunState('countdown');
         let count = COUNTDOWN_FROM;
@@ -153,6 +172,7 @@ export function useTaskRunner(phases) {
         clearTimer();
         stopRecording();
         samplesRef.current = [];
+        signalStatsRef.current = { total: 0, good: 0, noisy: 0, notWorn: 0, worstPoorSignal: null };
         setRunState('idle');
         setCountdown(COUNTDOWN_FROM);
         setPhaseIndex(0);
