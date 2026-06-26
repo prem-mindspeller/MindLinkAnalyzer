@@ -16,6 +16,10 @@ import loginService from './loginService';
 import i18n from '../i18n';
 import { createCompressedReportEnvelope } from './reportEnvelope.mjs';
 import { buildNeuroprofileReportDocument } from './reportDocument.mjs';
+import {
+    buildSingleTaskAnalysisPayload,
+    evaluateTaskQuality,
+} from './taskQualityGate.mjs';
 
 const BACKEND_HTTP = 'http://localhost:8000';
 
@@ -119,11 +123,48 @@ export async function runAnalysis() {
 }
 
 /**
+ * Run a quick evidence check for one just-completed task.
+ *
+ * This reuses POST /analyze with the current baseline and only the new task
+ * attempt. It does not write report data and does not alter the final upload
+ * envelope.
+ */
+export async function runSingleTaskQualityCheck(taskId, samples, { signalStats = null } = {}) {
+    const payload = buildSingleTaskAnalysisPayload(taskId, samples);
+
+    if ((payload.baseline.eyes_closed.length === 0) && (payload.baseline.eyes_open.length === 0)) {
+        throw new Error(i18n.t('errors.noBaselineData'));
+    }
+    if (!Array.isArray(samples) || samples.length === 0) {
+        throw new Error(i18n.t('errors.noTaskData'));
+    }
+
+    const res = await fetch(`${BACKEND_HTTP}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(i18n.t('errors.analysisFailedStatus', { status: res.status, message: text }));
+    }
+
+    const analysis = await res.json();
+    if (analysis.error) throw new Error(analysis.error);
+
+    return {
+        analysis,
+        quality: evaluateTaskQuality(analysis, taskId, { signalStats }),
+    };
+}
+
+/**
  * Seed the analysis report to the Mindspeller API.
  *
- * @param {string} email          — user email to associate with the report
+ * @param {string} email          - user email to associate with the report
  * @param {'initial'|'advanced'} protocolType
- * @param {object} analysisResults — result of runAnalysis()
+ * @param {object} analysisResults - result of runAnalysis()
  *
  * Returns { success: true } or throws on error.
  */

@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LoggedInHeader from '../components/LoggedInHeader';
 import Footer from '../components/footer';
+import EegWaveform from '../components/EegWaveform';
 import wsEegService, { CONNECTION_STATUS } from '../service/wsEegService';
+import { evaluateBaselineSignalStats } from '../service/baselineQualityGate.mjs';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faCircleCheck, faMoon, faEye, faBullseye, faVideo,
     faHourglass, faTriangleExclamation, faCircle, faArrowLeft, faArrowRight,
-    faCircleXmark, faPlay,
+    faCircleXmark, faPlay, faRotate,
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/liveEegReading.css';
 import '../styles/baselineCalibration.css';
@@ -58,20 +60,64 @@ const BaselineCalibration1 = () => {
     const [countdown, setCountdown] = useState(COUNTDOWN_FROM);
     const [recordingProgress, setRecordingProgress] = useState(0);
     const [signalStatus, setSignalStatus] = useState({ icon: faCircle, text: t('baseline.signalWaiting'), cls: 'waiting' });
+    const [connectionStatus, setConnectionStatus] = useState(wsEegService.getStatus());
+    const [poorSignal, setPoorSignal] = useState(wsEegService.getPoorSignal());
+    const [baselineQualityDialog, setBaselineQualityDialog] = useState(null);
     const [statusMsg, setStatusMsg] = useState(t('baseline.readyToStart'));
     const [phaseMsg, setPhaseMsg] = useState('');
 
     const bandSamplesRef = useRef([]);
+    const signalStatsRef = useRef({ total: 0, good: 0, noisy: 0, notWorn: 0, worstPoorSignal: null });
     const baselineRef = useRef({ eyesClosed: null, eyesOpen: null });
     const countdownTimerRef = useRef(null);
     const recordingTimerRef = useRef(null);
     const unsubBpRef = useRef(null);
     const elapsedRef = useRef(0);
 
+    const resetSignalStats = useCallback(() => {
+        signalStatsRef.current = { total: 0, good: 0, noisy: 0, notWorn: 0, worstPoorSignal: null };
+    }, []);
+
+    const recordSignalSample = useCallback((value) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return;
+        const stats = signalStatsRef.current;
+        stats.total += 1;
+        stats.worstPoorSignal = stats.worstPoorSignal == null
+            ? numeric
+            : Math.max(stats.worstPoorSignal, numeric);
+        if (numeric >= 200) stats.notWorn += 1;
+        else if (numeric < 25) stats.good += 1;
+        else stats.noisy += 1;
+    }, []);
+
+    const discardBaselinePhase = useCallback((isEC, quality) => {
+        bandSamplesRef.current = [];
+        if (isEC) {
+            baselineRef.current.eyesClosed = null;
+            sessionStorage.removeItem('calibrationData_eyes_closed');
+            sessionStorage.removeItem('baselineCalibration');
+            setPhase(PHASE.IDLE);
+        } else {
+            baselineRef.current.eyesOpen = null;
+            sessionStorage.removeItem('calibrationData_eyes_open');
+            sessionStorage.removeItem('baselineCalibration');
+            setPhase(PHASE.DONE_EC);
+        }
+        setRecordingProgress(0);
+        setStatusMsg(t('baseline.qualityRepeatTitle', { defaultValue: 'Please repeat this baseline phase' }));
+        setPhaseMsg(quality.reason);
+        setBaselineQualityDialog({ isEC, quality });
+    }, [t]);
+
+    const isGoodSignal = connectionStatus === CONNECTION_STATUS.CONNECTED && poorSignal < 25;
+
     useEffect(() => {
         const id = setInterval(() => {
             const ps = wsEegService.getPoorSignal();
             const st = wsEegService.getStatus();
+            setPoorSignal(ps);
+            setConnectionStatus(st);
             if (st !== CONNECTION_STATUS.CONNECTED) {
                 setSignalStatus({ icon: faCircle, text: t('baseline.signalWaiting'), cls: 'waiting' });
             } else if (ps >= 200) {
@@ -94,11 +140,18 @@ const BaselineCalibration1 = () => {
 
     const startRecording = useCallback((isEC) => {
         bandSamplesRef.current = [];
+        resetSignalStats();
+        recordSignalSample(wsEegService.getPoorSignal());
         elapsedRef.current = 0;
 
-        unsubBpRef.current = wsEegService.on('raw', (sample) => {
+        const unsubRaw = wsEegService.on('raw', (sample) => {
             bandSamplesRef.current.push(sample);
         });
+        const unsubSignal = wsEegService.on('eegData', (data) => recordSignalSample(data?.poorSignal));
+        unsubBpRef.current = () => {
+            unsubRaw();
+            unsubSignal();
+        };
 
         setPhase(isEC ? PHASE.RECORDING_EC : PHASE.RECORDING_EO);
         setStatusMsg(isEC ? t('baseline.recordingEC') : t('baseline.recordingEO'));
@@ -115,6 +168,12 @@ const BaselineCalibration1 = () => {
                 if (unsubBpRef.current) { unsubBpRef.current(); unsubBpRef.current = null; }
 
                 playCompletionBeeps();
+
+                const baselineSignalQuality = evaluateBaselineSignalStats(signalStatsRef.current);
+                if (!baselineSignalQuality.acceptable) {
+                    discardBaselinePhase(isEC, baselineSignalQuality);
+                    return;
+                }
 
                 const samples = bandSamplesRef.current;
                 const avg = samples.length > 0
@@ -137,7 +196,7 @@ const BaselineCalibration1 = () => {
                 }
             }
         }, 1000);
-    }, [t]);
+    }, [discardBaselinePhase, recordSignalSample, resetSignalStats, t]);
     const startCountdown = useCallback((isEC) => {
         setPhase(isEC ? PHASE.COUNTDOWN_EC : PHASE.COUNTDOWN_EO);
         let count = COUNTDOWN_FROM;
@@ -319,14 +378,60 @@ const BaselineCalibration1 = () => {
                             <button className="cal-btn-cancel" onClick={() => setPhase(PHASE.IDLE)}>
                                 <FontAwesomeIcon icon={faCircleXmark} style={{ marginRight: 6 }} />{t('baseline.cancel')}
                             </button>
-                            <button className="cal-btn-start" onClick={() => startCountdown(prepIsEC)}>
-                                <FontAwesomeIcon icon={faPlay} style={{ marginRight: 8 }} />{t('baseline.startRecording')}
+                            <button className="cal-btn-start" onClick={() => startCountdown(prepIsEC)} disabled={!isGoodSignal}>
+                                <FontAwesomeIcon icon={faPlay} style={{ marginRight: 8 }} />{isGoodSignal ? t('baseline.startRecording') : t('baseline.waitForGoodSignal', { defaultValue: 'Waiting for good signal' })}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {baselineQualityDialog && (
+                <div className="cal-modal-overlay cal-quality-overlay">
+                    <div className="cal-modal-card cal-quality-card" role="dialog" aria-modal="true">
+                        <h2 className="cal-modal-title">
+                            <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 8 }} />
+                            {t('baseline.qualityRepeatTitle', { defaultValue: 'Repeat this baseline phase' })}
+                        </h2>
+                        <p className="cal-quality-body">
+                            {baselineQualityDialog.isEC
+                                ? t('baseline.qualityRepeatECBody', { defaultValue: 'The eyes-closed baseline had too much signal instability, so it was not saved.' })
+                                : t('baseline.qualityRepeatEOBody', { defaultValue: 'The eyes-open baseline had too much signal instability, so it was not saved.' })}
+                        </p>
+                        <div className="cal-quality-reason">
+                            {t('baseline.qualityReason', { defaultValue: 'Reason: {{reason}}', reason: baselineQualityDialog.quality.reason })}
+                        </div>
+                        <div className={`cal-signal-badge cal-signal-${signalStatus.cls}`} style={{ margin: '0 auto 14px' }}>
+                            {signalStatus.icon && <FontAwesomeIcon icon={signalStatus.icon} style={{ marginRight: 6 }} />}
+                            {signalStatus.text}
+                        </div>
+                        <div className="cal-quality-chart">
+                            <EegWaveform status={connectionStatus} />
+                        </div>
+                        <div className="cal-quality-steps">
+                            <div><strong>1.</strong> {t('baseline.qualityStepAdjust', { defaultValue: 'Adjust the headset so the front sensor sits flat on the forehead, about two inches above the eyebrows.' })}</div>
+                            <div><strong>2.</strong> {t('baseline.qualityStepStill', { defaultValue: 'Sit still, relax your jaw and forehead, and keep hair away from the sensor contacts.' })}</div>
+                            <div><strong>3.</strong> {t('baseline.qualityStepWait', { defaultValue: 'Leave it for a few seconds until the signal stabilizes and shows Signal: Good.' })}</div>
+                        </div>
+                        <div className="cal-modal-buttons">
+                            <button
+                                className="cal-btn-start"
+                                disabled={!isGoodSignal}
+                                onClick={() => {
+                                    const repeatIsEC = baselineQualityDialog.isEC;
+                                    setBaselineQualityDialog(null);
+                                    startCountdown(repeatIsEC);
+                                }}
+                            >
+                                <FontAwesomeIcon icon={faRotate} style={{ marginRight: 8 }} />
+                                {isGoodSignal
+                                    ? t('baseline.qualityRepeatButton', { defaultValue: 'Repeat baseline now' })
+                                    : t('baseline.waitForGoodSignal', { defaultValue: 'Waiting for good signal' })}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <Footer />
 
             {/* ── Eyes-open fixation cross overlay ── */}

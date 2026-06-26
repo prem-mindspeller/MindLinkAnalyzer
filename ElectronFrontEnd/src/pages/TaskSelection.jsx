@@ -1,12 +1,13 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LoggedInHeader from '../components/LoggedInHeader';
 import Footer from '../components/footer';
+import EegWaveform from '../components/EegWaveform';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faCircleCheck, faMoon, faEye, faStar, faClock,
-    faArrowLeft, faArrowRight, faPlay, faTriangleExclamation, faLock, faCircleInfo,
+    faArrowLeft, faArrowRight, faPlay, faTriangleExclamation, faLock, faCircleInfo, faSpinner, faRotate,
 } from '@fortawesome/free-solid-svg-icons';
 
 
@@ -26,6 +27,9 @@ import OrderSurpriseTask from '../components/tasks/OrderSurpriseTask';
 import SemanticMemoryTask from '../components/tasks/SemanticMemoryTask';
 import BodyScanTask from '../components/tasks/BodyScanTask';
 import ColorPerceptionTask from '../components/tasks/ColorPerceptionTask';
+import wsEegService, { CONNECTION_STATUS } from '../service/wsEegService';
+import { runSingleTaskQualityCheck } from '../service/analysisService';
+import { commitTaskAttempt, isRepeatSignalReady, resolveTaskQualityOutcome } from '../service/taskQualityGate.mjs';
 
 import '../styles/liveEegReading.css';
 import '../styles/taskSelection.css';
@@ -85,6 +89,140 @@ const TASK_COMPONENTS = {
 };
 
 
+const FORCED_REPEAT_KEY = 'taskQualityForcedRepeats';
+
+const signalDisplay = (t, status, poorSignal) => {
+    const connected = status === CONNECTION_STATUS.CONNECTED;
+    if (!connected) {
+        return {
+            good: false,
+            cls: 'disconnected',
+            text: t('taskSelection.signalDisconnected', { defaultValue: 'Device not connected' }),
+        };
+    }
+    if (poorSignal >= 200) {
+        return {
+            good: false,
+            cls: 'not-worn',
+            text: t('taskSelection.signalNotWorn', { defaultValue: 'Signal: Not worn' }),
+        };
+    }
+    if (poorSignal < 25) {
+        return {
+            good: true,
+            cls: 'good',
+            text: t('taskSelection.signalGood', { defaultValue: 'Signal: Good' }),
+        };
+    }
+    return {
+        good: false,
+        cls: 'noisy',
+        text: t('taskSelection.signalNoisy', { defaultValue: 'Signal: Noisy' }),
+    };
+};
+
+const TaskQualityModal = ({
+    taskName,
+    signalStatus,
+    poorSignal,
+    qualityDialog,
+    isGoodSignal,
+    repeatSignalReady,
+    goodSignalStableMs,
+    onRepeat,
+    onKeep,
+    t,
+}) => {
+    if (!qualityDialog) return null;
+
+    const signal = signalDisplay(t, signalStatus, poorSignal);
+    const stableSecondsRemaining = Math.max(0, Math.ceil((5000 - Number(goodSignalStableMs || 0)) / 1000));
+    const mode = qualityDialog.mode;
+    const repeatRequired = mode === 'force_repeat';
+    const checkError = mode === 'check_error';
+    const title = checkError
+        ? t('taskSelection.qualityCheckErrorTitle', { defaultValue: 'Signal check could not finish' })
+        : repeatRequired
+            ? t('taskSelection.qualityRepeatTitle', { defaultValue: 'Repeat this task after improving the signal' })
+            : t('taskSelection.qualitySavedWarningTitle', { defaultValue: 'Task saved after repeat' });
+    const body = checkError
+        ? t('taskSelection.qualityCheckErrorBody', { defaultValue: 'The task was saved, but the quick signal check was not available. You may repeat the task if the live signal is not good.' })
+        : repeatRequired
+            ? t('taskSelection.qualityRepeatBody', { defaultValue: 'This recording did not contain enough usable EEG evidence. Adjust the headset, wait for a stable good signal, then repeat the task.' })
+            : t('taskSelection.qualitySavedWarningBody', { defaultValue: 'The required repeat was saved, but evidence may still be limited. You can repeat again after the signal is good, or continue with this saved attempt.' });
+
+    return (
+        <div className="ts-quality-modal-backdrop" role="presentation">
+            <div className="ts-quality-modal" role="dialog" aria-modal="true" aria-labelledby="task-quality-title">
+                <div className="ts-quality-modal-header">
+                    <div>
+                        <p className="ts-quality-kicker">{t('taskSelection.qualityKicker', { defaultValue: 'Task signal check' })}</p>
+                        <h2 id="task-quality-title">{title}</h2>
+                        <p>{t('taskSelection.qualityTaskName', { defaultValue: 'Task: {{taskName}}', taskName })}</p>
+                    </div>
+                    <div className={`ts-quality-signal-pill ${signal.cls}`}>
+                        <FontAwesomeIcon icon={signal.good ? faCircleCheck : faTriangleExclamation} />
+                        <span>{signal.text}</span>
+                    </div>
+                </div>
+
+                <p className="ts-quality-modal-body">{body}</p>
+                <div className="ts-quality-chart-wrap">
+                    <div className="ts-quality-chart-header">
+                        {t('taskSelection.qualityLivePlot', { defaultValue: 'Live EEG signal' })}
+                    </div>
+                    <div className="ts-quality-chart-area">
+                        <EegWaveform status={signalStatus} />
+                    </div>
+                </div>
+
+                <div className="ts-quality-stages">
+                    <div className="ts-quality-stage">
+                        <span className="ts-stage-number">1</span>
+                        <div>
+                            <strong>{t('taskSelection.qualityStageAdjustTitle', { defaultValue: 'Adjust the headset' })}</strong>
+                            <p>{t('taskSelection.qualityStageAdjustBody', { defaultValue: 'Place the front sensor flat against the forehead, about two inches above the eyebrows. Move hair away from the contacts and press gently if the app says Not worn.' })}</p>
+                        </div>
+                    </div>
+                    <div className="ts-quality-stage">
+                        <span className="ts-stage-number">2</span>
+                        <div>
+                            <strong>{t('taskSelection.qualityStageStabilizeTitle', { defaultValue: 'Let the signal stabilize' })}</strong>
+                            <p>{t('taskSelection.qualityStageStabilizeBody', { defaultValue: 'Stay still, relax your jaw and forehead, and wait 5 to 10 seconds until the status above shows Signal: Good.' })}</p>
+                        </div>
+                    </div>
+                    <div className={`ts-quality-stage ${repeatSignalReady ? 'ready' : ''}`}>
+                        <span className="ts-stage-number">3</span>
+                        <div>
+                            <strong>{t('taskSelection.qualityStageRepeatTitle', { defaultValue: 'Repeat the task' })}</strong>
+                            <p>{repeatSignalReady
+                                ? t('taskSelection.qualityStageReadyBody', { defaultValue: 'The signal is good. You can now repeat the task; the new recording will replace the previous one.' })
+                                : isGoodSignal
+                                    ? t('taskSelection.qualityStageStabilizingBody', { defaultValue: 'Keep the signal good for {{seconds}} more seconds. The repeat button unlocks after 5 continuous seconds of good signal.', seconds: stableSecondsRemaining })
+                                    : t('taskSelection.qualityStageWaitingBody', { defaultValue: 'The repeat button unlocks when the live signal is good for 5 continuous seconds.' })}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="ts-quality-actions">
+                    {!repeatRequired && (
+                        <button className="ts-quality-secondary" onClick={onKeep}>
+                            {t('taskSelection.qualityKeepAttempt', { defaultValue: 'Keep saved attempt' })}
+                        </button>
+                    )}
+                    <button className="ts-quality-primary" onClick={onRepeat} disabled={!repeatSignalReady}>
+                        <FontAwesomeIcon icon={faRotate} />
+                        {repeatSignalReady
+                            ? t('taskSelection.qualityRepeatButton', { defaultValue: 'Repeat task now' })
+                            : isGoodSignal
+                                ? t('taskSelection.qualityStabilizingButton', { defaultValue: 'Hold good signal for {{seconds}}s', seconds: stableSecondsRemaining })
+                                : t('taskSelection.qualityWaitingButton', { defaultValue: 'Waiting for good signal' })}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 const TaskSelection = () => {
     const navigate = useNavigate();
     const { t } = useTranslation();
@@ -103,6 +241,7 @@ const TaskSelection = () => {
         catch { return []; }
     });
 
+    // All tasks that are currently unlocked — must ALL be done before analysis
     const enabledTaskIds = [
         ...COGNITIVE_TASKS,
         ...(hasAdvancedBooking ? advancedTaskIds : []),
@@ -114,24 +253,117 @@ const TaskSelection = () => {
     const pendingEnabledIds = enabledTaskIds.filter(id => !completedIds.includes(id));
 
     const selectedMeta = selectedId ? TASK_META[selectedId] : null;
+    const [qualityCheckTaskId, setQualityCheckTaskId] = useState(null);
+    const [qualityDialog, setQualityDialog] = useState(null);
+    const [signalStatus, setSignalStatus] = useState(wsEegService.getStatus());
+    const [poorSignal, setPoorSignal] = useState(wsEegService.getPoorSignal());
+    const [forcedRepeatByTask, setForcedRepeatByTask] = useState(() => {
+        try { return JSON.parse(sessionStorage.getItem(FORCED_REPEAT_KEY) || '{}'); }
+        catch { return {}; }
+    });
+    const [goodSignalStableMs, setGoodSignalStableMs] = useState(0);
+
+    const isGoodSignal = signalStatus === CONNECTION_STATUS.CONNECTED && poorSignal < 25;
+    const repeatSignalReady = isRepeatSignalReady({ isGoodSignal, goodSignalStableMs });
+
+    useEffect(() => {
+        const unsubStatus = wsEegService.on('status', setSignalStatus);
+        const unsubEeg = wsEegService.on('eegData', d => setPoorSignal(d.poorSignal));
+        wsEegService.fetchStatus();
+        return () => { unsubStatus(); unsubEeg(); };
+    }, []);
+
+    useEffect(() => {
+        if (!qualityDialog || !isGoodSignal) {
+            setGoodSignalStableMs(0);
+            return undefined;
+        }
+
+        const startedAt = Date.now();
+        setGoodSignalStableMs(0);
+        const timer = setInterval(() => {
+            setGoodSignalStableMs(Date.now() - startedAt);
+        }, 250);
+        return () => clearInterval(timer);
+    }, [qualityDialog?.taskId, qualityDialog?.mode, isGoodSignal]);
+
+    const updateForcedRepeatByTask = useCallback((updater) => {
+        setForcedRepeatByTask(prev => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            sessionStorage.setItem(FORCED_REPEAT_KEY, JSON.stringify(next));
+            return next;
+        });
+    }, []);
+
+    const clearForcedRepeatForTask = useCallback((taskId) => {
+        updateForcedRepeatByTask(prev => {
+            const next = { ...prev };
+            delete next[taskId];
+            return next;
+        });
+    }, [updateForcedRepeatByTask]);
+
+    const acceptTaskAttempt = useCallback((taskId, samples) => {
+        const updated = commitTaskAttempt(taskId, samples);
+        setCompletedIds(updated);
+        clearForcedRepeatForTask(taskId);
+    }, [clearForcedRepeatForTask]);
 
     const handleStartTask = useCallback(() => {
-        if (selectedId) setActiveTaskId(selectedId);
-    }, [selectedId]);
+        if (!selectedId) return;
+        if (completedIds.includes(selectedId)) {
+            clearForcedRepeatForTask(selectedId);
+        }
+        setActiveTaskId(selectedId);
+    }, [selectedId, completedIds, clearForcedRepeatForTask]);
 
-    const handleTaskComplete = useCallback((taskId, samples) => {
-        // Save samples to sessionStorage
-        const key = `taskData_${taskId}`;
-        const existing = JSON.parse(sessionStorage.getItem(key) || '[]');
-        sessionStorage.setItem(key, JSON.stringify([...existing, ...samples]));
-
-        // Mark complete
-        const updated = [...new Set([...completedIds, taskId])];
-        setCompletedIds(updated);
-        sessionStorage.setItem('completedTasks', JSON.stringify(updated));
-
+    const handleTaskComplete = useCallback(async (taskId, samples, signalStats = null) => {
         setActiveTaskId(null);
-    }, [completedIds, visibleTaskIds, hasAdvancedBooking]);
+        setQualityCheckTaskId(taskId);
+
+        try {
+            const { quality } = await runSingleTaskQualityCheck(taskId, samples, { signalStats });
+            const outcome = resolveTaskQualityOutcome(quality, {
+                forcedRepeatUsed: Boolean(forcedRepeatByTask[taskId]),
+            });
+
+            if (outcome === 'force_repeat') {
+                updateForcedRepeatByTask(prev => ({ ...prev, [taskId]: true }));
+                setQualityDialog({ taskId, quality, mode: 'force_repeat' });
+                return;
+            }
+
+            acceptTaskAttempt(taskId, samples);
+            if (outcome === 'accept_with_warning') {
+                setQualityDialog({ taskId, quality, mode: 'accepted_warning' });
+            }
+        } catch (error) {
+            acceptTaskAttempt(taskId, samples);
+            setQualityDialog({
+                taskId,
+                mode: 'check_error',
+                quality: {
+                    usableFeatureCount: 0,
+                    taskConfidence: 'unknown',
+                    error: error?.message || String(error),
+                },
+            });
+        } finally {
+            setQualityCheckTaskId(null);
+        }
+    }, [forcedRepeatByTask, updateForcedRepeatByTask, acceptTaskAttempt]);
+
+    const handleRepeatFromQualityDialog = useCallback(() => {
+        if (!qualityDialog?.taskId) return;
+        const taskId = qualityDialog.taskId;
+        setSelectedId(taskId);
+        setQualityDialog(null);
+        setActiveTaskId(taskId);
+    }, [qualityDialog]);
+
+    const handleKeepQualityAttempt = useCallback(() => {
+        setQualityDialog(null);
+    }, []);
 
     const handleTaskBack = useCallback(() => {
         setActiveTaskId(null);
@@ -149,7 +381,7 @@ const TaskSelection = () => {
                             <p className="ts-page-subtitle">{t('taskSelection.taskSubtitle')}</p>
                         </div>
                         <TaskComp
-                            onComplete={(samples) => handleTaskComplete(activeTaskId, samples)}
+                            onComplete={(samples, signalStats) => handleTaskComplete(activeTaskId, samples, signalStats)}
                             onBack={handleTaskBack}
                         />
                     </div>
@@ -185,11 +417,11 @@ const TaskSelection = () => {
                             />
                             <div className="ts-notice-content">
                                 {allEnabledCompleted ? (
-                                    <strong>{t('taskSelection.allTasksDone', { defaultValue: 'All tasks completed - ready for analysis!' })}</strong>
+                                    <strong>{t('taskSelection.allTasksDone', { defaultValue: 'All tasks completed — ready for analysis!' })}</strong>
                                 ) : (
                                     <>
                                         <strong>{t('taskSelection.repeatabilityTitle', { defaultValue: 'All sessions must be completed before analysis' })}</strong>
-                                        <p>{t('taskSelection.repeatabilityBody', { defaultValue: 'You have unlocked new session tasks. To ensure the repeatability of your neural profile measurements, all enabled tasks - including those from earlier sessions - must be completed each time you run a full assessment. You are welcome to tackle the new tasks first, but please return to any remaining earlier tasks before continuing to analysis.' })}</p>
+                                        <p>{t('taskSelection.repeatabilityBody', { defaultValue: 'You have unlocked new session tasks. To ensure the repeatability of your neural profile measurements, all enabled tasks — including those from earlier sessions — must be completed each time you run a full assessment. You are welcome to tackle the new tasks first, but please return to any remaining earlier tasks before continuing to analysis.' })}</p>
                                         {pendingEnabledIds.length > 0 && (
                                             <p className="ts-notice-pending">
                                                 <strong>{t('taskSelection.stillNeeded', { defaultValue: 'Still needed:' })}</strong>{' '}
@@ -358,12 +590,33 @@ const TaskSelection = () => {
                 </button>
                 <button
                     className="btn-next-eeg"
-                    disabled={!allEnabledCompleted}
+                    disabled={!allEnabledCompleted || Boolean(qualityCheckTaskId) || qualityDialog?.mode === 'force_repeat'}
                     onClick={() => navigate('/upload')}
                 >
                     {t('nav.next')} ({completedEnabledCount}/{enabledTaskIds.length}) <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
                 </button>
             </div>
+            {qualityCheckTaskId && (
+                <div className="ts-quality-blocking-overlay" role="alert" aria-live="assertive">
+                    <div className="ts-quality-blocking-panel">
+                        <FontAwesomeIcon icon={faSpinner} spin />
+                        <strong>{t('taskSelection.qualityBlockingTitle', { defaultValue: 'Checking task signal quality' })}</strong>
+                        <span>{t('taskSelection.qualityBlockingBody', { defaultValue: 'Please wait while the recording is checked. Analysis and navigation are blocked until this finishes.' })}</span>
+                    </div>
+                </div>
+            )}
+            <TaskQualityModal
+                taskName={qualityDialog ? t(`taskMeta.${qualityDialog.taskId}.name`, { defaultValue: TASK_META[qualityDialog.taskId]?.name || qualityDialog.taskId }) : ''}
+                signalStatus={signalStatus}
+                poorSignal={poorSignal}
+                qualityDialog={qualityDialog}
+                isGoodSignal={isGoodSignal}
+                repeatSignalReady={repeatSignalReady}
+                goodSignalStableMs={goodSignalStableMs}
+                onRepeat={handleRepeatFromQualityDialog}
+                onKeep={handleKeepQualityAttempt}
+                t={t}
+            />
             <Footer />
         </div>
     );

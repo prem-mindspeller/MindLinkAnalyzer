@@ -530,3 +530,31 @@ def test_frontend_session_3_raw_task_ids_produce_session_3_export():
     assert "body_scan" in canonical_ids
     assert "semantic_memory_retrieval" in canonical_ids
     assert "visual_colour_processing" in canonical_ids
+
+
+def test_frontend_diverse_thinking_raw_task_id_maps_to_task_9():
+    per_task = {}
+    for task_id in (
+        "mental_math",
+        "visual_imagery",
+        "focused_attention",
+        "emotion_face",
+        "working_memory",
+        "language_processing",
+        "motor_imagery",
+        "cognitive_load",
+        "diverse_thinking",
+    ):
+        per_task.update(_make_per_task(task_id))
+
+    existing = _make_existing_analysis(per_task)
+    export = build_neuroprofile_export(per_task, existing)
+    creative_task = next(
+        task for task in export["tasks"]
+        if "diverse_thinking" in task["raw_task_labels"]
+    )
+
+    assert creative_task["canonical_task_id"] == "divergent_thinking"
+    assert creative_task["task_number"] == 9
+    assert export["protocol_session_depth"] == "session_2"
+    assert all(isinstance(task["task_number"], int) for task in export["tasks"])
