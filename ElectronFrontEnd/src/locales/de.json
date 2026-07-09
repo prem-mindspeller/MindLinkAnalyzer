@@ -52,7 +52,8 @@
         "submit": "Geben Sie die Partner-ID ein",
         "submitting": "Einreichen...",
         "errorNotFound": "Partner-ID wird nicht erkannt. Bitte überprüfen Sie es und versuchen Sie es erneut.",
-        "errorConnection": "Die Partner-ID konnte nicht überprüft werden. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+        "errorConnection": "Die Partner-ID konnte nicht überprüft werden. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "errorNoBooking": "Sie haben noch keine aktive Buchung bei diesem Partner. Bitte buchen Sie eine Sitzung, bevor Sie fortfahren."
     },
     "warning": {
         "title": "Bevor Sie sich anmelden, stellen Sie sicher, dass Ihr Headset:",

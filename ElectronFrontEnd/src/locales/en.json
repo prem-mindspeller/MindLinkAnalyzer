@@ -52,7 +52,8 @@
         "submit": "Submit Partner ID",
         "submitting": "Submitting...",
         "errorNotFound": "Partner ID is not recognised. Please check and try again.",
-        "errorConnection": "Could not verify Partner ID. Please check your connection and try again."
+        "errorConnection": "Could not verify Partner ID. Please check your connection and try again.",
+        "errorNoBooking": "You do not have an active booking with this partner yet. Please book a session before continuing."
     },
     "warning": {
         "title": "Before you sign in, make sure your headset is:",

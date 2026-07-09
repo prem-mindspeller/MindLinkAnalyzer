@@ -52,7 +52,8 @@
         "submit": "Partner-ID indienen",
         "submitting": "Indienen...",
         "errorNotFound": "Partner-ID wordt niet herkend. Controleer en probeer opnieuw.",
-        "errorConnection": "Kan partner-ID niet verifiëren. Controleer uw verbinding en probeer opnieuw."
+        "errorConnection": "Kan partner-ID niet verifiëren. Controleer uw verbinding en probeer opnieuw.",
+        "errorNoBooking": "U heeft nog geen actieve boeking bij deze partner. Boek eerst een sessie voordat u doorgaat."
     },
     "warning": {
         "title": "Controleer vóór het aanmelden of uw headset:",

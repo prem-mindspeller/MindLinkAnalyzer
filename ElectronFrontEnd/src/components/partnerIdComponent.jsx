@@ -32,8 +32,18 @@ const PartnerIdComponent = () => {
             return;
         }
 
+        if (!result.hasSessionOne) {
+            sessionStorage.removeItem('partnerId');
+            sessionStorage.removeItem('hasSessionOne');
+            sessionStorage.removeItem('hasAdvancedBooking');
+            sessionStorage.removeItem('hasSessionThree');
+            setError(t('partnerId.errorNoBooking', { defaultValue: 'You do not have an active booking with this partner yet. Please book a session before continuing.' }));
+            setIsLoading(false);
+            return;
+        }
         sessionStorage.setItem('partnerId', trimmedId);
         localStorage.setItem('partnerId', trimmedId);
+        sessionStorage.setItem('hasSessionOne', result.hasSessionOne ? 'true' : 'false');
         sessionStorage.setItem('hasAdvancedBooking', result.hasAdvancedBooking ? 'true' : 'false');
         sessionStorage.setItem('hasSessionThree', result.hasSessionThree ? 'true' : 'false');
 

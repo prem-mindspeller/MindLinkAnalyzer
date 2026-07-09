@@ -52,7 +52,8 @@
         "submit": "Enviar ID de parceiro",
         "submitting": "Enviando...",
         "errorNotFound": "O ID do parceiro não é reconhecido. Verifique e tente novamente.",
-        "errorConnection": "Não foi possível verificar o ID do parceiro. Verifique sua conexão e tente novamente."
+        "errorConnection": "Não foi possível verificar o ID do parceiro. Verifique sua conexão e tente novamente.",
+        "errorNoBooking": "Você ainda não tem uma reserva ativa com este parceiro. Reserve uma sessão antes de continuar."
     },
     "warning": {
         "title": "Antes de fazer login, certifique-se de que seu fone de ouvido esteja:",

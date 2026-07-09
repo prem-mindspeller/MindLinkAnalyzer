@@ -52,7 +52,8 @@
         "submit": "Invia l'ID partner",
         "submitting": "Invio...",
         "errorNotFound": "L'ID partner non è riconosciuto. Per favore controlla e riprova.",
-        "errorConnection": "Impossibile verificare l'ID partner. Controlla la connessione e riprova."
+        "errorConnection": "Impossibile verificare l'ID partner. Controlla la connessione e riprova.",
+        "errorNoBooking": "Non hai ancora una prenotazione attiva con questo partner. Prenota una sessione prima di continuare."
     },
     "warning": {
         "title": "Prima di accedere, assicurati che le tue cuffie siano:",

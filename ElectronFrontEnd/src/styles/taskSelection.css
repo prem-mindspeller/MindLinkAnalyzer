@@ -286,6 +286,12 @@
     background: #1d4ed8;
 }
 
+.ts-start-btn:disabled {
+    cursor: not-allowed;
+    background: #cbd5e1;
+    color: #64748b;
+}
+
 .ts-detail-placeholder {
     color: #94a3b8;
     font-size: 0.95rem;

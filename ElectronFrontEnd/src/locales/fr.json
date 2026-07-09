@@ -52,7 +52,8 @@
         "submit": "Soumettre l'ID du partenaire",
         "submitting": "Soumission...",
         "errorNotFound": "L'ID du partenaire n'est pas reconnu. Veuillez vérifier et réessayer.",
-        "errorConnection": "Impossible de vérifier l'ID du partenaire. Veuillez vérifier votre connexion et réessayer."
+        "errorConnection": "Impossible de vérifier l'ID du partenaire. Veuillez vérifier votre connexion et réessayer.",
+        "errorNoBooking": "Vous n’avez pas encore de réservation active avec ce partenaire. Veuillez réserver une session avant de continuer."
     },
     "warning": {
         "title": "Avant de vous connecter, assurez-vous que votre casque est :",
