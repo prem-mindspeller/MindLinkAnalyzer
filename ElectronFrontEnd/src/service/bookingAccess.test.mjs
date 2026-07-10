@@ -9,6 +9,8 @@ assert.deepEqual(resolveBookingAccess({ partner_bookings: [{}] }), {
     hasSessionThree: false,
 });
 
+assert.equal(resolveBookingAccess([{}]).hasAdvancedBooking, false);
+
 assert.deepEqual(resolveBookingAccess({ bookings: [{}, {}] }), {
     bookingCount: 2,
     hasSessionOne: true,

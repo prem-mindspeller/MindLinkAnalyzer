@@ -411,6 +411,7 @@
         "eyesOpen": "Augen auf",
         "advanced": "Erweitert",
         "locked": "Gesperrt",
+        "sessionThreeLock": "Erfordert 3 Partnerbuchungen zum Freischalten",
         "alreadyDone": "Diese Aufgabe wurde bereits abgeschlossen. Sie können es erneut ausführen oder eine andere Aufgabe auswählen.",
         "runAgain": "Erneut ausführen",
         "taskInstructions": "Aufgabenanweisungen",

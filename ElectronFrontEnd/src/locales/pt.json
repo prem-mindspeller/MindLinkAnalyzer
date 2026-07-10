@@ -411,6 +411,7 @@
         "eyesOpen": "Olhos abertos",
         "advanced": "Avançado",
         "locked": "Bloqueado",
+        "sessionThreeLock": "Requer 3 reservas com o parceiro para desbloquear",
         "alreadyDone": "Esta tarefa já foi concluída. Você pode executá-lo novamente ou selecionar uma tarefa diferente.",
         "runAgain": "Executar novamente",
         "taskInstructions": "Instruções da tarefa",

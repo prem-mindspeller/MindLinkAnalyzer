@@ -411,6 +411,7 @@
         "eyesOpen": "Yeux ouverts",
         "advanced": "Avancé",
         "locked": "Verrouillé",
+        "sessionThreeLock": "Nécessite 3 réservations avec le partenaire pour être déverrouillé",
         "alreadyDone": "Cette tâche est déjà terminée. Vous pouvez l'exécuter à nouveau ou sélectionner une tâche différente.",
         "runAgain": "Exécuter à nouveau",
         "taskInstructions": "Instructions de tâche",

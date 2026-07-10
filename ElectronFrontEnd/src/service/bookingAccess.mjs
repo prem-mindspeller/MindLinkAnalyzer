@@ -1,5 +1,6 @@
 export function resolveBookingAccess(data) {
     const countBookings = (obj) => {
+        if (Array.isArray(obj)) return obj.length;
         if (!obj || typeof obj !== 'object') return 0;
         if (Array.isArray(obj.partner_bookings)) return obj.partner_bookings.length;
         if (Array.isArray(obj.bookings)) return obj.bookings.length;

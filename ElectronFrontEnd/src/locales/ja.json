@@ -411,6 +411,7 @@
         "eyesOpen": "目を開けて",
         "advanced": "上級",
         "locked": "ロックされました",
+        "sessionThreeLock": "ロック解除にはパートナーとの予約が3件必要です",
         "alreadyDone": "このタスクはすでに完了しています。再度実行することも、別のタスクを選択することもできます。",
         "runAgain": "もう一度実行してください",
         "taskInstructions": "タスクの指示",

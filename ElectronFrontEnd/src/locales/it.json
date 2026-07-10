@@ -411,6 +411,7 @@
         "eyesOpen": "Occhi aperti",
         "advanced": "Avanzato",
         "locked": "Bloccato",
+        "sessionThreeLock": "Richiede 3 prenotazioni con il partner per sbloccare",
         "alreadyDone": "Questa attività è già stata completata. Puoi eseguirlo di nuovo o selezionare un'attività diversa.",
         "runAgain": "Corri di nuovo",
         "taskInstructions": "Istruzioni dell'attività",

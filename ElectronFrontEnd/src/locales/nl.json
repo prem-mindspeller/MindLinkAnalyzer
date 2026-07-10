@@ -411,6 +411,7 @@
         "eyesOpen": "Ogen open",
         "advanced": "Geavanceerd",
         "locked": "Vergrendeld",
+        "sessionThreeLock": "Vereist 3 partnerboekingen om te ontgrendelen",
         "alreadyDone": "Deze taak is al voltooid. U kunt hem opnieuw uitvoeren of een andere taak selecteren.",
         "runAgain": "Opnieuw uitvoeren",
         "taskInstructions": "Taakinstructies",
