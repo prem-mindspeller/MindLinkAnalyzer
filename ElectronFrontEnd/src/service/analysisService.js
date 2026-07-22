@@ -4,8 +4,8 @@
  * Service layer for Step 9: Multi-Task Analysis & Report Seeding.
  *
  * Responsibilities:
- *   runAnalysis()   — Reads baseline + task band-power samples from
- *                     sessionStorage and POSTs them to the Python backend
+ *   runAnalysis()   — Reads IndexedDB-backed baseline and task recordings and
+ *                     POSTs them to the Python backend
  *                     POST /analyze, returning per-task p-values + effect sizes.
  *
  *   seedReport()    — Sends the analysis results to the Mindspeller REST API
@@ -20,6 +20,20 @@ import {
     buildSingleTaskAnalysisPayload,
     evaluateTaskQuality,
 } from './taskQualityGate.mjs';
+import {
+    loadBaselineRecording,
+    loadTaskRecording,
+} from './recordingStore.mjs';
+import {
+    missingExpectedTaskIds,
+    missingOrEmptyTaskRecordings,
+    requiredBaselineConditionsForSession,
+} from './analysisReadiness.mjs';
+import {
+    BATTERY_VERSION,
+    resolveSessionDepth,
+} from '../components/tasks/optimizedBatteryConfig.mjs';
+import { PROTOCOL_PROFILE_METADATA } from '../components/tasks/optimizedBatteryProfile.mjs';
 
 const BACKEND_HTTP = 'http://localhost:8000';
 
@@ -29,41 +43,53 @@ const API_ENDPOINTS = {
 };
 
 const TASK_NAMES = {
-    visual_imagery: 'Visual Imagery',
-    attention_focus: 'Focused Attention',
-    mental_math: 'Mental Math',
-    emotion_face: 'Emotion Recognition',
-    working_memory: 'Working Memory',
-    language_processing: 'Language Processing',
-    motor_imagery: 'Motor Imagery',
-    cognitive_load: 'Cognitive Load',
-    diverse_thinking: 'Creative Fluency',
-    reappraisal: 'Perspective Shift',
-    curiosity: 'Curiosity Reveal',
-    num_form: 'Numerical Preference',
-    order_surprise: 'Order & Surprise',
-    semantic_memory: 'Semantic Memory Retrieval',
-    body_scan: 'Body Scan',
-    color_perception: 'Color Perception',
+    adaptive_numerical_reasoning: 'Adaptive Numerical Reasoning and Sequencing',
+    working_memory_manipulation: 'Working-Memory Manipulation',
+    auditory_target_counting: 'Auditory Target Counting',
+    semantic_induction_category_switching: 'Semantic Induction and Category Switching',
+    visuospatial_transformation_orientation: 'Visuospatial Transformation and Orientation',
+    divergent_ideation: 'Divergent Ideation',
+    dual_task_rule_switching: 'Dual-Task Performance and Rule Switching',
+    rule_based_anomaly_detection: 'Rule-Based Anomaly Detection',
+    rapid_visual_comparison: 'Rapid Visual Comparison',
+    pattern_closure_visual_noise: 'Pattern Closure under Visual Noise',
+    speech_in_noise_comprehension: 'Speech-in-Noise Comprehension',
+    written_comprehension_synthesis: 'Written Comprehension and Concise Synthesis',
 };
 
-/**
- * Read band-power samples stored by TaskSelection for a given key.
- * Returns [] when nothing is stored.
- */
-function _loadSamples(sessionKey) {
+function _loadCompletedIds(storage = globalThis.sessionStorage) {
     try {
-        return JSON.parse(sessionStorage.getItem(sessionKey) || '[]');
+        const ids = JSON.parse(storage?.getItem('completedTasks') || '[]');
+        return Array.isArray(ids) ? ids : [];
     } catch {
         return [];
     }
 }
 
+function _loadBaselineMetadata(storage = globalThis.sessionStorage) {
+    let summary;
+    try {
+        summary = JSON.parse(storage?.getItem('baselineCalibration') || '{}');
+    } catch {
+        return {};
+    }
+
+    if (!summary || typeof summary !== 'object' || Array.isArray(summary)) return {};
+    const metadata = {};
+    if (summary.eyesClosed && typeof summary.eyesClosed === 'object' && !Array.isArray(summary.eyesClosed)) {
+        metadata.eyes_closed = summary.eyesClosed;
+    }
+    if (summary.eyesOpen && typeof summary.eyesOpen === 'object' && !Array.isArray(summary.eyesOpen)) {
+        metadata.eyes_open = summary.eyesOpen;
+    }
+    return metadata;
+}
+
 /**
  * Run the multi-task EEG analysis.
  *
- * Reads baseline + completed-task data from sessionStorage and calls the
- * Python backend's POST /analyze endpoint.
+ * Reads baseline and task recordings from the asynchronous recording store,
+ * then calls POST /analyze.
  *
  * Returns:
  *   {
@@ -73,36 +99,100 @@ function _loadSamples(sessionKey) {
  *
  * Throws on network/backend error.
  */
-export async function runAnalysis() {
-    const completedIds = JSON.parse(sessionStorage.getItem('completedTasks') || '[]');
+export async function runAnalysis({
+    storage = globalThis.sessionStorage,
+    fetchImpl = globalThis.fetch,
+} = {}) {
+    const completedIds = _loadCompletedIds(storage);
+    const sessionDepth = resolveSessionDepth(storage);
 
-    // Collect baseline samples (eyes-closed and eyes-open recorded by BaselineCalibration)
+    // Collect matched baseline samples from the same durable run namespace as
+    // task recordings. loadBaselineRecording also migrates legacy Web Storage
+    // arrays only after their IndexedDB copies commit.
+    const [eyesClosedRecord, eyesOpenRecord] = await Promise.all([
+        loadBaselineRecording('eyes_closed', storage),
+        loadBaselineRecording('eyes_open', storage),
+    ]);
     const baseline = {
-        eyes_closed: _loadSamples('calibrationData_eyes_closed'),
-        eyes_open: _loadSamples('calibrationData_eyes_open'),
+        eyes_closed: Array.isArray(eyesClosedRecord?.samples) ? eyesClosedRecord.samples : [],
+        eyes_open: Array.isArray(eyesOpenRecord?.samples) ? eyesOpenRecord.samples : [],
     };
 
     if (baseline.eyes_closed.length === 0 && baseline.eyes_open.length === 0) {
         throw new Error(i18n.t('errors.noBaselineData'));
     }
 
+    const missingBaselines = requiredBaselineConditionsForSession(sessionDepth)
+        .filter((condition) => !Array.isArray(baseline[condition]) || baseline[condition].length === 0);
+    if (missingBaselines.length > 0) {
+        throw new Error(`Matched baseline recording(s) are missing: ${missingBaselines.join(', ')}.`);
+    }
+
+    const manifestMetadata = _loadBaselineMetadata(storage);
+    const baselineMetadata = {
+        ...(eyesClosedRecord?.metadata || manifestMetadata.eyes_closed
+            ? { eyes_closed: eyesClosedRecord?.metadata || manifestMetadata.eyes_closed }
+            : {}),
+        ...(eyesOpenRecord?.metadata || manifestMetadata.eyes_open
+            ? { eyes_open: eyesOpenRecord?.metadata || manifestMetadata.eyes_open }
+            : {}),
+    };
+    const incompatibleBaselines = requiredBaselineConditionsForSession(sessionDepth)
+        .filter((condition) => baselineMetadata[condition]?.battery_version !== BATTERY_VERSION);
+    if (incompatibleBaselines.length > 0) {
+        throw new Error(
+            `Matched baseline recording(s) do not belong to ${BATTERY_VERSION}: ${incompatibleBaselines.join(', ')}.`,
+        );
+    }
+
+    const missingExpected = missingExpectedTaskIds(completedIds, sessionDepth);
+    if (missingExpected.length > 0) {
+        throw new Error(
+            `Task battery is incomplete for ${sessionDepth}: missing completed task(s): ${missingExpected.join(', ')}.`,
+        );
+    }
+
     // Collect task samples
     const tasks = {};
+    const taskMetadata = {};
+    const recordingsByTask = new Map();
     for (const id of completedIds) {
-        const samples = _loadSamples(`taskData_${id}`);
+        const recording = await loadTaskRecording(id, storage);
+        recordingsByTask.set(id, recording);
+        const samples = Array.isArray(recording?.samples) ? recording.samples : [];
         if (samples.length > 0) {
             tasks[id] = samples;
+            if (recording?.metadata != null) taskMetadata[id] = recording.metadata;
         }
+    }
+
+    const missingRecordings = missingOrEmptyTaskRecordings(completedIds, recordingsByTask);
+    if (missingRecordings.length > 0) {
+        throw new Error(
+            `Completed task recording(s) are missing or empty: ${missingRecordings.join(', ')}.`,
+        );
     }
 
     if (Object.keys(tasks).length === 0) {
         throw new Error(i18n.t('errors.noTaskData'));
     }
 
-    const res = await fetch(`${BACKEND_HTTP}/analyze`, {
+    const analysisPayload = {
+        baseline,
+        tasks,
+        protocol_profile: PROTOCOL_PROFILE_METADATA,
+    };
+    if (Object.keys(baselineMetadata).length > 0) {
+        analysisPayload.baseline_metadata = baselineMetadata;
+    }
+    if (Object.keys(taskMetadata).length > 0) {
+        analysisPayload.task_metadata = taskMetadata;
+    }
+
+    const res = await fetchImpl(`${BACKEND_HTTP}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ baseline, tasks }),
+        body: JSON.stringify(analysisPayload),
     });
 
     if (!res.ok) {
@@ -112,6 +202,11 @@ export async function runAnalysis() {
 
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    if (Array.isArray(data.invalid_tasks) && data.invalid_tasks.length > 0) {
+        throw new Error(
+            `Final analysis rejected invalid task recording(s): ${data.invalid_tasks.join(', ')}.`,
+        );
+    }
 
 
     const enriched = {};
@@ -129,17 +224,23 @@ export async function runAnalysis() {
  * attempt. It does not write report data and does not alter the final upload
  * envelope.
  */
-export async function runSingleTaskQualityCheck(taskId, samples, { signalStats = null } = {}) {
-    const payload = buildSingleTaskAnalysisPayload(taskId, samples);
+export async function runSingleTaskQualityCheck(taskId, samples = null, {
+    signalStats = null,
+    metadata = undefined,
+    storage = globalThis.sessionStorage,
+    fetchImpl = globalThis.fetch,
+} = {}) {
+    const payload = await buildSingleTaskAnalysisPayload(taskId, samples, storage, metadata);
+    const resolvedSamples = payload.tasks?.[taskId] || [];
 
     if ((payload.baseline.eyes_closed.length === 0) && (payload.baseline.eyes_open.length === 0)) {
         throw new Error(i18n.t('errors.noBaselineData'));
     }
-    if (!Array.isArray(samples) || samples.length === 0) {
+    if (!Array.isArray(resolvedSamples) || resolvedSamples.length === 0) {
         throw new Error(i18n.t('errors.noTaskData'));
     }
 
-    const res = await fetch(`${BACKEND_HTTP}/analyze`, {
+    const res = await fetchImpl(`${BACKEND_HTTP}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -518,7 +619,7 @@ export function buildReportText(analysisResults) {
     lines.push(`Mode=${cfg.mode || 'NA'} | alpha=${cfg.alpha ?? 'NA'} | dependence=${cfg.dependence_correction || 'NA'}`);
     lines.push(`Permutation preset=${cfg.runtime_preset || 'None'} (n_perm=${cfg.n_perm ?? 'NA'}) | effect_measure=${cfg.effect_measure || 'NA'}`);
     lines.push(`Discretization bins=${cfg.discretization_bins ?? 'NA'} | FDR alpha=${cfg.fdr_alpha ?? 'NA'}`);
-    lines.push('Baseline: eyes-closed only (eyes-open retained for reference, not pooled).');
+    lines.push('Baseline matching: task eye state (eyes-closed and eyes-open references remain separate and are never pooled).');
     lines.push('');
 
     // ── Glossary ──────────────────────────────────────────────────────────────

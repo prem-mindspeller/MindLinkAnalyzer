@@ -456,7 +456,7 @@
         },
         "3": {
             "title": "Compiti cognitivi",
-            "content": "Ogni attività viene eseguita da 45 a 114 secondi. Seguire attentamente le istruzioni visualizzate sullo schermo. Rimanere il più fermi possibile per ridurre al minimo gli artefatti da movimento. Una volta completate tutte le attività selezionate, procedere alla schermata di caricamento."
+            "content": "Ogni attività comprende un blocco EEG continuo di 60–180 secondi. Seguire l’ordine fisso della sessione e l’indicazione di tenere gli occhi aperti o chiusi. Rimanere il più fermi possibile per ridurre gli artefatti da movimento."
         },
         "4": {
             "title": "Caricamento dei risultati",
@@ -571,7 +571,7 @@
             },
             "taskSelection": {
                 "title": "Passaggio 6: selezione e registrazione dell'attività",
-                "why": "Diversi compiti cognitivi attivano regioni cerebrali distinte. La scelta delle attività giuste mappa le abilità mentali specifiche (concentrazione, memoria, creatività e altro ancora) offrendoti un profilo cognitivo ricco e personalizzato."
+                "why": "Le caratteristiche EEG specifiche del compito vengono confrontate con una baseline nello stesso stato degli occhi. Le risposte comportamentali e la qualità del segnale determinano quali collegamenti alle abilità O*NET possono essere riportati; l’EEG da solo non misura direttamente un’abilità."
             },
             "upload": {
                 "title": "Passaggio 7: caricamento e analisi",

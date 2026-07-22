@@ -157,6 +157,14 @@ class WsEegServiceClass {
 
             case 'raw_multi_batch':
                 if (Array.isArray(msg.samples)) {
+                    const receivedAtMs = typeof globalThis.performance?.now === 'function'
+                        ? globalThis.performance.now()
+                        : Date.now();
+                    this._notify('rawMultiBatch', {
+                        samples: msg.samples,
+                        channels: msg.channels || this._deviceInfo?.channels || [],
+                        receivedAtMs,
+                    });
                     for (const sample of msg.samples) {
                         this._rawMultiBuffer.push(sample);
                         this._notify('rawMulti', sample);
