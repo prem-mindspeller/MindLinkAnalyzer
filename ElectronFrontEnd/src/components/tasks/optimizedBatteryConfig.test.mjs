@@ -293,3 +293,78 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   };
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
+
+// Page 47 durations, the eyes-open/closed slide, and each task's
+// "can provide evidence for" / "does not support direct claims regarding" lists.
+// The backend repeats this table in neuroprofile_traceability.py, so drift here
+// silently desynchronizes acquisition from ability gating.
+const PDF_TASK_CONTRACT = [
+  [1, TASK_IDS.NUMERICAL, 90, 'closed', 'eyes_closed',
+    ['Mathematical Reasoning', 'Number Facility', 'Information Ordering', 'Deductive Reasoning'],
+    ['Inductive Reasoning', 'Memorization', 'Reaction Time', 'Oral Comprehension', 'Oral Expression']],
+  [2, TASK_IDS.WORKING_MEMORY, 90, 'closed', 'eyes_closed',
+    ['Memorization', 'Information Ordering', 'Deductive Reasoning'],
+    ['Inductive Reasoning', 'Category Flexibility', 'Time Sharing', 'Number Facility', 'Mathematical Reasoning', 'Oral Comprehension']],
+  [3, TASK_IDS.AUDITORY_COUNT, 120, 'closed', 'eyes_closed',
+    ['Selective Attention', 'Auditory Attention'],
+    ['Reaction Time', 'Speech Recognition', 'Oral Comprehension', 'Time Sharing', 'Problem Sensitivity']],
+  [4, TASK_IDS.SEMANTIC, 90, 'closed', 'eyes_closed',
+    ['Inductive Reasoning', 'Category Flexibility'],
+    ['Deductive Reasoning', 'Memorization', 'Fluency of Ideas', 'Originality', 'Oral Comprehension']],
+  [5, TASK_IDS.VISUOSPATIAL, 90, 'open', 'eyes_open',
+    ['Visualization', 'Spatial Orientation'],
+    ['Perceptual Speed', 'Speed of Closure', 'Flexibility of Closure', 'Reaction Time', 'Visual sensory abilities']],
+  [6, TASK_IDS.IDEATION, 120, 'closed', 'eyes_closed',
+    ['Category Flexibility', 'Fluency of Ideas', 'Originality'],
+    ['Written Expression', 'Oral Expression', 'Inductive Reasoning', 'Deductive Reasoning', 'Visualization']],
+  [7, TASK_IDS.DUAL_TASK, 120, 'closed', 'eyes_closed',
+    ['Time Sharing', 'Category Flexibility', 'Deductive Reasoning', 'Selective Attention', 'Information Ordering'],
+    ['Mathematical Reasoning', 'Number Facility', 'Memorization', 'Reaction Time', 'Auditory Attention']],
+  [8, TASK_IDS.ANOMALY, 90, 'open', 'eyes_open',
+    ['Problem Sensitivity', 'Deductive Reasoning', 'Selective Attention', 'Information Ordering'],
+    ['Inductive Reasoning', 'Perceptual Speed', 'Reaction Time', 'Speed of Closure', 'Flexibility of Closure']],
+  [9, TASK_IDS.VISUAL_COMPARISON, 60, 'open', 'eyes_open',
+    ['Perceptual Speed', 'Reaction Time'],
+    ['Speed of Closure', 'Flexibility of Closure', 'Visualization', 'Spatial Orientation', 'Problem Sensitivity']],
+  [10, TASK_IDS.CLOSURE, 75, 'open', 'eyes_open',
+    ['Speed of Closure', 'Flexibility of Closure'],
+    ['Perceptual Speed', 'Spatial Orientation', 'Problem Sensitivity', 'Reaction Time', 'Selective Attention']],
+  [11, TASK_IDS.SPEECH_NOISE, 120, 'closed', 'eyes_closed',
+    ['Oral Comprehension', 'Speech Recognition', 'Auditory Attention'],
+    ['Oral Expression', 'Speech Clarity', 'Reaction Time', 'Written Comprehension', 'Written Expression']],
+  [12, TASK_IDS.WRITTEN, 180, 'open', 'eyes_open',
+    ['Written Comprehension', 'Written Expression', 'Inductive Reasoning', 'Information Ordering'],
+    ['Oral Comprehension', 'Oral Expression', 'Speech Recognition', 'Speech Clarity', 'Fluency of Ideas', 'Originality']],
+];
+
+test('task eye states, matched baselines and ability claims match the optimization document', () => {
+  assert.equal(PDF_TASK_CONTRACT.length, 12);
+  for (const [number, taskId, duration, eyeState, baseline, abilities, blocked] of PDF_TASK_CONTRACT) {
+    const definition = TASK_DEFINITIONS[taskId];
+    assert.ok(definition, taskId);
+    assert.equal(definition.number, number, taskId);
+    assert.equal(definition.duration, duration, taskId);
+    assert.equal(definition.eyeState, eyeState, taskId);
+    assert.equal(definition.baseline, baseline, taskId);
+    assert.deepEqual(definition.abilities, abilities, taskId);
+    assert.deepEqual(definition.blocked, blocked, taskId);
+    // "Never compare an eyes-open task only with an eyes-closed baseline."
+    assert.equal(definition.baseline, `eyes_${eyeState}`, taskId);
+    // No task may claim an ability it explicitly cannot support.
+    for (const ability of abilities) {
+      assert.ok(!blocked.includes(ability), `${taskId}: ${ability}`);
+    }
+  }
+});
+
+test('every eyes-open task is reached only after the eyes-open baseline checkpoint', () => {
+  for (const [depth, sequence] of Object.entries(SESSION_SEQUENCES)) {
+    const checkpointIndex = sequence.indexOf(EYES_OPEN_BASELINE_CHECKPOINT);
+    sequence.forEach((entry, index) => {
+      if (entry === EYES_OPEN_BASELINE_CHECKPOINT) return;
+      if (TASK_DEFINITIONS[entry].eyeState !== 'open') return;
+      assert.ok(checkpointIndex >= 0, `${depth} runs an eyes-open task without the checkpoint`);
+      assert.ok(index > checkpointIndex, `${depth}: ${entry} precedes the eyes-open baseline`);
+    });
+  }
+});

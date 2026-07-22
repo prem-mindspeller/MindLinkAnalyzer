@@ -2,6 +2,7 @@ import importlib.util
 import asyncio
 import json
 import math
+import random
 import sys
 import types
 import warnings
@@ -1602,3 +1603,205 @@ def test_full_component_profile_refs_are_supported_and_checked_fail_closed():
         canonical_task_id=task_id,
     )
     assert "test_ref_rubrics_version_mismatch" in reasons
+
+
+# ---------------------------------------------------------------------------
+# Task_Battery_Optimization.pdf conformance
+# ---------------------------------------------------------------------------
+
+# Page 47 durations, the eyes-open/closed slide, and each task's
+# "After validation, the task can provide evidence for" list.
+_PDF_TASK_CONTRACT = {
+    1: ("adaptive_numerical_reasoning", 90, "eyes_closed", [
+        "Mathematical Reasoning", "Number Facility", "Information Ordering",
+        "Deductive Reasoning"]),
+    2: ("working_memory_manipulation", 90, "eyes_closed", [
+        "Memorization", "Information Ordering", "Deductive Reasoning"]),
+    3: ("auditory_target_counting", 120, "eyes_closed", [
+        "Selective Attention", "Auditory Attention"]),
+    4: ("semantic_induction_category_switching", 90, "eyes_closed", [
+        "Inductive Reasoning", "Category Flexibility"]),
+    5: ("visuospatial_transformation_orientation", 90, "eyes_open", [
+        "Visualization", "Spatial Orientation"]),
+    6: ("divergent_ideation", 120, "eyes_closed", [
+        "Category Flexibility", "Fluency of Ideas", "Originality"]),
+    7: ("dual_task_rule_switching", 120, "eyes_closed", [
+        "Time Sharing", "Category Flexibility", "Deductive Reasoning",
+        "Selective Attention", "Information Ordering"]),
+    8: ("rule_based_anomaly_detection", 90, "eyes_open", [
+        "Problem Sensitivity", "Deductive Reasoning", "Selective Attention",
+        "Information Ordering"]),
+    9: ("rapid_visual_comparison", 60, "eyes_open", [
+        "Perceptual Speed", "Reaction Time"]),
+    10: ("pattern_closure_visual_noise", 75, "eyes_open", [
+        "Speed of Closure", "Flexibility of Closure"]),
+    11: ("speech_in_noise_comprehension", 120, "eyes_closed", [
+        "Oral Comprehension", "Speech Recognition", "Auditory Attention"]),
+    12: ("written_comprehension_synthesis", 180, "eyes_open", [
+        "Written Comprehension", "Written Expression", "Inductive Reasoning",
+        "Information Ordering"]),
+}
+
+
+def test_backend_task_table_matches_optimization_document():
+    backend = _load_backend()
+    import neuroprofile_traceability as traceability
+
+    for number, (task_id, duration, baseline, abilities) in _PDF_TASK_CONTRACT.items():
+        assert traceability.CANONICAL_TASKS[number]["id"] == task_id
+        assert traceability.canonical_task_number(task_id) == number
+        assert traceability.TASK_RECORDING_DURATIONS_SECONDS[task_id] == duration
+        assert backend.task_baseline_condition(task_id) == baseline
+        assert backend.theoretical_abilities_for_task(task_id) == abilities
+
+
+def test_analysis_bands_and_windowing_match_common_methodology():
+    backend = _load_backend()
+
+    # "delta 0.5-4 Hz, theta 4-8 Hz, alpha 8-13 Hz, beta 13-30 Hz, gamma 30-45 Hz"
+    for band, bounds in {
+        "delta": (0.5, 4.0),
+        "theta": (4.0, 8.0),
+        "alpha": (8.0, 13.0),
+        "beta": (13.0, 30.0),
+        "gamma": (30.0, 45.0),
+    }.items():
+        assert backend._RAW_FEATURE_BANDS[band] == bounds
+
+    # "two-second rolling windows with 50% overlap"
+    assert backend._RAW_WINDOW_SECONDS == 2.0
+    assert backend._RAW_WINDOW_OVERLAP == 0.5
+    assert backend._raw_window_samples(500) == 1000
+    assert backend._raw_step_samples(500) == 500
+
+    # "at least one contiguous clean interval of 20 seconds"
+    assert backend._MIN_CONTIGUOUS_CLEAN_SECONDS == 20.0
+
+
+def test_band_power_localizes_a_known_sinusoid_to_its_own_band():
+    backend = _load_backend()
+    fs = 500
+    neural_bands = ["delta", "theta", "alpha", "beta"]
+
+    for frequency, expected in ((2.0, "delta"), (6.0, "theta"), (10.0, "alpha"), (20.0, "beta")):
+        window = [
+            50.0 * math.sin(2.0 * math.pi * frequency * (i / fs))
+            for i in range(2 * fs)
+        ]
+        features = backend._raw_window_to_features(window, fs)
+        powers = {band: features[f"{band}_power"] for band in neural_bands}
+        assert max(powers, key=powers.get) == expected, (frequency, powers)
+        assert abs(features[f"{expected}_peak_freq"] - frequency) <= 0.5
+
+
+def _steady_montage_samples(n, fs=500, alpha=20.0, seed=1):
+    rng = random.Random(seed)
+    samples = []
+    for i in range(n):
+        t = i / fs
+        a = alpha * math.sin(2.0 * math.pi * 10.0 * t)
+        b = 6.0 * math.sin(2.0 * math.pi * 20.0 * t)
+        samples.append({
+            "fp1": a + b + rng.gauss(0, 2),
+            "fp2": 1.04 * a + 0.96 * b + rng.gauss(0, 2),
+            "o1": 1.10 * a + b + rng.gauss(0, 2),
+            "o2": 1.05 * a + 0.98 * b + rng.gauss(0, 2),
+        })
+    return samples
+
+
+def test_pooled_combined_baseline_counts_each_condition_once():
+    """One session baseline must not be restated once per task that matches it.
+
+    Two eyes-closed tasks share a single eyes-closed recording, so the pooled
+    comparison must see that baseline's windows once, not twice.
+    """
+    backend = _load_backend()
+    calls = []
+    original = backend._analyze_task_vs_baseline
+
+    def spy(task_rows, baseline_rows, *args, **kwargs):
+        calls.append((len(task_rows), len(baseline_rows)))
+        return original(task_rows, baseline_rows, *args, **kwargs)
+
+    backend._analyze_task_vs_baseline = spy
+    try:
+        result = backend.analyze({
+            "baseline": {
+                "eyes_closed": _steady_montage_samples(15000, alpha=24.0, seed=7),
+                "eyes_open": [],
+            },
+            "tasks": {
+                "semantic_induction_category_switching": _steady_montage_samples(
+                    15000, alpha=11.0, seed=13),
+                "adaptive_numerical_reasoning": _steady_montage_samples(
+                    15000, alpha=13.0, seed=17),
+            },
+        })
+    finally:
+        backend._analyze_task_vs_baseline = original
+
+    per_task = result["per_task"]
+    assert all(entry["scorable"] for entry in per_task.values()), {
+        task_id: entry["invalid_reasons"] for task_id, entry in per_task.items()
+    }
+
+    per_task_calls = calls[:-1]
+    combined_task_rows, combined_baseline_rows = calls[-1]
+    single_baseline_rows = per_task_calls[0][1]
+
+    assert len(per_task_calls) == 2
+    assert all(baseline == single_baseline_rows for _, baseline in per_task_calls)
+    # Task rows accumulate across tasks; the shared baseline must not.
+    assert combined_task_rows == sum(task for task, _ in per_task_calls)
+    assert combined_baseline_rows == single_baseline_rows
+
+
+def test_pooled_combined_baseline_keeps_both_eye_states_once_each():
+    """A mixed session pools eyes-closed and eyes-open baselines exactly once each."""
+    backend = _load_backend()
+    calls = []
+    original = backend._analyze_task_vs_baseline
+
+    def spy(task_rows, baseline_rows, *args, **kwargs):
+        calls.append((kwargs.get("task_id") or (args[0] if args else None), len(baseline_rows)))
+        return original(task_rows, baseline_rows, *args, **kwargs)
+
+    backend._analyze_task_vs_baseline = spy
+    try:
+        result = backend.analyze({
+            "baseline": {
+                "eyes_closed": _steady_montage_samples(15000, alpha=24.0, seed=7),
+                # The visual task is occipital-primary, so its matched baseline
+                # needs a posterior-dominant signal to survive montage QC.
+                "eyes_open": _mindrove_regional_samples(
+                    n=15000, frontal_alpha=5.0, occipital_alpha=18.0,
+                    frontal_beta=4.0, occipital_beta=2.0),
+            },
+            "tasks": {
+                "semantic_induction_category_switching": _steady_montage_samples(
+                    15000, alpha=11.0, seed=13),
+                "adaptive_numerical_reasoning": _steady_montage_samples(
+                    15000, alpha=13.0, seed=17),
+                "rapid_visual_comparison": _mindrove_regional_samples(
+                    n=15000, frontal_alpha=4.0, occipital_alpha=16.0,
+                    frontal_beta=9.0, occipital_beta=2.0),
+            },
+            "task_metadata": {"rapid_visual_comparison": {"eye_state": "eyes_open"}},
+        })
+    finally:
+        backend._analyze_task_vs_baseline = original
+
+    per_task = result["per_task"]
+    assert all(entry["scorable"] for entry in per_task.values()), {
+        task_id: entry["invalid_reasons"] for task_id, entry in per_task.items()
+    }
+    assert per_task["rapid_visual_comparison"]["baseline_condition"] == "eyes_open"
+
+    by_task = {task_id: rows for task_id, rows in calls[:-1]}
+    combined_baseline_rows = calls[-1][1]
+    eyes_closed_rows = by_task["adaptive_numerical_reasoning"]
+    eyes_open_rows = by_task["rapid_visual_comparison"]
+
+    assert eyes_closed_rows > 0 and eyes_open_rows > 0
+    assert combined_baseline_rows == eyes_closed_rows + eyes_open_rows

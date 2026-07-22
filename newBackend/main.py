@@ -4616,8 +4616,12 @@ def analyze(body: Dict) -> Dict:
     per_task:      Dict[str, Any] = {}
     per_task_rows: Dict[str, List[Dict]] = {}
     all_task_rows: List[Dict]     = []
-    all_matched_baseline_rows: List[Dict] = []
     montage_summaries: List[Dict[str, Any]] = [baseline_montage] if baseline_montage else []
+    # A session-level baseline condition is one recording shared by every task
+    # that matches its eye state. Analyse it once per condition so the pooled
+    # comparison cannot count the same baseline windows once per task.
+    matched_baseline_cache: Dict[str, Tuple[List[Dict], Dict[str, Any], Dict[str, Any]]] = {}
+    scored_baseline_conditions: List[str] = []
 
     for task in normalized_tasks:
         task_id = task["canonical_task_id"]
@@ -4651,14 +4655,23 @@ def analyze(body: Dict) -> Dict:
         comparison_baseline_multichannel = bool(
             _multichannel_raw_subset(baseline_samples_for_task)
         )
-        comparison_baseline_rows, task_baseline_qc, task_baseline_montage = _feature_rows_for_transport_segments(
-            baseline_samples_for_task,
-            comparison_baseline_metadata,
-            task_id=task_id,
-            fs=_task_sample_rate(
+        # Keyed by condition and montage profile: the region weighting depends on
+        # the task, so tasks with different primary regions need their own rows.
+        baseline_cache_key = (
+            f"{expected_baseline}|{_montage_profile_for_task(task_id).get('primary_region', '')}"
+        )
+        if baseline_cache_key not in matched_baseline_cache:
+            matched_baseline_cache[baseline_cache_key] = _feature_rows_for_transport_segments(
+                baseline_samples_for_task,
                 comparison_baseline_metadata,
-                multichannel=comparison_baseline_multichannel,
-            ),
+                task_id=task_id,
+                fs=_task_sample_rate(
+                    comparison_baseline_metadata,
+                    multichannel=comparison_baseline_multichannel,
+                ),
+            )
+        comparison_baseline_rows, task_baseline_qc, task_baseline_montage = (
+            matched_baseline_cache[baseline_cache_key]
         )
 
         invalid_reasons: List[str] = []
@@ -4691,7 +4704,9 @@ def analyze(body: Dict) -> Dict:
         scorable = not invalid_reasons
         if task_montage:
             montage_summaries.append(task_montage)
-        if task_baseline_montage:
+        if task_baseline_montage and not any(
+            summary is task_baseline_montage for summary in montage_summaries
+        ):
             montage_summaries.append(task_baseline_montage)
         _eeg_log(
             "AnalyzeTask",
@@ -4706,7 +4721,8 @@ def analyze(body: Dict) -> Dict:
             summary["validity"] = {"scorable": True, "invalid_reasons": []}
             per_task_rows[task_id] = task_rows
             all_task_rows.extend(task_rows)
-            all_matched_baseline_rows.extend(comparison_baseline_rows)
+            if baseline_cache_key not in scored_baseline_conditions:
+                scored_baseline_conditions.append(baseline_cache_key)
             continuous_time_series = _continuous_time_series_summary(
                 task_rows, task_metadata
             )
@@ -4760,6 +4776,13 @@ def analyze(body: Dict) -> Dict:
                 },
             )
         )
+
+    # Each matched baseline condition contributes its windows exactly once, so
+    # pooling many eyes-closed tasks cannot restate one baseline as independent
+    # observations and shrink the combined p-values.
+    all_matched_baseline_rows: List[Dict] = []
+    for cache_key in scored_baseline_conditions:
+        all_matched_baseline_rows.extend(matched_baseline_cache[cache_key][0])
 
     # ── Combined (all tasks pooled vs baseline) ───────────────────────────────
     comb_summary, comb_analysis = ({}, {})

@@ -160,13 +160,31 @@ const backendPath = app.isPackaged
 let backendProcess = null
 
 function startBackend() {
+    if (!app.isPackaged && process.platform !== 'win32') {
+        console.log('Linux development mode: using externally started backend on port 8000')
+        return
+    }
+
     backendProcess = spawn(backendPath, [], {
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
     })
-    backendProcess.stdout.on('data', () => { })
-    backendProcess.stderr.on('data', () => { })
-    backendProcess.on('exit', () => { })
+
+    backendProcess.stdout.on('data', (data) => {
+        console.log(`[backend] ${data}`)
+    })
+
+    backendProcess.stderr.on('data', (data) => {
+        console.error(`[backend] ${data}`)
+    })
+
+    backendProcess.on('error', (error) => {
+        console.error('Failed to start backend:', error)
+    })
+
+    backendProcess.on('exit', (code) => {
+        console.log(`Backend exited with code ${code}`)
+    })
 }
 
 function waitForBackend(retries = 30, delayMs = 500) {

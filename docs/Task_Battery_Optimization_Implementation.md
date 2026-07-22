@@ -84,6 +84,12 @@ rejected rather than being interpreted as the active protocol.
   response; the interval from `response - 2 s` through the scheduled block end
   is explicitly excluded. Thus the stored block duration remains exact while
   the scored EEG segment is deliberately pre-response and can be shorter.
+- Spoken stimuli depend on the host's Web Speech API and are therefore currently
+  Windows-only: Electron on Linux exposes the API but has no voices, so `speak()`
+  fails immediately with `synthesis-failed`. Tasks 1, 2, 4, 7 and 11 cannot be
+  delivered there and their attempts are rejected by the audio audit below rather
+  than scored. Supplying premixed assets removes the dependency. See
+  `ElectronFrontEnd/DOCUMENTATION.md` section 13.
 - Spoken cues, tones and the Task-11 noise source have delivery-audit markers.
   The browser's actual speech start/end callbacks and WebAudio start/end state
   are recorded separately from planned dispatch markers. Missing, failed or
@@ -101,6 +107,10 @@ rejected rather than being interpreted as the active protocol.
   that protocol session; voluntary best-attempt reruns are not permitted.
 - Task-versus-baseline comparison is eye-state matched. Eyes-open tasks are not
   evaluated only against the eyes-closed reference.
+- A session baseline condition is analyzed once and reused by every task that
+  matches its eye state. The pooled combined comparison therefore counts each
+  baseline's windows a single time; it does not restate one eyes-closed
+  recording as seven independent references because seven tasks matched it.
 - Temporal output is descriptive and continuous (mean, standard deviation and
   slope per minute). Event markers are audit metadata, not ERP or
   stimulus-locked analysis inputs. Peak features are excluded from inference

@@ -71,6 +71,10 @@ The application:
 
 > **Note:** The Python backend (`MindlinkBackend.exe`) must be built separately from the `newBackend/` sibling directory. In development mode the frontend expects the executable at `../newBackend/dist/MindlinkBackend/MindlinkBackend.exe` relative to this folder.
 
+> **Spoken stimuli require Windows.** Tasks 1, 2, 4, 7 and 11 deliver their
+> stimuli through the Web Speech API, which has no voices under Electron on
+> Linux. See [Known Limitations](#13-known-limitations).
+
 ---
 
 ## 3. Repository Structure
@@ -755,6 +759,29 @@ Component design conventions:
 ## 13. Known Limitations
 
 - **Windows only** — The Python backend is packaged as a `.exe`. macOS/Linux builds are not supported without modifying the `extraResources` path and build target.
+- **Spoken stimuli are silent under Electron on Linux** — Electron does not ship
+  Chromium's speech-dispatcher integration, so the Web Speech API exists but has
+  no voices. Verified on Electron 40.10.6: `window.speechSynthesis` and
+  `SpeechSynthesisUtterance` are present, `getVoices()` returns `0`, and
+  `speak()` fires `onerror` with `synthesis-failed`. This does not depend on the
+  host — a working system speech stack (`speech-dispatcher` + `espeak-ng`, with
+  `spd-say` producing audio) does not change it, and neither does the
+  `--enable-speech-dispatcher` Chromium switch. Windows is unaffected because
+  Chromium uses SAPI there.
+  - *Affected tasks:* 1, 2, 4, 7 (the "Update"/"Switch" cues) and 11 (the
+    passage). Task 3 is tones-only and unaffected.
+  - *Expected signature:* countdown and tone stimuli still play, because those
+    are WebAudio oscillators on a separate code path. Hearing beeps but no voice
+    is this limitation, not a broken audio device.
+  - *No invalid data results.* The failed utterance enters the audio delivery
+    audit, forcing `protocol_complete: false`, so the backend marks the attempt
+    protocol-invalid and unscorable rather than scoring undelivered stimuli.
+  - *Remedy, when required:* the audio profile already supports a
+    `premixed_audio_asset` source mode, and `speak()` resolves assets globally,
+    per form or per stimulus key. Pre-rendered audio files therefore fix Linux
+    through profile data alone, with no task-engine change — the same step the
+    battery needs for calibrated production audio (see
+    `docs/Task_Battery_Optimization_Implementation.md`).
 - **Single language server regions** — Only the English (`en`) region is selectable in the UI; the Dutch region card is visible but locked.
 - **Test script wiring** — Automated `.test.mjs` contract/unit tests exist, but
   the package-level `npm test` script is still a placeholder; run them with
