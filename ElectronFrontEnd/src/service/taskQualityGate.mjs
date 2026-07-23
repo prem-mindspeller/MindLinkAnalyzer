@@ -8,8 +8,17 @@ import { PROTOCOL_PROFILE_METADATA } from '../components/tasks/optimizedBatteryP
 
 const PASSING_CONFIDENCE = new Set(['weak', 'moderate', 'strong']);
 const MIN_USABLE_FEATURES = 2;
+// The live status stream carries one sample per second, so a task contributes
+// as many samples as it lasts. The proportional ratio is the tolerance; the
+// absolute count is only a floor, so short blocks still get a usable allowance.
+// Combining them the other way round (whichever is smaller) would make the
+// ratio unreachable and, worse, tighten the gate as tasks grow longer.
 const MAX_NOISY_RECORDING_RATIO = 0.15;
-const MAX_NOISY_RECORDING_EVENTS = 4;
+const MIN_NOISY_RECORDING_ALLOWANCE = 4;
+
+function noisyEventAllowance(total) {
+  return Math.max(MIN_NOISY_RECORDING_ALLOWANCE, Math.floor(total * MAX_NOISY_RECORDING_RATIO));
+}
 export const REPEAT_SIGNAL_STABLE_MS = 5000;
 
 function readJson(storage, key, fallback) {
@@ -56,20 +65,17 @@ function evaluateRecordingSignal(signalStats = null) {
   const notWornCount = Number(signalStats?.notWorn || 0);
   const goodCount = Number(signalStats?.good || 0);
   const noisyRatio = total > 0 ? noisyCount / total : 0;
+  const noisyAllowance = noisyEventAllowance(total);
   const acceptable = (
-    total > 0 && (
-      notWornCount === 0 &&
-      noisyCount <= MAX_NOISY_RECORDING_EVENTS &&
-      noisyRatio <= MAX_NOISY_RECORDING_RATIO
-    )
+    total > 0 && notWornCount === 0 && noisyCount <= noisyAllowance
   );
   let reason = 'Signal stable during recording';
-  if (notWornCount > 0) {
-    reason = 'Signal was not worn during the task recording';
-  } else if (noisyCount > MAX_NOISY_RECORDING_EVENTS || noisyRatio > MAX_NOISY_RECORDING_RATIO) {
-    reason = 'Signal was noisy too often during the task recording';
-  } else if (total === 0) {
+  if (total === 0) {
     reason = 'No live signal status samples were available during recording';
+  } else if (notWornCount > 0) {
+    reason = `Signal was not worn for ${notWornCount} of ${total} seconds during the task recording`;
+  } else if (noisyCount > noisyAllowance) {
+    reason = `Signal was noisy for ${noisyCount} of ${total} seconds during the task recording, above the ${noisyAllowance}-second allowance`;
   }
 
   return {
@@ -79,6 +85,7 @@ function evaluateRecordingSignal(signalStats = null) {
     noisyCount,
     notWornCount,
     noisyRatio,
+    noisyAllowance,
     worstPoorSignal: signalStats?.worstPoorSignal ?? null,
     reason,
   };

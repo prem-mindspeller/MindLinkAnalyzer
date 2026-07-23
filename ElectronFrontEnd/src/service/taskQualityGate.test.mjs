@@ -233,3 +233,60 @@ const goodSignalStats = {
   await clearTaskAttempts(['mental_math'], storage);
   assert.equal(await loadTaskAttempt('mental_math', storage), null);
 }
+
+// The live status stream delivers one sample per second, so a 90-second Task 2
+// contributes ~91 samples. A fixed allowance would make the proportional ratio
+// unreachable and tighten the gate as tasks get longer.
+{
+  const analysis = {
+    neuroprofile_feature_export: { tasks: [], feature_rows: [] },
+    per_task: {
+      working_memory_manipulation: {
+        scorable: true,
+        task_qc: { meets_contiguous_clean_minimum: true },
+        baseline_qc: { meets_contiguous_clean_minimum: true },
+        invalid_reasons: [],
+      },
+    },
+  };
+  const evaluate = (signalStats) => evaluateTaskQuality(
+    analysis,
+    'working_memory_manipulation',
+    { signalStats },
+  );
+
+  // A handful of blink/jaw seconds across a 90-second block stays acceptable.
+  const occasionalNoise = evaluate({ total: 91, good: 81, noisy: 10, notWorn: 0, worstPoorSignal: 80 });
+  assert.equal(occasionalNoise.recordingSignal.acceptable, true);
+  assert.equal(occasionalNoise.sufficient, true);
+  assert.equal(resolveTaskQualityOutcome(occasionalNoise), 'accept');
+
+  // Sustained noise beyond the proportional tolerance still forces a repeat.
+  const sustainedNoise = evaluate({ total: 91, good: 61, noisy: 30, notWorn: 0, worstPoorSignal: 120 });
+  assert.equal(sustainedNoise.recordingSignal.acceptable, false);
+  assert.equal(resolveTaskQualityOutcome(sustainedNoise), 'force_repeat');
+  assert.match(sustainedNoise.recordingSignal.reason, /noisy for 30 of 91 seconds/);
+
+  // The allowance scales with block length instead of shrinking.
+  const shortBlock = evaluate({ total: 20, good: 16, noisy: 4, notWorn: 0, worstPoorSignal: 80 });
+  const longBlock = evaluate({ total: 181, good: 154, noisy: 27, notWorn: 0, worstPoorSignal: 80 });
+  assert.equal(shortBlock.recordingSignal.acceptable, true);
+  assert.equal(longBlock.recordingSignal.acceptable, true);
+  assert.ok(
+    longBlock.recordingSignal.noisyAllowance > shortBlock.recordingSignal.noisyAllowance,
+    'a longer block must not be held to a stricter absolute allowance',
+  );
+
+  // Short blocks keep the absolute floor rather than a tiny proportional share.
+  assert.equal(shortBlock.recordingSignal.noisyAllowance, 4);
+
+  // A headset that came off is still rejected outright, at any duration.
+  const notWorn = evaluate({ total: 91, good: 88, noisy: 2, notWorn: 1, worstPoorSignal: 200 });
+  assert.equal(notWorn.recordingSignal.acceptable, false);
+  assert.match(notWorn.recordingSignal.reason, /not worn for 1 of 91 seconds/);
+
+  // No live status stream at all remains unacceptable and is named as such.
+  const noStatus = evaluate({ total: 0, good: 0, noisy: 0, notWorn: 0, worstPoorSignal: null });
+  assert.equal(noStatus.recordingSignal.acceptable, false);
+  assert.match(noStatus.recordingSignal.reason, /No live signal status samples/);
+}
