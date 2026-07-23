@@ -192,6 +192,10 @@ const presentation = {
   [TASK.AUDITORY_COUNT]: { firstToneSeconds: 0.4, finalQuietSeconds: 1.4 },
   [TASK.SEMANTIC]: { itemsPerPhase: 15 },
   [TASK.VISUOSPATIAL]: { finalQuietSeconds: 3 },
+  // Divergent ideation is a silent generation block with no scheduled audio or
+  // visual stimuli, so it carries no presentation timing parameters. The entry
+  // must still exist: taskPresentationFor() throws for any unconfigured task.
+  [TASK.IDEATION]: {},
   [TASK.DUAL_TASK]: { finalQuietSeconds: 3 },
   [TASK.ANOMALY]: { entryIntervalSeconds: 2 },
   [TASK.VISUAL_COMPARISON]: { updateIntervalSeconds: 1, mismatchRevealSeconds: 2 },

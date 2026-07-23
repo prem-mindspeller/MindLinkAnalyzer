@@ -11,13 +11,18 @@ import {
   SESSION_SEQUENCES,
   TASK_DEFINITIONS,
   TASK_IDS,
+  audioProfileForTask,
   closureRevealState,
   pacedPassageChunk,
   resolveSessionDepth,
+  scoringRubricFor,
+  scoringThresholdsFor,
   taskFormForSession,
   taskDefinitionForProfile,
   taskIdsForSession,
   taskIntroduction,
+  taskPresentationFor,
+  taskTimingFor,
   visualComparisonFrame,
   visualRouteState,
 } from './optimizedBatteryConfig.mjs';
@@ -30,6 +35,19 @@ test('battery exposes twelve unique canonical tasks numbered 1 through 12', () =
   assert.equal(definitions.length, 12);
   assert.deepEqual(definitions.map(([, task]) => task.number).sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   assert.equal(new Set(definitions.map(([id]) => id)).size, 12);
+});
+
+test('every canonical task resolves all runner configs (no missing-profile crash)', () => {
+  // A missing presentation/timing/audio/rubric/threshold entry throws at task
+  // mount and white-screens the renderer. Regression guard: divergent_ideation
+  // had no presentation profile and crashed OptimizedBatteryTask on open.
+  for (const taskId of Object.values(TASK_IDS)) {
+    assert.doesNotThrow(() => taskPresentationFor(taskId), `presentation: ${taskId}`);
+    assert.doesNotThrow(() => taskTimingFor(taskId), `timing: ${taskId}`);
+    assert.doesNotThrow(() => audioProfileForTask(taskId), `audio: ${taskId}`);
+    assert.doesNotThrow(() => scoringThresholdsFor(taskId), `thresholds: ${taskId}`);
+    assert.doesNotThrow(() => scoringRubricFor(taskId), `rubric: ${taskId}`);
+  }
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
