@@ -164,6 +164,7 @@ class WsEegServiceClass {
                         samples: msg.samples,
                         channels: msg.channels || this._deviceInfo?.channels || [],
                         receivedAtMs,
+                        streamStartSampleIndex: msg.streamStartSampleIndex,
                     });
                     for (const sample of msg.samples) {
                         this._rawMultiBuffer.push(sample);

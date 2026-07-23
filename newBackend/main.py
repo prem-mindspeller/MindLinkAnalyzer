@@ -315,6 +315,7 @@ def _mindrove_reader_worker() -> None:
     device: Optional[MindRoveDevice] = None
     raw_batch: List[int] = []
     raw_multi_batch: List[Dict[str, int]] = []
+    raw_multi_next_sample_index = 0
     quality_buffer = deque(maxlen=_RAW_WINDOW)
     contact_buffer = deque(maxlen=_RAW_EEG_FS)
     contact_debouncer = _MindRoveContactDebouncer()
@@ -329,16 +330,22 @@ def _mindrove_reader_worker() -> None:
     SILENCE_TIMEOUT = 5.0
 
     def _flush_raw_batches() -> None:
-        nonlocal raw_batch, raw_multi_batch, last_flush
+        nonlocal raw_batch, raw_multi_batch, raw_multi_next_sample_index, last_flush
         if raw_multi_batch:
+            batch_size = len(raw_multi_batch)
             _enqueue({
                 "type": "raw_multi_batch",
                 "samples": list(raw_multi_batch),
+                # WebSocket messages can queue while the renderer is busy.
+                # This acquisition-clock index lets the frontend distinguish a
+                # real missing batch from harmless browser delivery jitter.
+                "streamStartSampleIndex": raw_multi_next_sample_index,
                 "channels": [
                     {"key": key, "label": MINDROVE_CHANNEL_LABELS.get(key, key.upper())}
                     for key in MINDROVE_CHANNEL_ORDER
                 ],
             })
+            raw_multi_next_sample_index += batch_size
             raw_multi_batch.clear()
         if raw_batch:
             _enqueue({"type": "raw_batch", "samples": list(raw_batch)})
@@ -1943,13 +1950,15 @@ def _multichannel_window_to_features(
     if missing_reason is not None:
         return None, "artifact", reasons_by_channel
     agreement_reason, affected_channels, agreements = _low_primary_region_agreement(window, channel_rows, task_id)
-    if agreement_reason is not None:
-        for key in affected_channels:
-            reasons_by_channel[key] = "artifact"
-        return None, "artifact", reasons_by_channel
     if channel_rows:
         row = _task_weighted_montage_features(channel_rows, task_id)
         _add_agreement_metadata(row, channel_rows, agreements, task_id)
+        # Low agreement between two otherwise valid regional channels lowers
+        # spatial confidence, but does not prove that the time-domain recording
+        # is noisy or discontinuous.  Hard-rejecting it split valid recordings
+        # into sub-20-second fragments, particularly in frontal Task 2 data.
+        row["_primary_region_agreement_low"] = float(agreement_reason is not None)
+        row["_low_agreement_channel_count"] = float(len(affected_channels))
         return row, None, reasons_by_channel
 
     rejected_reasons = [
@@ -4418,14 +4427,22 @@ def _task_audio_protocol_invalid_reasons(
     if not all(_valid_nonnegative_int(audio_delivery.get(field)) for field in count_fields):
         reasons.append("task_audio_delivery_audit_invalid")
     else:
+        started_speech = audio_delivery["started_speech_count"]
+        ended_speech = audio_delivery["ended_speech_count"]
+        # A spoken stimulus that starts in the block's final seconds may not fire
+        # its end event before the block finalizes and audio is cancelled; its
+        # audio still played. The renderer discloses these in speech_end_waived_keys.
+        # Count them as delivered so the audit is not failed for an unobservable
+        # end event. The cap at started_speech keeps the waiver from ever excusing
+        # a stimulus that never started.
+        waived_keys = audio_delivery.get("speech_end_waived_keys")
+        waived_count = len(waived_keys) if isinstance(waived_keys, list) else 0
+        effective_ended_speech = min(started_speech, ended_speech + waived_count)
         speech_counts = [
-            audio_delivery[field]
-            for field in (
-                "expected_speech_count",
-                "scheduled_speech_count",
-                "started_speech_count",
-                "ended_speech_count",
-            )
+            audio_delivery["expected_speech_count"],
+            audio_delivery["scheduled_speech_count"],
+            started_speech,
+            effective_ended_speech,
         ]
         tone_counts = [
             audio_delivery[field]

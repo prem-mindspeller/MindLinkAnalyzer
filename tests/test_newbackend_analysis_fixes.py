@@ -716,7 +716,7 @@ def test_multichannel_features_include_real_spatial_contrast_metrics():
     assert "front_occipital_beta_ratio" in row
 
 
-def test_primary_region_low_channel_agreement_rejects_task_window():
+def test_primary_region_low_channel_agreement_lowers_confidence_without_breaking_continuity():
     backend = _load_backend()
     samples = []
     for i in range(1000):
@@ -736,8 +736,11 @@ def test_primary_region_low_channel_agreement_rejects_task_window():
         apply_qc=False,
     )
 
-    assert rows == []
-    assert qc["rejected"] == 1
+    assert len(rows) == 1
+    assert qc["kept"] == 1
+    assert qc["rejected"] == 0
+    assert rows[0]["_primary_region_agreement_low"] == 1.0
+    assert rows[0]["_primary_region_confidence"] < 1e-12
 
 
 def test_duplicate_power_variants_are_not_inferred_as_separate_features():
@@ -1410,6 +1413,45 @@ def test_optimized_contract_requires_consistent_audio_delivery_audit():
     })
     assert missing_audit["per_task"][task_id]["scorable"] is False
     assert "task_audio_delivery_audit_missing" in missing_audit["per_task"][task_id]["invalid_reasons"]
+
+
+def test_end_of_block_speech_waiver_is_accepted_but_not_abusable():
+    backend = _load_backend()
+    task_id = "working_memory_manipulation"
+
+    def audio(started, ended, waived):
+        return {
+            "contract_version": "mindspeller_continuous_task_result_v1",
+            "protocol_valid": True,
+            "recording": {"audio_delivery": {
+                "expected_speech_count": 9,
+                "scheduled_speech_count": 9,
+                "started_speech_count": started,
+                "ended_speech_count": ended,
+                "incomplete_speech_keys": [],
+                "expected_tone_count": 0,
+                "scheduled_tone_count": 0,
+                "started_tone_count": 0,
+                "ended_tone_count": 0,
+                "incomplete_tone_keys": [],
+                "background_noise_required": False,
+                "background_noise_started": False,
+                "failed_audio_keys": [],
+                "speech_end_waived_keys": waived,
+                "protocol_complete": True,
+            }},
+        }
+
+    reasons = backend._task_audio_protocol_invalid_reasons
+    # A final-second stimulus that started but could not fire onend before the
+    # block ended is disclosed via speech_end_waived_keys and must be accepted.
+    assert reasons(task_id, audio(9, 8, ["speech:8"])) == []
+    # Full completion still passes.
+    assert reasons(task_id, audio(9, 9, [])) == []
+    # A missing end event that is NOT disclosed as waived is still rejected.
+    assert "task_audio_delivery_incomplete" in reasons(task_id, audio(9, 8, []))
+    # The waiver cannot excuse a stimulus that never started (started < expected).
+    assert "task_audio_delivery_incomplete" in reasons(task_id, audio(8, 8, ["speech:8"]))
 
 
 def test_speech_in_noise_contract_requires_running_noise_audit():

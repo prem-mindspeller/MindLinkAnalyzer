@@ -32,6 +32,11 @@ const RUNNER_PROTOCOL = runnerProtocolFor();
 const COUNTDOWN_SECONDS = RUNNER_PROTOCOL.countdownSeconds;
 const RESPONSE_EXCLUSION_MS = RUNNER_PROTOCOL.responseExclusionMs;
 const RECORDING_CONTRACT = RUNNER_PROTOCOL.recordingContract;
+// Browser speech synthesis delivers its onend event a beat after the audio
+// actually finishes. A stimulus scheduled within this window of the block end
+// cannot fire onend before the block finalizes and audio is cancelled, so its
+// started delivery is accepted as sufficient (the audio still played).
+const SPEECH_END_GRACE_MS = 6000;
 
 const emptyAudioDeliveryAudit = ({ schedule = [], noiseRequired = false } = {}) => ({
   expectedSpeech: new Set(schedule
@@ -285,6 +290,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   const audioContextRef = useRef(null);
   const noiseSourceRef = useRef(null);
   const assetAudioRefsRef = useRef(new Set());
+  const speechUtteranceRefsRef = useRef(new Set());
   const audioDeliveryRef = useRef(emptyAudioDeliveryAudit());
   const recordingRunRef = useRef(0);
   const startingRef = useRef(false);
@@ -540,17 +546,25 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
         ));
         if (configuredVoice) utterance.voice = configuredVoice;
       }
+      // Chromium/Electron garbage-collects an utterance that is not referenced
+      // after speak() returns, which silently drops its onend (and sometimes
+      // onstart) event. That made the delivery audit under-count started/ended
+      // speech and blocked otherwise-valid tasks. Hold a live reference until the
+      // utterance settles, then release it.
+      speechUtteranceRefsRef.current.add(utterance);
       utterance.onstart = () => {
         if (!auditIsCurrent()) return;
         audit.startedSpeech.add(auditKey);
         pushPlaybackMarker('speech_playback_started', { source_mode: sourceMode });
       };
       utterance.onend = () => {
+        speechUtteranceRefsRef.current.delete(utterance);
         if (!auditIsCurrent()) return;
         audit.endedSpeech.add(auditKey);
         pushPlaybackMarker('speech_playback_ended', { source_mode: sourceMode });
       };
       utterance.onerror = (event) => {
+        speechUtteranceRefsRef.current.delete(utterance);
         if (!auditIsCurrent()) return;
         audit.failed.add(auditKey);
         pushPlaybackMarker('speech_playback_failed', {
@@ -657,6 +671,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     }
     assetAudioRefsRef.current.clear();
     try { window.speechSynthesis?.cancel(); } catch (_) { /* ignore */ }
+    speechUtteranceRefsRef.current.clear();
   }, []);
 
   const stopSubscriptions = useCallback(() => {
@@ -684,7 +699,11 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
 
   const attachRecording = useCallback(() => {
     const unsubRawMultiBatch = wsEegService.on('rawMultiBatch', (batch) => {
-      batchCollectorRef.current?.appendBatch(batch?.samples, batch?.receivedAtMs);
+      batchCollectorRef.current?.appendBatch(
+        batch?.samples,
+        batch?.receivedAtMs,
+        batch?.streamStartSampleIndex,
+      );
     });
     const unsubSignal = wsEegService.on('eegData', (data) => recordSignal(data?.poorSignal));
     recordSignal(wsEegService.getPoorSignal());
@@ -742,11 +761,22 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
 
     const audioAudit = audioDeliveryRef.current;
     audioAudit.finalized = true;
+    // Stimuli scheduled in the block's final seconds cannot reliably fire onend
+    // before finalize; accept started-only delivery for those specific keys.
+    const blockEndMs = definition.duration * 1000;
+    const speechEndWaivedKeys = new Set(
+      schedule
+        .filter((event) => (
+          (event.type === 'spoken_stimulus' || event.type === 'spoken_passage_onset')
+          && (blockEndMs - event.at * 1000) <= SPEECH_END_GRACE_MS
+        ))
+        .map((event) => String(event.key)),
+    );
     const incompleteSpeechKeys = [...audioAudit.expectedSpeech].filter(
       (key) => (
         !audioAudit.scheduledSpeech.has(key)
         || !audioAudit.startedSpeech.has(key)
-        || !audioAudit.endedSpeech.has(key)
+        || (!audioAudit.endedSpeech.has(key) && !speechEndWaivedKeys.has(key))
       ),
     );
     const incompleteToneKeys = [...audioAudit.expectedTones].filter(
@@ -781,6 +811,9 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       background_noise_required: audioAudit.noiseRequired,
       background_noise_started: audioAudit.noiseStarted,
       failed_audio_keys: failedAudioKeys,
+      speech_end_waived_keys: [...speechEndWaivedKeys].filter(
+        (key) => audioAudit.startedSpeech.has(key) && !audioAudit.endedSpeech.has(key),
+      ),
       protocol_complete: (
         incompleteSpeechKeys.length === 0
         && incompleteToneKeys.length === 0

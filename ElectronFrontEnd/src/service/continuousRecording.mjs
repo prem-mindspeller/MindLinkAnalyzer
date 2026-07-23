@@ -52,23 +52,44 @@ export function createFourChannelBatchCollector({
   let segmentId = -1;
   let forceNewSegment = true;
   let invalidSampleCount = 0;
+  let lastStreamEndSampleIndex = null;
 
-  const appendBatch = (samples, receivedAtMs = now()) => {
+  const appendBatch = (
+    samples,
+    receivedAtMs = now(),
+    streamStartSampleIndex = null,
+  ) => {
     const batch = Array.isArray(samples) ? samples : [];
     if (!batch.length) return { appended: 0, rejected: 0, openedSegment: false };
 
+    const numericStreamStart = Number(streamStartSampleIndex);
+    const hasStreamPosition = (
+      streamStartSampleIndex != null
+      && Number.isInteger(numericStreamStart)
+      && numericStreamStart >= 0
+    );
     if (!batch.every(isFourChannelSample)) {
       invalidSampleCount += batch.length;
       forceNewSegment = true;
       lastArrivalMs = Number(receivedAtMs);
+      lastStreamEndSampleIndex = hasStreamPosition
+        ? numericStreamStart + batch.length
+        : null;
       return { appended: 0, rejected: batch.length, openedSegment: false };
     }
 
     const arrivalMs = Number.isFinite(Number(receivedAtMs)) ? Number(receivedAtMs) : now();
     const coveredDurationMs = batch.length * sampleIntervalMs;
     const observedGapMs = lastArrivalMs == null ? 0 : Math.max(0, arrivalMs - lastArrivalMs);
-    const transportGap = lastArrivalMs != null
-      && observedGapMs > coveredDurationMs + Math.max(0, Number(gapToleranceMs) || 0);
+    const hasComparableStreamPosition = (
+      hasStreamPosition && lastStreamEndSampleIndex != null
+    );
+    const transportGap = hasComparableStreamPosition
+      ? numericStreamStart !== lastStreamEndSampleIndex
+      : (
+        lastArrivalMs != null
+        && observedGapMs > coveredDurationMs + Math.max(0, Number(gapToleranceMs) || 0)
+      );
     const openedSegment = forceNewSegment || transportGap;
 
     if (openedSegment) segmentId += 1;
@@ -87,6 +108,9 @@ export function createFourChannelBatchCollector({
 
     syntheticEndMs = batchStartMs + coveredDurationMs;
     lastArrivalMs = arrivalMs;
+    lastStreamEndSampleIndex = hasStreamPosition
+      ? numericStreamStart + batch.length
+      : null;
     forceNewSegment = false;
     return { appended: batch.length, rejected: 0, openedSegment };
   };

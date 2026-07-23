@@ -35,6 +35,38 @@ test('keeps covered batches continuous but exposes an uncovered transport gap', 
   assert.equal(snapshot.transport_gap_count, 1);
 });
 
+test('uses acquisition sequence instead of delayed browser arrival time', () => {
+  const collector = createFourChannelBatchCollector({
+    sampleRateHz: 100,
+    startedAtMs: 0,
+    gapToleranceMs: 50,
+  });
+
+  collector.appendBatch(Array.from({ length: 100 }, (_, index) => sample(index)), 1000, 5000);
+  // The renderer handles this queued message three seconds late, but the
+  // acquisition indices prove that no samples were lost.
+  collector.appendBatch(Array.from({ length: 100 }, (_, index) => sample(index + 100)), 4000, 5100);
+
+  const snapshot = collector.snapshot();
+  assert.equal(snapshot.transport_segments.length, 1);
+  assert.equal(snapshot.max_contiguous_transport_seconds, 2);
+  assert.equal(snapshot.transport_gap_count, 0);
+});
+
+test('opens a segment when acquisition sequence proves samples are missing', () => {
+  const collector = createFourChannelBatchCollector({
+    sampleRateHz: 100,
+    startedAtMs: 0,
+  });
+
+  collector.appendBatch(Array.from({ length: 100 }, (_, index) => sample(index)), 1000, 5000);
+  collector.appendBatch(Array.from({ length: 100 }, (_, index) => sample(index + 100)), 2000, 5200);
+
+  const snapshot = collector.snapshot();
+  assert.equal(snapshot.transport_segments.length, 2);
+  assert.equal(snapshot.transport_gap_count, 1);
+});
+
 test('trimming a button response also clips transport segment indices', () => {
   const collector = createFourChannelBatchCollector({ sampleRateHz: 100, startedAtMs: 0 });
   collector.appendBatch(Array.from({ length: 300 }, (_, index) => sample(index)), 3000);

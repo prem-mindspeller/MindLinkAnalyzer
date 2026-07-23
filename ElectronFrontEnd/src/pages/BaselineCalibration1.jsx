@@ -306,7 +306,11 @@ const BaselineCalibration1 = () => {
         const collector = createFourChannelBatchCollector({ sampleRateHz, startedAtMs });
         batchCollectorRef.current = collector;
         const unsubRawMultiBatch = wsEegService.on('rawMultiBatch', (batch) => {
-            collector.appendBatch(batch?.samples, batch?.receivedAtMs);
+            collector.appendBatch(
+                batch?.samples,
+                batch?.receivedAtMs,
+                batch?.streamStartSampleIndex,
+            );
         });
         const unsubSignal = wsEegService.on('eegData', (data) => recordSignalSample(data?.poorSignal));
         unsubBpRef.current = () => {
