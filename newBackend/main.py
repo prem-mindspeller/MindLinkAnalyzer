@@ -829,6 +829,10 @@ def connect(body: Dict) -> Dict:
         and _status in ("connecting", "connected")
     ):
         _eeg_log("Connect", f"idempotent target={connection_target} status={_status}")
+        # Re-broadcast the live status so a client that just set a local
+        # "searching" state (e.g. a re-scan) recovers to it, instead of waiting
+        # for a status change that never comes on an already-open connection.
+        _enqueue({"type": "status", "value": _status})
         return {"success": True, "status": _status, "alreadyConnected": True}
 
     # Disconnect existing connection first
