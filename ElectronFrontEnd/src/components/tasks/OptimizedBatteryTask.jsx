@@ -308,6 +308,16 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   const form = useMemo(() => taskFormForSession(taskId, sessionDepth), [taskId, sessionDepth]);
   const presentation = useMemo(() => taskPresentationFor(taskId), [taskId]);
   const audioProfile = useMemo(() => audioProfileForTask(taskId), [taskId]);
+  // Spoken cues always use a speech-synthesis profile — even on the dual task,
+  // whose primary audioProfile is tones. Without this, speak() would receive the
+  // tone profile and reject every "Update"/"Switch" cue as an unsupported speech
+  // mode, silencing the cues and failing the audio-delivery audit.
+  const speechProfile = useMemo(
+    () => (taskId === TASK_IDS.SPEECH_NOISE
+      ? ACTIVE_BATTERY_PROFILE.audioProfiles.speech_in_noise
+      : ACTIVE_BATTERY_PROFILE.audioProfiles.spoken_stimuli),
+    [taskId],
+  );
   const scoringThresholds = useMemo(() => scoringThresholdsFor(taskId), [taskId]);
   const introductions = useMemo(() => taskIntroduction(taskId, form), [taskId, form]);
   const schedule = useMemo(
@@ -521,15 +531,15 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       });
     };
     try {
-      const sourceMode = audioProfile.mode;
-      const assetDescriptor = configuredAudioAsset(audioProfile, form.id, auditKey, scheduled);
+      const sourceMode = speechProfile.mode;
+      const assetDescriptor = configuredAudioAsset(speechProfile, form.id, auditKey, scheduled);
       if (sourceMode === 'premixed_audio_asset') {
         if (!assetDescriptor?.uri || typeof window.Audio !== 'function') {
           throw new Error('Configured premixed audio asset is unavailable');
         }
         const asset = new window.Audio(assetDescriptor.uri);
         asset.preload = 'auto';
-        asset.volume = Math.max(0, Math.min(1, Number(audioProfile.volume ?? 1)));
+        asset.volume = Math.max(0, Math.min(1, Number(speechProfile.volume ?? 1)));
         assetAudioRefsRef.current.add(asset);
         asset.onplaying = () => {
           if (!auditIsCurrent()) return;
@@ -579,13 +589,13 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
         return false;
       }
       const utterance = new window.SpeechSynthesisUtterance(text);
-      utterance.lang = audioProfile.language;
-      utterance.rate = audioProfile.rate;
-      utterance.pitch = audioProfile.pitch;
-      utterance.volume = audioProfile.volume;
-      if (audioProfile.voiceId) {
+      utterance.lang = speechProfile.language;
+      utterance.rate = speechProfile.rate;
+      utterance.pitch = speechProfile.pitch;
+      utterance.volume = speechProfile.volume;
+      if (speechProfile.voiceId) {
         const configuredVoice = window.speechSynthesis.getVoices?.().find((voice) => (
-          voice.voiceURI === audioProfile.voiceId || voice.name === audioProfile.voiceId
+          voice.voiceURI === speechProfile.voiceId || voice.name === speechProfile.voiceId
         ));
         if (configuredVoice) utterance.voice = configuredVoice;
       }
@@ -622,7 +632,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       pushPlaybackMarker('speech_playback_failed', { error_code: error?.message || 'exception' });
       return false;
     }
-  }, [audioProfile, form.id, recordedSampleCount, taskId]);
+  }, [speechProfile, form.id, recordedSampleCount, taskId]);
 
   const startModerateNoise = useCallback(() => {
     if (taskId !== TASK_IDS.SPEECH_NOISE) return;

@@ -613,8 +613,10 @@ function dualTaskForm(id, seed, toneCount, targetCount, startValue, beforeDelta,
   const definition = TASK_DEFINITIONS[TASK_IDS.DUAL_TASK];
   const switchAt = definition.phases[1].start;
   const tones = toneForm(`${id}_tones`, seed, toneCount, targetCount, definition.duration);
-  const beforeUpdateTimes = [10, 23, 36, 50];
-  const afterUpdateTimes = [68, 78, 88, 98, 108, 117];
+  // Few, widely spaced updates (~20 s apart, with a clear gap around the switch
+  // cue) keep the running total easy and unhurried.
+  const beforeUpdateTimes = [14, 34, 52];
+  const afterUpdateTimes = [74, 94, 112];
   const updateTimes = [...beforeUpdateTimes, ...afterUpdateTimes];
   const finalValue = updateTimes.reduce(
     (value, at) => value + (at < switchAt ? beforeDelta : afterDelta),
@@ -635,10 +637,16 @@ function dualTaskForm(id, seed, toneCount, targetCount, startValue, beforeDelta,
   };
 }
 
+// Eased dual task: keep the tone stream (Selective Attention) and the single
+// rule switch (Category Flexibility), but make the number task a light,
+// addition-only running total. This preserves the report's ability set
+// (Time Sharing, Deductive Reasoning, Information Ordering) without the mental
+// arithmetic the report excludes (Mathematical Reasoning, Number Facility).
+// Fewer target tones (10) further lighten the concurrent count.
 const DUAL_FORMS = [
-  dualTaskForm('dual_a', 7101, 70, 16, 12, -1, 2),
-  dualTaskForm('dual_b', 7102, 68, 15, 20, -2, 3),
-  dualTaskForm('dual_c', 7103, 72, 17, 15, 1, -2),
+  dualTaskForm('dual_a', 7101, 70, 10, 0, 1, 2),
+  dualTaskForm('dual_b', 7102, 68, 10, 4, 2, 1),
+  dualTaskForm('dual_c', 7103, 72, 10, 10, 1, 2),
 ];
 
 const VALID_CODES = ['A-47', 'B-18', 'C-62', 'D-05', 'E-91', 'F-33', 'G-74', 'H-26', 'J-80', 'K-14', 'L-59', 'M-42', 'N-07', 'P-68', 'Q-31', 'R-95', 'S-24', 'T-76', 'U-11', 'V-53', 'W-89', 'X-36', 'Y-20', 'Z-64'];
