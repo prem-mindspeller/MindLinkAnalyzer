@@ -672,7 +672,7 @@ function anomalyForm(id, offset) {
   const anomalyTypes = [...new Set(entries.filter((entry) => entry.type).map((entry) => entry.type))];
   return {
     id,
-    rule: 'Every code must contain exactly one letter, a hyphen, and two digits.',
+    rule: 'Every code must contain exactly one letter, a hyphen, and two digits in that same order.',
     entries,
     entryIntervalSeconds: presentation.entryIntervalSeconds,
     anomalyCount: anomalySlots.length,

@@ -65,6 +65,49 @@ const nowMs = () => (
 
 const isoNow = () => new Date().toISOString();
 
+// Task-end cue. Four 1000 Hz beeps, identical to the eyes-closed baseline's
+// completion sound (BaselineCalibration1.jsx), so participants get a clear,
+// familiar signal that the scoring block has ended — e.g. when to open their
+// eyes on an eyes-closed task. Uses its own short-lived AudioContext so it is
+// unaffected by the task audio being stopped/cancelled at block end.
+function playCueBeep(frequencyHz = 1000, durationMs = 150) {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.frequency.value = frequencyHz;
+    oscillator.type = 'sine';
+    gain.gain.setValueAtTime(0.3, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + durationMs / 1000);
+    oscillator.start(context.currentTime);
+    oscillator.stop(context.currentTime + durationMs / 1000);
+  } catch (_) { /* audio is best-effort */ }
+}
+
+function playTaskCompletionCue() {
+  for (let index = 0; index < 4; index += 1) {
+    setTimeout(() => playCueBeep(1000, 150), index * 200);
+  }
+}
+
+// Emphasise the ordering clause of the anomaly rule wherever it is shown, so
+// participants notice the letter–hyphen–digits sequence must be in that order.
+const RULE_ORDER_PHRASE = 'in that same order';
+function renderRuleWithOrderEmphasis(text) {
+  const value = String(text ?? '');
+  const index = value.indexOf(RULE_ORDER_PHRASE);
+  if (index < 0) return value;
+  return [
+    value.slice(0, index),
+    <strong key="rule-order-emphasis">{RULE_ORDER_PHRASE}</strong>,
+    value.slice(index + RULE_ORDER_PHRASE.length),
+  ];
+}
+
 function normalizeAssetDescriptor(value) {
   if (typeof value === 'string') return { uri: value, sha256: null };
   if (!value || typeof value !== 'object') return null;
@@ -836,6 +879,9 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       analysis_use: 'delivery_audit_only_not_erp',
     }));
     stopAudio();
+    // Signal the end of the scoring block so participants know to stop and (on
+    // eyes-closed tasks) open their eyes — matches the baseline completion cue.
+    playTaskCompletionCue();
 
     const interactionRuntime = buttonRuntimeRef.current || {};
     const resolvedRuntime = taskId === TASK_IDS.VISUAL_COMPARISON
@@ -1156,7 +1202,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
         <div className="task-runner-sound-notice">🔊 Audio is part of this candidate pilot form. Check your volume before starting.</div>
         <div className="task-runner-intro">
           <ul className="task-runner-intro-bullets">
-            {introductions.map((line) => <li key={line}>{line}</li>)}
+            {introductions.map((line) => <li key={line}>{renderRuleWithOrderEmphasis(line)}</li>)}
           </ul>
         </div>
         <p className="optimized-guardrail">EEG features are task-contextual candidate evidence. Behavioral validity and signal quality are checked separately.</p>
@@ -1210,7 +1256,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
         {taskId === TASK_IDS.VISUOSPATIAL && route && (
           <div className="optimized-route-wrap" aria-label="Five by five route grid">
             <div className="optimized-route-column-labels" aria-hidden="true">
-              <span />{[1, 2, 3, 4, 5].map((column) => <span key={column}>{column}</span>)}
+              {[1, 2, 3, 4, 5].map((column) => <span key={column}>{column}</span>)}
             </div>
             <div className="optimized-route-grid-row">
               <div className="optimized-route-row-labels" aria-hidden="true">
@@ -1237,7 +1283,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
 
         {taskId === TASK_IDS.ANOMALY && anomalyEntry && (
           <div className="optimized-code-stimulus">
-            <small>{form.rule}</small>
+            <small>{renderRuleWithOrderEmphasis(form.rule)}</small>
             <strong>{anomalyEntry.value}</strong>
             <p>Count silently · no response during recording</p>
           </div>
