@@ -45,6 +45,16 @@ import {
 import '../styles/liveEegReading.css';
 import '../styles/taskSelection.css';
 
+// Development convenience: once the mandatory baselines are recorded, allow
+// starting any task in any order instead of enforcing the fixed sequence.
+// Production keeps the controlled sequential administration. (`npm run dev`
+// builds with NODE_ENV=development; the packaged app builds production.)
+const ALLOW_ANY_TASK_ORDER = process.env.NODE_ENV === 'development';
+// Development convenience: allow re-running an already-completed task. Production
+// keeps accepted attempts immutable (one attempt per task) to avoid practice and
+// best-attempt selection bias.
+const ALLOW_RERUN_COMPLETED_TASKS = process.env.NODE_ENV === 'development';
+
 const readCompletedTasks = () => {
     try {
         const parsed = JSON.parse(sessionStorage.getItem('completedTasks') || '[]');
@@ -284,8 +294,15 @@ const TaskSelection = () => {
     const taskIsUnlocked = useCallback((taskId) => {
         if (!baselineStatus.loaded || !eyesClosedBaselineDone || baselineStatus.error) return false;
         const position = positionOf(taskId);
-        return position >= 0 && (position <= nextPosition || completedIds.includes(taskId));
-    }, [baselineStatus.error, baselineStatus.loaded, completedIds, eyesClosedBaselineDone, nextPosition, positionOf]);
+        if (position < 0) return false;
+        if (ALLOW_ANY_TASK_ORDER) {
+            // Any order in dev, but the matched baseline stays mandatory: an
+            // eyes-open task still needs the eyes-open baseline (its analysis
+            // requires it too), so it unlocks only once that baseline is done.
+            return TASK_DEFINITIONS[taskId]?.baseline !== 'eyes_open' || eyesOpenBaselineDone;
+        }
+        return position <= nextPosition || completedIds.includes(taskId);
+    }, [baselineStatus.error, baselineStatus.loaded, completedIds, eyesClosedBaselineDone, eyesOpenBaselineDone, nextPosition, positionOf]);
 
     const acceptTaskAttempt = useCallback(async (taskId, samples, metadata) => {
         const updated = await commitTaskAttempt(taskId, samples, sessionStorage, metadata);
@@ -331,12 +348,13 @@ const TaskSelection = () => {
             navigate('/baselineCalibration1');
             return;
         }
-        // Accepted attempts are immutable within a protocol session. A repeat
-        // is available only from the failed-QC dialog before an attempt is
-        // committed, avoiding practice and best-attempt selection bias.
+        // Accepted attempts are immutable within a protocol session (production):
+        // a repeat is available only from the failed-QC dialog before an attempt
+        // is committed, avoiding practice and best-attempt selection bias.
+        // ALLOW_RERUN_COMPLETED_TASKS lifts this for development testing only.
         if (
             !selectedId
-            || completedIds.includes(selectedId)
+            || (!ALLOW_RERUN_COMPLETED_TASKS && completedIds.includes(selectedId))
             || !taskIsUnlocked(selectedId)
             || !isGoodSignal
         ) return;
@@ -437,7 +455,7 @@ const TaskSelection = () => {
                                         !baselineStatus.loaded
                                         || !eyesClosedBaselineDone
                                         || Boolean(baselineStatus.error)
-                                        || index > nextPosition
+                                        || (!ALLOW_ANY_TASK_ORDER && index > nextPosition)
                                     );
                                     return (
                                         <button
@@ -512,9 +530,9 @@ const TaskSelection = () => {
                                     <button
                                         className="ts-start-btn"
                                         onClick={startSelected}
-                                        disabled={completedIds.includes(selectedId) || !taskIsUnlocked(selectedId) || !isGoodSignal}
+                                        disabled={(completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS) || !taskIsUnlocked(selectedId) || !isGoodSignal}
                                     >
-                                        <FontAwesomeIcon icon={completedIds.includes(selectedId) ? faCircleCheck : faPlay} /> {completedIds.includes(selectedId) ? 'Completed · accepted attempt locked' : !isGoodSignal ? 'Wait for good signal' : 'Read task instructions'}
+                                        <FontAwesomeIcon icon={completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? faCircleCheck : faPlay} /> {completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? 'Completed · accepted attempt locked' : !isGoodSignal ? 'Wait for good signal' : completedIds.includes(selectedId) ? 'Re-run task (dev)' : 'Read task instructions'}
                                     </button>
                                 </>
                             ) : null}
