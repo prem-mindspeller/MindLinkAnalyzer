@@ -111,9 +111,10 @@ _status:        str                        = "disconnected"
 _battery_level: Optional[int]             = None    # last known battery % from 0x85 packet
 _EEG_LOGS_ENABLED = os.getenv("EEG_DEBUG_LOGS", "1").strip().lower() not in ("0", "false", "no", "off")
 _EEG_ANALYSIS_VERBOSE = os.getenv("EEG_ANALYSIS_VERBOSE", "0").strip().lower() in ("1", "true", "yes", "on")
-_MINDROVE_WORN_MIN_ACTIVE_ROWS = max(1, int(os.getenv("MINDROVE_WORN_MIN_ACTIVE_EEG_ROWS", "4") or "4"))
-_MINDROVE_WORN_MIN_EEG_STD = float(os.getenv("MINDROVE_WORN_MIN_EEG_STD", "0.5") or "0.5")
-_MINDROVE_WORN_MAX_EEG_STD = float(os.getenv("MINDROVE_WORN_MAX_EEG_STD", "50000.0") or "50000.0")
+# A channel with no data or near-zero variance carries no EEG (electrode off or
+# disconnected). When at least half the channels are dead the headset reads as
+# "not worn"; a present-but-artifacty signal reads as "noisy".
+_MINDROVE_LIVE_FLATLINE_STD = float(os.getenv("MINDROVE_LIVE_FLATLINE_STD", "0.5") or "0.5")
 
 # Asyncio queue bridging the serial-reader thread → WebSocket broadcaster
 _broadcast_queue:  Optional[asyncio.Queue] = None
@@ -170,44 +171,87 @@ def _raw_sample_shape(samples: List) -> str:
     return type(first).__name__
 
 
-def _mindrove_contact_state_from_samples(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _mindrove_contact_state_from_samples(
+    samples: List[Dict[str, Any]], fs: Optional[int] = None
+) -> Dict[str, Any]:
+    """Live signal state from a short multi-channel window.
+
+    A channel is "dead" when it has no data or near-zero variance (electrode off
+    or disconnected). When at least half the channels are dead the headset reads
+    as "not worn" (poor_signal 200). Otherwise the worn signal is run through the
+    same artifact QC used for recordings: a failing window reads as "noisy" (80)
+    and a clean one as "good" (0). Per-channel reasons aid debugging.
+    """
     if not samples or not _NP_AVAILABLE:
         return {
             "worn": False,
             "quality": 0.0,
             "reason": "no_samples",
             "poor_signal": 200,
-            "eeg_std": [],
+            "channel_reasons": {},
         }
 
-    stds: List[float] = []
+    sample_rate = int(fs or _RAW_EEG_FS)
+    channel_reasons: Dict[str, str] = {}
+    channel_values: Dict[str, List[float]] = {}
     for key in MINDROVE_CHANNEL_ORDER:
-        values = []
+        values: List[float] = []
         for sample in samples:
             try:
                 value = float(sample.get(key))
-            except Exception:
+            except (TypeError, ValueError):
                 continue
             if math.isfinite(value):
                 values.append(value)
-        stds.append(float(_np.std(values)) if values else 0.0)
+        if len(values) < 2:
+            channel_reasons[key] = "missing"
+        elif float(_np.std(values)) < _MINDROVE_LIVE_FLATLINE_STD:
+            channel_reasons[key] = "flatline"
+        else:
+            channel_reasons[key] = ""
+            channel_values[key] = values
 
-    required = max(1, min(len(MINDROVE_CHANNEL_ORDER), _MINDROVE_WORN_MIN_ACTIVE_ROWS))
-    active_rows = sum(
-        _MINDROVE_WORN_MIN_EEG_STD <= std <= _MINDROVE_WORN_MAX_EEG_STD
-        for std in stds
-    )
-    worn = active_rows >= required
-    quality = min(1.0, active_rows / required)
-    reason = "eeg_variance_fallback" if worn else "low_variance"
+    dead_channels = [key for key, reason in channel_reasons.items() if reason]
+    channel_count = len(MINDROVE_CHANNEL_ORDER)
+    dead_required = max(1, (channel_count + 1) // 2)
+    quality = round(1.0 - (len(dead_channels) / channel_count), 3) if channel_count else 0.0
+    if len(dead_channels) >= dead_required:
+        return {
+            "worn": False,
+            "quality": quality,
+            "reason": "signal_missing_or_flatline",
+            "poor_signal": 200,
+            "channel_reasons": channel_reasons,
+            "dead_channels": dead_channels,
+        }
+
+    # Worn: aggregate the live channels and reuse the recording artifact QC so a
+    # present-but-noisy signal still reads as noisy rather than clean.
+    qc_reason = None
+    if channel_values:
+        length = min(len(values) for values in channel_values.values())
+        aggregate = [
+            sum(channel_values[key][index] for key in channel_values) / len(channel_values)
+            for index in range(length)
+        ]
+        if len(aggregate) >= 2:
+            qc_reason = _raw_window_qc(aggregate, fs=sample_rate)
+    if qc_reason is not None:
+        return {
+            "worn": True,
+            "quality": quality,
+            "reason": qc_reason,
+            "poor_signal": 80,
+            "channel_reasons": channel_reasons,
+            "dead_channels": dead_channels,
+        }
     return {
-        "worn": worn,
+        "worn": True,
         "quality": quality,
-        "reason": reason,
-        "poor_signal": 0 if worn else 200,
-        "eeg_std": stds,
-        "active_rows": active_rows,
-        "required_rows": required,
+        "reason": "signal_good",
+        "poor_signal": 0,
+        "channel_reasons": channel_reasons,
+        "dead_channels": dead_channels,
     }
 
 
@@ -223,7 +267,7 @@ class _MindRoveContactDebouncer:
             "quality": 0.0,
             "reason": "initial",
             "poor_signal": 200,
-            "eeg_std": [],
+            "channel_reasons": {},
         }
 
     def update(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -316,8 +360,8 @@ def _mindrove_reader_worker() -> None:
     raw_batch: List[int] = []
     raw_multi_batch: List[Dict[str, int]] = []
     raw_multi_next_sample_index = 0
-    quality_buffer = deque(maxlen=_RAW_WINDOW)
-    contact_buffer = deque(maxlen=_RAW_EEG_FS)
+    signal_buffer = deque(maxlen=_live_signal_window_samples(_RAW_EEG_FS))
+    signal_window_min = _raw_window_samples(_RAW_EEG_FS)
     contact_debouncer = _MindRoveContactDebouncer()
     filters: Dict[str, Any] = {}
     last_channel_rows: Tuple[int, ...] = ()
@@ -361,9 +405,8 @@ def _mindrove_reader_worker() -> None:
 
         device.connect()
         fs = int(device.sample_rate or _RAW_EEG_FS)
-        quality_window = _raw_window_samples(fs)
-        quality_buffer = deque(maxlen=quality_window)
-        contact_buffer = deque(maxlen=max(1, int(round(float(fs)))))
+        signal_window_min = _raw_window_samples(fs)
+        signal_buffer = deque(maxlen=_live_signal_window_samples(fs))
         filters = {key: create_eeg_filter(fs=fs) for key in MINDROVE_CHANNEL_ORDER}
         last_channel_rows = tuple(ch.row_index for ch in device.channels)
         _eeg_log(
@@ -396,7 +439,7 @@ def _mindrove_reader_worker() -> None:
             if current_channel_rows and current_channel_rows != last_channel_rows:
                 _flush_raw_batches()
                 filters = {key: create_eeg_filter(fs=fs) for key in MINDROVE_CHANNEL_ORDER}
-                quality_buffer.clear()
+                signal_buffer.clear()
                 last_channel_rows = current_channel_rows
                 # _eeg_log("MindRove", f"active_rows_updated rows={list(current_channel_rows)} filters_reset=true")
                 _enqueue({
@@ -423,14 +466,9 @@ def _mindrove_reader_worker() -> None:
                     continue
 
                 aggregate = float(sum(values) / len(values))
-                contact_buffer.append({
-                    key: float(sample[key])
-                    for key in MINDROVE_CHANNEL_ORDER
-                    if key in sample
-                })
                 raw_multi_batch.append(filtered)
                 raw_batch.append(int(round(aggregate)))
-                quality_buffer.append(aggregate)
+                signal_buffer.append(filtered)
 
             now = time.monotonic()
             if now - last_flush >= FLUSH_INTERVAL:
@@ -446,22 +484,14 @@ def _mindrove_reader_worker() -> None:
                 samples_since_log = 0
                 last_stream_log = now
 
-            if now - last_quality >= 1.0 and len(quality_buffer) >= quality_window:
-                contact_state = _mindrove_contact_state_from_samples(list(contact_buffer))
-                contact_state = contact_debouncer.update(contact_state)
-                qc_reason = None
-                if contact_state["worn"]:
-                    qc_reason = _raw_window_qc(list(quality_buffer), fs=fs)
-                poor_signal = int(contact_state["poor_signal"])
-                if contact_state["worn"] and qc_reason is not None:
-                    poor_signal = 80
-                reason = qc_reason or contact_state["reason"]
-                std_text = ",".join(f"{std:.2f}" for std in contact_state.get("eeg_std", []))
+            if now - last_quality >= 1.0 and len(signal_buffer) >= signal_window_min:
+                signal_state = _mindrove_contact_state_from_samples(list(signal_buffer), fs=fs)
+                signal_state = contact_debouncer.update(signal_state)
+                poor_signal = int(signal_state["poor_signal"])
                 # _eeg_log(
                 #     "MindRoveQC",
-                #     f"worn={contact_state['worn']} reason={reason} poor_signal={poor_signal} "
-                #     f"active={contact_state.get('active_rows', 0)}/{contact_state.get('required_rows', 4)} "
-                #     f"eeg_std=[{std_text}]",
+                #     f"worn={signal_state['worn']} reason={signal_state['reason']} "
+                #     f"poor_signal={poor_signal} dead={signal_state.get('dead_channels', [])}",
                 # )
                 _enqueue({
                     "type": "eeg_data",
@@ -896,6 +926,9 @@ _BANDS = ["delta", "theta", "lowAlpha", "highAlpha", "lowBeta", "highBeta", "low
 _RAW_EEG_FS      = 500    # MindRove default sample rate (Hz)
 _LEGACY_RAW_EEG_FS = 512  # BrainLink scalar fallback sample rate (Hz)
 _RAW_WINDOW_SECONDS = 2.0
+# The live "Signal: Good/Noisy" indicator averages over a longer window than the
+# 2 s analysis window so the displayed status does not flicker on brief noise.
+_LIVE_SIGNAL_WINDOW_SECONDS = float(os.getenv("MINDROVE_LIVE_SIGNAL_WINDOW_SECONDS", "5.0") or "5.0")
 _RAW_WINDOW_OVERLAP = 0.50
 _RAW_WINDOW      = round(_RAW_WINDOW_SECONDS * _RAW_EEG_FS)
 _RAW_STEP        = round(_RAW_WINDOW * (1.0 - _RAW_WINDOW_OVERLAP))
@@ -912,6 +945,13 @@ def _raw_window_samples(fs: int = _RAW_EEG_FS) -> int:
         return max(1, int(round(_RAW_WINDOW_SECONDS * float(fs))))
     except Exception:
         return _RAW_WINDOW
+
+
+def _live_signal_window_samples(fs: int = _RAW_EEG_FS) -> int:
+    try:
+        return max(1, int(round(_LIVE_SIGNAL_WINDOW_SECONDS * float(fs))))
+    except Exception:
+        return round(_LIVE_SIGNAL_WINDOW_SECONDS * _RAW_EEG_FS)
 
 
 def _raw_step_samples(fs: int = _RAW_EEG_FS) -> int:

@@ -238,7 +238,7 @@ def test_websocket_keepalive_sends_heartbeat_without_device_disconnect():
     assert backend._status == "disconnected"
 
 
-def test_mindrove_contact_state_matches_terminal_variance_gate():
+def test_mindrove_contact_state_worn_signal_vs_dead_channels():
     backend = _load_backend()
     worn_samples = _mindrove_alpha_samples(n=80)
     not_worn_samples = [
@@ -250,10 +250,10 @@ def test_mindrove_contact_state_matches_terminal_variance_gate():
     not_worn = backend._mindrove_contact_state_from_samples(not_worn_samples)
 
     assert worn["worn"] is True
-    assert worn["reason"] == "eeg_variance_fallback"
+    assert worn["reason"] == "signal_good"
     assert worn["poor_signal"] == 0
     assert not_worn["worn"] is False
-    assert not_worn["reason"] == "low_variance"
+    assert not_worn["reason"] == "signal_missing_or_flatline"
     assert not_worn["poor_signal"] == 200
 
 
@@ -1847,3 +1847,66 @@ def test_pooled_combined_baseline_keeps_both_eye_states_once_each():
 
     assert eyes_closed_rows > 0 and eyes_open_rows > 0
     assert combined_baseline_rows == eyes_closed_rows + eyes_open_rows
+
+
+def _live_signal_eeg_window(spec, seconds=3, fs=500):
+    """Build a multi-channel window. spec maps channel -> 'good'|'flat'|'missing'."""
+    import numpy as np
+
+    n = fs * seconds
+    t = np.arange(n) / fs
+    series = {}
+    for key, kind in spec.items():
+        if kind == "good":
+            r = np.random.default_rng(sum(ord(c) for c in key))
+            x = np.zeros(n)
+            for f in np.arange(1, 41, 0.5):
+                x += (1.0 / f) * 12.0 * np.sin(2 * math.pi * f * t + r.uniform(0, 2 * math.pi))
+            x += 18.0 * np.sin(2 * math.pi * 10.0 * t + r.uniform(0, 2 * math.pi))
+            x += r.normal(0, 3.0, n)
+            series[key] = x
+        elif kind == "flat":
+            series[key] = np.zeros(n)
+    samples = []
+    for i in range(n):
+        sample = {}
+        for key, kind in spec.items():
+            if kind == "missing":
+                continue
+            sample[key] = float(series[key][i])
+        samples.append(sample)
+    return samples
+
+
+def test_live_signal_state_good_noisy_and_not_worn():
+    backend = _load_backend()
+    fs = 500
+
+    good = backend._mindrove_contact_state_from_samples(
+        _live_signal_eeg_window({"fp1": "good", "fp2": "good", "o1": "good", "o2": "good"}), fs=fs
+    )
+    assert good["worn"] is True and good["poor_signal"] == 0
+
+    # A single dead electrode is tolerated (fewer than half dead) and clean.
+    one_dead = backend._mindrove_contact_state_from_samples(
+        _live_signal_eeg_window({"fp1": "good", "fp2": "good", "o1": "good", "o2": "flat"}), fs=fs
+    )
+    assert one_dead["worn"] is True and one_dead["poor_signal"] == 0
+    assert one_dead["dead_channels"] == ["o2"]
+
+    # Half or more channels missing/flatline -> "not worn" (200).
+    not_worn = backend._mindrove_contact_state_from_samples(
+        _live_signal_eeg_window({"fp1": "flat", "fp2": "missing", "o1": "good", "o2": "good"}), fs=fs
+    )
+    assert not_worn["worn"] is False and not_worn["poor_signal"] == 200
+    assert not_worn["reason"] == "signal_missing_or_flatline"
+
+    # No data -> not worn.
+    empty = backend._mindrove_contact_state_from_samples([], fs=fs)
+    assert empty["worn"] is False and empty["poor_signal"] == 200
+
+
+def test_live_signal_window_is_longer_than_analysis_window():
+    backend = _load_backend()
+    assert backend._live_signal_window_samples(500) > backend._raw_window_samples(500)
+    assert backend._live_signal_window_samples(500) == round(backend._LIVE_SIGNAL_WINDOW_SECONDS * 500)

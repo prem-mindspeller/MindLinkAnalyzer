@@ -764,7 +764,9 @@
     text-align: center;
 }
 
-.optimized-code-stimulus strong {
+/* Direct child only: the large monospace styling is for the code entry, not for
+   emphasized words nested inside the rule's <small> (e.g. "in that same order"). */
+.optimized-code-stimulus > strong {
     color: #0f172a;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: clamp(3rem, 9vw, 5.5rem);
