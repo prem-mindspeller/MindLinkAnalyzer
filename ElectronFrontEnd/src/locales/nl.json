@@ -52,7 +52,8 @@
         "submit": "Partner-ID indienen",
         "submitting": "Indienen...",
         "errorNotFound": "Partner-ID wordt niet herkend. Controleer en probeer opnieuw.",
-        "errorConnection": "Kan partner-ID niet verifiëren. Controleer uw verbinding en probeer opnieuw."
+        "errorConnection": "Kan partner-ID niet verifiëren. Controleer uw verbinding en probeer opnieuw.",
+        "errorNoBooking": "U heeft nog geen actieve boeking bij deze partner. Boek eerst een sessie voordat u doorgaat."
     },
     "warning": {
         "title": "Controleer vóór het aanmelden of uw headset:",
@@ -410,6 +411,7 @@
         "eyesOpen": "Ogen open",
         "advanced": "Geavanceerd",
         "locked": "Vergrendeld",
+        "sessionThreeLock": "Vereist 3 partnerboekingen om te ontgrendelen",
         "alreadyDone": "Deze taak is al voltooid. U kunt hem opnieuw uitvoeren of een andere taak selecteren.",
         "runAgain": "Opnieuw uitvoeren",
         "taskInstructions": "Taakinstructies",

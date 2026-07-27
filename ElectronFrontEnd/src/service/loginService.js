@@ -1,4 +1,5 @@
 import i18n from '../i18n';
+import { resolveBookingAccess } from './bookingAccess.mjs';
 
 const API_ENDPOINTS = {
     en: 'https://en.mindspeller.com',
@@ -159,7 +160,7 @@ const checkPartnerBookings = async (partnerId) => {
         );
 
         if (response.status === 404) {
-            return { success: false, notFound: true, hasAdvancedBooking: false, hasSessionThree: false };
+            return { success: false, notFound: true, hasSessionOne: false, hasAdvancedBooking: false, hasSessionThree: false };
         }
 
         if (!response.ok) {
@@ -167,39 +168,18 @@ const checkPartnerBookings = async (partnerId) => {
         }
 
         const data = await response.json();
-
-        let hasAdvancedBooking = false;
-        let bookingCount = 0;
-        const countBookings = (obj) => {
-            if (Array.isArray(obj?.partner_bookings)) return obj.partner_bookings.length;
-            if (Array.isArray(obj?.bookings)) return obj.bookings.length;
-            if (typeof obj?.booking_count === 'number') return obj.booking_count;
-            return 0;
-        };
-        if (typeof data.has_booking !== 'undefined') {
-            hasAdvancedBooking = Boolean(data.has_booking);
-            bookingCount = countBookings(data);
-        } else if (Array.isArray(data.bookings)) {
-            hasAdvancedBooking = data.bookings.length > 0;
-            bookingCount = data.bookings.length;
-        } else if (Array.isArray(data.partner_bookings)) {
-            hasAdvancedBooking = data.partner_bookings.length > 0;
-            bookingCount = data.partner_bookings.length;
-        } else if (data.data && typeof data.data.has_booking !== 'undefined') {
-            hasAdvancedBooking = Boolean(data.data.has_booking);
-            bookingCount = countBookings(data.data);
-        }
+        const access = resolveBookingAccess(data);
 
         return {
             success: true,
             notFound: false,
-            hasAdvancedBooking,
-            hasSessionThree: bookingCount >= 2,
+            ...access,
         };
     } catch (error) {
         return {
             success: false,
             notFound: false,
+            hasSessionOne: false,
             hasAdvancedBooking: false,
             hasSessionThree: false,
             error: error.message,

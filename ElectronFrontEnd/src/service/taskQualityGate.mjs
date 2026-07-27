@@ -1,7 +1,6 @@
 const PASSING_CONFIDENCE = new Set(['weak', 'moderate', 'strong']);
 const MIN_USABLE_FEATURES = 2;
 const MAX_NOISY_RECORDING_RATIO = 0.15;
-const MAX_NOISY_RECORDING_EVENTS = 4;
 export const REPEAT_SIGNAL_STABLE_MS = 5000;
 
 function readJson(storage, key, fallback) {
@@ -38,14 +37,13 @@ function evaluateRecordingSignal(signalStats = null) {
   const acceptable = (
     total === 0 || (
       notWornCount === 0 &&
-      noisyCount <= MAX_NOISY_RECORDING_EVENTS &&
       noisyRatio <= MAX_NOISY_RECORDING_RATIO
     )
   );
   let reason = 'Signal stable during recording';
   if (notWornCount > 0) {
     reason = 'Signal was not worn during the task recording';
-  } else if (noisyCount > MAX_NOISY_RECORDING_EVENTS || noisyRatio > MAX_NOISY_RECORDING_RATIO) {
+  } else if (noisyRatio > MAX_NOISY_RECORDING_RATIO) {
     reason = 'Signal was noisy too often during the task recording';
   } else if (total === 0) {
     reason = 'No live signal status samples were available during recording';

@@ -103,6 +103,7 @@ _MINDROVE_WORN_MIN_ACTIVE_ROWS = max(1, int(os.getenv("MINDROVE_WORN_MIN_ACTIVE_
 _MINDROVE_WORN_MIN_EEG_STD = float(os.getenv("MINDROVE_WORN_MIN_EEG_STD", "0.5") or "0.5")
 _MINDROVE_WORN_MAX_EEG_STD = float(os.getenv("MINDROVE_WORN_MAX_EEG_STD", "50000.0") or "50000.0")
 
+
 # Asyncio queue bridging the serial-reader thread → WebSocket broadcaster
 _broadcast_queue:  Optional[asyncio.Queue] = None
 _broadcaster_task: Optional[asyncio.Task]  = None
@@ -186,12 +187,10 @@ def _mindrove_contact_state_from_samples(samples: List[Dict[str, Any]]) -> Dict[
         for std in stds
     )
     worn = active_rows >= required
-    quality = min(1.0, active_rows / required)
-    reason = "eeg_variance_fallback" if worn else "low_variance"
     return {
         "worn": worn,
-        "quality": quality,
-        "reason": reason,
+        "quality": min(1.0, active_rows / required),
+        "reason": "eeg_variance_fallback" if worn else "low_variance",
         "poor_signal": 0 if worn else 200,
         "eeg_std": stds,
         "active_rows": active_rows,
@@ -206,13 +205,6 @@ class _MindRoveContactDebouncer:
         self._good_count = 0
         self._bad_count = 0
         self._current_worn = False
-        self._last_state: Dict[str, Any] = {
-            "worn": False,
-            "quality": 0.0,
-            "reason": "initial",
-            "poor_signal": 200,
-            "eeg_std": [],
-        }
 
     def update(self, state: Dict[str, Any]) -> Dict[str, Any]:
         if bool(state.get("worn")):
@@ -228,13 +220,41 @@ class _MindRoveContactDebouncer:
 
         smoothed = dict(state)
         smoothed["worn"] = self._current_worn
-        if self._current_worn:
-            smoothed["poor_signal"] = int(state.get("poor_signal", 0) or 0)
+        smoothed["poor_signal"] = int(state.get("poor_signal", 0) or 0) if self._current_worn else 200
+        if not self._current_worn and bool(state.get("worn")):
+            smoothed["reason"] = "debouncing_contact"
+        return smoothed
+
+
+class _MindRoveSignalDebouncer:
+    def __init__(self, good_required: int = 1, bad_required: int = 2):
+        self.good_required = max(1, int(good_required))
+        self.bad_required = max(1, int(bad_required))
+        self._good_count = 0
+        self._bad_count = 0
+        self._current_good = False
+
+    def update(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        if bool(state.get("good")):
+            self._good_count += 1
+            self._bad_count = 0
+            if self._good_count >= self.good_required:
+                self._current_good = True
         else:
-            smoothed["poor_signal"] = 200
-            if bool(state.get("worn")):
-                smoothed["reason"] = "debouncing_contact"
-        self._last_state = smoothed
+            self._bad_count += 1
+            self._good_count = 0
+            if self._bad_count >= self.bad_required:
+                self._current_good = False
+
+        smoothed = dict(state)
+        smoothed["good"] = self._current_good
+        smoothed["poor_signal"] = (
+            0 if self._current_good
+            else int(state.get("poor_signal", 80) or 80) if self._bad_count >= self.bad_required
+            else 80
+        )
+        if self._current_good != bool(state.get("good")):
+            smoothed["reason"] = "debouncing_signal"
         return smoothed
 
 
@@ -306,13 +326,15 @@ def _mindrove_reader_worker() -> None:
     quality_buffer = deque(maxlen=_RAW_WINDOW)
     contact_buffer = deque(maxlen=_RAW_EEG_FS)
     contact_debouncer = _MindRoveContactDebouncer()
+    quality_debouncer = _MindRoveSignalDebouncer()
+    contact_state: Dict[str, Any] = {"worn": False, "poor_signal": 200}
+    last_quality_poor = 80
     filters: Dict[str, Any] = {}
     last_channel_rows: Tuple[int, ...] = ()
     last_flush = time.monotonic()
     last_quality = time.monotonic()
+    last_contact = time.monotonic()
     last_data_time = time.monotonic()
-    last_stream_log = time.monotonic()
-    samples_since_log = 0
     FLUSH_INTERVAL = 0.016
     SILENCE_TIMEOUT = 5.0
 
@@ -342,7 +364,7 @@ def _mindrove_reader_worker() -> None:
 
         device.connect()
         fs = int(device.sample_rate or _RAW_EEG_FS)
-        quality_window = _raw_window_samples(fs)
+        quality_window = _live_signal_window_samples(fs)
         quality_buffer = deque(maxlen=quality_window)
         contact_buffer = deque(maxlen=max(1, int(round(float(fs)))))
         filters = {key: create_eeg_filter(fs=fs) for key in MINDROVE_CHANNEL_ORDER}
@@ -369,7 +391,6 @@ def _mindrove_reader_worker() -> None:
             samples = device.read_samples(max_samples=None)
             if samples:
                 last_data_time = time.monotonic()
-                samples_since_log += len(samples)
             if device.battery_level is not None:
                 _set_battery_level(device.battery_level, "mindrove")
 
@@ -378,6 +399,7 @@ def _mindrove_reader_worker() -> None:
                 _flush_raw_batches()
                 filters = {key: create_eeg_filter(fs=fs) for key in MINDROVE_CHANNEL_ORDER}
                 quality_buffer.clear()
+                contact_buffer.clear()
                 last_channel_rows = current_channel_rows
                 # _eeg_log("MindRove", f"active_rows_updated rows={list(current_channel_rows)} filters_reset=true")
                 _enqueue({
@@ -392,58 +414,53 @@ def _mindrove_reader_worker() -> None:
 
             for sample in samples:
                 filtered: Dict[str, int] = {}
-                values: List[float] = []
+                filtered_values: List[float] = []
                 for key in MINDROVE_CHANNEL_ORDER:
                     if key not in sample:
                         continue
-                    value = filters[key](float(sample[key]))
-                    filtered[key] = int(round(value))
-                    values.append(value)
+                    raw_value = float(sample[key])
+                    filtered_value = filters[key](raw_value)
+                    filtered[key] = int(round(filtered_value))
+                    filtered_values.append(filtered_value)
 
-                if not values:
+                if not filtered_values:
                     continue
 
-                aggregate = float(sum(values) / len(values))
                 contact_buffer.append({
                     key: float(sample[key])
                     for key in MINDROVE_CHANNEL_ORDER
                     if key in sample
                 })
                 raw_multi_batch.append(filtered)
-                raw_batch.append(int(round(aggregate)))
-                quality_buffer.append(aggregate)
-
+                filtered_aggregate = float(sum(filtered_values) / len(filtered_values))
+                raw_batch.append(int(round(filtered_aggregate)))
+                quality_buffer.append(filtered_aggregate)
             now = time.monotonic()
             if now - last_flush >= FLUSH_INTERVAL:
                 _flush_raw_batches()
 
-            if now - last_stream_log >= 1.0:
-                # _eeg_log(
-                #     "MindRoveStream",
-                #     f"samples_last_sec={samples_since_log} rows={list(last_channel_rows)} "
-                #     f"quality_buffer={len(quality_buffer)}/{quality_window} "
-                #     f"battery={_battery_level if _battery_level is not None else 'n/a'} status={_status}",
-                # )
-                samples_since_log = 0
-                last_stream_log = now
+            publish_signal = False
+            if now - last_contact >= 1.0 and len(contact_buffer) >= int(round(float(fs))):
+                contact_state = contact_debouncer.update(
+                    _mindrove_contact_state_from_samples(list(contact_buffer))
+                )
+                last_contact = now
+                publish_signal = True
 
-            if now - last_quality >= 1.0 and len(quality_buffer) >= quality_window:
-                contact_state = _mindrove_contact_state_from_samples(list(contact_buffer))
-                contact_state = contact_debouncer.update(contact_state)
-                qc_reason = None
-                if contact_state["worn"]:
+            if now - last_quality >= _LIVE_SIGNAL_WINDOW_SECONDS and len(quality_buffer) >= quality_window:
+                if contact_state.get("worn"):
                     qc_reason = _raw_window_qc(list(quality_buffer), fs=fs)
-                poor_signal = int(contact_state["poor_signal"])
-                if contact_state["worn"] and qc_reason is not None:
-                    poor_signal = 80
-                reason = qc_reason or contact_state["reason"]
-                std_text = ",".join(f"{std:.2f}" for std in contact_state.get("eeg_std", []))
-                # _eeg_log(
-                #     "MindRoveQC",
-                #     f"worn={contact_state['worn']} reason={reason} poor_signal={poor_signal} "
-                #     f"active={contact_state.get('active_rows', 0)}/{contact_state.get('required_rows', 4)} "
-                #     f"eeg_std=[{std_text}]",
-                # )
+                    quality_state = quality_debouncer.update({
+                        "good": qc_reason is None,
+                        "poor_signal": 80 if qc_reason else 0,
+                        "reason": qc_reason or "signal_good",
+                    })
+                    last_quality_poor = int(quality_state["poor_signal"])
+                    publish_signal = True
+                last_quality = now
+
+            if publish_signal:
+                poor_signal = 200 if not contact_state.get("worn") else last_quality_poor
                 _enqueue({
                     "type": "eeg_data",
                     "poorSignal": poor_signal,
@@ -452,8 +469,6 @@ def _mindrove_reader_worker() -> None:
                     "bandPower": None,
                     "battery": _battery_level,
                 })
-                last_quality = now
-
             if time.monotonic() - last_data_time > SILENCE_TIMEOUT:
                 _eeg_log("MindRove", "device silent for 5 s; stopping reader")
                 _enqueue({"type": "error", "message": "MindRove device silent for 5 s."})
@@ -873,6 +888,7 @@ _BANDS = ["delta", "theta", "lowAlpha", "highAlpha", "lowBeta", "highBeta", "low
 _RAW_EEG_FS      = 500    # MindRove default sample rate (Hz)
 _LEGACY_RAW_EEG_FS = 512  # BrainLink scalar fallback sample rate (Hz)
 _RAW_WINDOW_SECONDS = 2.0
+_LIVE_SIGNAL_WINDOW_SECONDS = 5.0
 _RAW_WINDOW      = round(_RAW_WINDOW_SECONDS * _RAW_EEG_FS)
 _RAW_STEP        = _RAW_WINDOW
 _MT_TAPERS       = 3      # DPSS multitaper count (matches legacy mt_tapers=3)
@@ -887,6 +903,10 @@ def _raw_window_samples(fs: int = _RAW_EEG_FS) -> int:
         return max(1, int(round(_RAW_WINDOW_SECONDS * float(fs))))
     except Exception:
         return _RAW_WINDOW
+
+
+def _live_signal_window_samples(fs: int = _RAW_EEG_FS) -> int:
+    return max(1, int(round(_LIVE_SIGNAL_WINDOW_SECONDS * float(fs))))
 
 
 def _raw_step_samples(fs: int = _RAW_EEG_FS) -> int:

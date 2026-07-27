@@ -52,7 +52,8 @@
         "submit": "Submit Partner ID",
         "submitting": "Submitting...",
         "errorNotFound": "Partner ID is not recognised. Please check and try again.",
-        "errorConnection": "Could not verify Partner ID. Please check your connection and try again."
+        "errorConnection": "Could not verify Partner ID. Please check your connection and try again.",
+        "errorNoBooking": "You do not have an active booking with this partner yet. Please book a session before continuing."
     },
     "warning": {
         "title": "Before you sign in, make sure your headset is:",
@@ -410,6 +411,7 @@
         "eyesOpen": "Eyes Open",
         "advanced": "Advanced",
         "locked": "Locked",
+        "sessionThreeLock": "Requires 3 partner bookings to unlock",
         "alreadyDone": "This task has already been completed. You may run it again or select a different task.",
         "runAgain": "Run Again",
         "taskInstructions": "Task Instructions",

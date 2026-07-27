@@ -52,7 +52,8 @@
         "submit": "Enviar ID de socio",
         "submitting": "Enviando...",
         "errorNotFound": "No se reconoce el ID del socio. Por favor verifique e intente nuevamente.",
-        "errorConnection": "No se pudo verificar la identificación del socio. Por favor verifique su conexión e inténtelo nuevamente."
+        "errorConnection": "No se pudo verificar la identificación del socio. Por favor verifique su conexión e inténtelo nuevamente.",
+        "errorNoBooking": "Aún no tienes una reserva activa con este socio. Reserva una sesión antes de continuar."
     },
     "warning": {
         "title": "Antes de iniciar sesión, asegúrese de que sus auriculares estén:",
@@ -410,6 +411,7 @@
         "eyesOpen": "Ojos abiertos",
         "advanced": "Avanzado",
         "locked": "Bloqueado",
+        "sessionThreeLock": "Requiere 3 reservas con el socio para desbloquearse",
         "alreadyDone": "Esta tarea ya se ha completado. Puede ejecutarlo nuevamente o seleccionar una tarea diferente.",
         "runAgain": "Ejecutar de nuevo",
         "taskInstructions": "Instrucciones de tarea",

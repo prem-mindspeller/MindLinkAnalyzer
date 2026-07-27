@@ -113,6 +113,21 @@ const failingAnalysis = {
   assert.match(quality.recordingSignal.reason, /not worn|noisy/i);
 }
 {
+  const quality = evaluateTaskQuality(passingAnalysis, 'mental_math', {
+    signalStats: {
+      total: 300,
+      good: 295,
+      noisy: 5,
+      notWorn: 0,
+      worstPoorSignal: 80,
+    },
+  });
+
+  assert.equal(quality.recordingSignal.acceptable, true);
+  assert.equal(quality.sufficient, true);
+}
+
+{
   assert.equal(
     resolveTaskQualityOutcome({ sufficient: false }, { forcedRepeatUsed: false }),
     'force_repeat',

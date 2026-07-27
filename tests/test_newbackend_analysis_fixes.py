@@ -220,39 +220,50 @@ def test_websocket_keepalive_sends_heartbeat_without_device_disconnect():
     assert backend._status == "disconnected"
 
 
-def test_mindrove_contact_state_matches_terminal_variance_gate():
+def test_mindrove_live_signal_window_is_five_seconds():
     backend = _load_backend()
-    worn_samples = _mindrove_alpha_samples(n=80)
-    not_worn_samples = [
-        {"fp1": 100.0, "fp2": -50.0, "o1": 0.0, "o2": 0.0}
-        for _ in range(80)
-    ]
 
-    worn = backend._mindrove_contact_state_from_samples(worn_samples)
-    not_worn = backend._mindrove_contact_state_from_samples(not_worn_samples)
+    assert backend._live_signal_window_samples(500) == 2500
+    assert backend._live_signal_window_samples(400) == 2000
+
+
+def test_mindrove_contact_state_restores_not_worn_detection():
+    backend = _load_backend()
+    worn = backend._mindrove_contact_state_from_samples(_mindrove_alpha_samples(n=500))
+    not_worn = backend._mindrove_contact_state_from_samples([
+        {"fp1": 100.0, "fp2": -50.0, "o1": 0.0, "o2": 0.0}
+        for _ in range(500)
+    ])
 
     assert worn["worn"] is True
-    assert worn["reason"] == "eeg_variance_fallback"
     assert worn["poor_signal"] == 0
     assert not_worn["worn"] is False
-    assert not_worn["reason"] == "low_variance"
     assert not_worn["poor_signal"] == 200
 
 
-def test_mindrove_contact_debouncer_blocks_single_false_good_window():
+def test_mindrove_filtered_quality_check_keeps_normal_alpha_clean():
     backend = _load_backend()
-    smoother = backend._MindRoveContactDebouncer(good_required=3, bad_required=1)
+    samples = _mindrove_alpha_samples()
+    filtered_aggregate = [sum(sample.values()) / len(sample) for sample in samples]
 
+    assert backend._raw_window_qc(filtered_aggregate, fs=500) is None
+
+
+def test_mindrove_signal_debouncer_requires_two_bad_blocks():
+    backend = _load_backend()
+    quality = backend._MindRoveSignalDebouncer(good_required=1, bad_required=2)
     states = [
-        {"worn": False, "poor_signal": 200, "reason": "low_variance", "quality": 0.0},
-        {"worn": True, "poor_signal": 0, "reason": "eeg_variance_fallback", "quality": 1.0},
-        {"worn": False, "poor_signal": 200, "reason": "low_variance", "quality": 0.0},
+        {"good": True, "poor_signal": 0, "reason": "signal_good"},
+        {"good": False, "poor_signal": 80, "reason": "signal_noisy"},
+        {"good": False, "poor_signal": 80, "reason": "signal_noisy"},
     ]
 
-    outputs = [smoother.update(state)["poor_signal"] for state in states]
+    assert [quality.update(state)["poor_signal"] for state in states] == [0, 0, 80]
 
-    assert outputs == [200, 200, 200]
-
+    contact = backend._MindRoveContactDebouncer()
+    state = {"worn": True, "poor_signal": 0}
+    assert [contact.update(state)["poor_signal"] for _ in range(3)] == [200, 200, 0]
+    assert contact.update({"worn": False, "poor_signal": 200})["poor_signal"] == 200
 
 def test_mindrove_baseline_qc_rejects_all_flat_channels_as_flatline():
     backend = _load_backend()

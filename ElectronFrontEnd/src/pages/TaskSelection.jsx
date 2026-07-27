@@ -227,6 +227,7 @@ const TaskSelection = () => {
     const navigate = useNavigate();
     const { t } = useTranslation();
     const pathway = sessionStorage.getItem('selectedPathway') || 'personal';
+    const hasSessionOne = sessionStorage.getItem('hasSessionOne') === 'true';
     const hasAdvancedBooking = sessionStorage.getItem('hasAdvancedBooking') === 'true';
     const hasSessionThree = sessionStorage.getItem('hasSessionThree') === 'true';
 
@@ -234,25 +235,27 @@ const TaskSelection = () => {
     const advancedTaskIds = PATHWAY_TASKS[pathway] || [];
     const visibleTaskIds = [...COGNITIVE_TASKS, ...advancedTaskIds];
 
-    const [selectedId, setSelectedId] = useState(visibleTaskIds[0] || null);
+    // All tasks that are currently unlocked — must ALL be done before analysis
+    const enabledTaskIds = [
+        ...(hasSessionOne ? COGNITIVE_TASKS : []),
+        ...(hasAdvancedBooking ? advancedTaskIds : []),
+        ...(hasSessionThree ? SESSION_THREE_TASKS : []),
+    ];
+
+    const [selectedId, setSelectedId] = useState(enabledTaskIds[0] || visibleTaskIds[0] || null);
     const [activeTaskId, setActiveTaskId] = useState(null); // currently executing
     const [completedIds, setCompletedIds] = useState(() => {
         try { return JSON.parse(sessionStorage.getItem('completedTasks') || '[]'); }
         catch { return []; }
     });
 
-    // All tasks that are currently unlocked — must ALL be done before analysis
-    const enabledTaskIds = [
-        ...COGNITIVE_TASKS,
-        ...(hasAdvancedBooking ? advancedTaskIds : []),
-        ...(hasSessionThree ? SESSION_THREE_TASKS : []),
-    ];
     const completedEnabledCount = enabledTaskIds.filter(id => completedIds.includes(id)).length;
-    const allEnabledCompleted = completedEnabledCount === enabledTaskIds.length;
+    const allEnabledCompleted = enabledTaskIds.length > 0 && completedEnabledCount === enabledTaskIds.length;
     const hasNewSessionUnlocked = hasAdvancedBooking || hasSessionThree;
     const pendingEnabledIds = enabledTaskIds.filter(id => !completedIds.includes(id));
 
     const selectedMeta = selectedId ? TASK_META[selectedId] : null;
+    const selectedLocked = selectedId ? !enabledTaskIds.includes(selectedId) : false;
     const [qualityCheckTaskId, setQualityCheckTaskId] = useState(null);
     const [qualityDialog, setQualityDialog] = useState(null);
     const [signalStatus, setSignalStatus] = useState(wsEegService.getStatus());
@@ -310,12 +313,12 @@ const TaskSelection = () => {
     }, [clearForcedRepeatForTask]);
 
     const handleStartTask = useCallback(() => {
-        if (!selectedId) return;
+        if (!selectedId || selectedLocked) return;
         if (completedIds.includes(selectedId)) {
             clearForcedRepeatForTask(selectedId);
         }
         setActiveTaskId(selectedId);
-    }, [selectedId, completedIds, clearForcedRepeatForTask]);
+    }, [selectedId, selectedLocked, completedIds, clearForcedRepeatForTask]);
 
     const handleTaskComplete = useCallback(async (taskId, samples, signalStats = null) => {
         setActiveTaskId(null);
@@ -440,28 +443,38 @@ const TaskSelection = () => {
                             {/* General tasks group */}
                             <p className="ts-group-label">
                                 {t('taskSelection.generalTasks')}
-                                <span className="ts-group-progress">
-                                    {COGNITIVE_TASKS.filter(id => completedIds.includes(id)).length}/{COGNITIVE_TASKS.length}
-                                </span>
+                                {hasSessionOne ? (
+                                    <span className="ts-group-progress">
+                                        {COGNITIVE_TASKS.filter(id => completedIds.includes(id)).length}/{COGNITIVE_TASKS.length}
+                                    </span>
+                                ) : (
+                                    <span className="ts-group-lock-hint">
+                                        &nbsp;· {t('taskSelection.sessionOneLock', { defaultValue: 'Requires partner booking to unlock' })}
+                                    </span>
+                                )}
                             </p>
                             {COGNITIVE_TASKS.map(id => {
                                 const meta = TASK_META[id];
                                 const done = completedIds.includes(id);
+                                const locked = !hasSessionOne;
                                 return (
                                     <button
                                         key={id}
-                                        className={`ts-task-item${selectedId === id ? ' selected' : ''}${done ? ' done' : ''}`}
-                                        onClick={() => setSelectedId(id)}
+                                        className={`ts-task-item${selectedId === id ? ' selected' : ''}${done ? ' done' : ''}${locked ? ' locked' : ''}`}
+                                        onClick={() => !locked && setSelectedId(id)}
+                                        disabled={locked}
                                     >
                                         <span className="ts-task-item-icon">
-                                            {done
-                                                ? <FontAwesomeIcon icon={faCircleCheck} />
-                                                : meta.eyesClosed
-                                                    ? <FontAwesomeIcon icon={faMoon} />
-                                                    : <FontAwesomeIcon icon={faEye} />}
+                                            {locked
+                                                ? <FontAwesomeIcon icon={faLock} />
+                                                : done
+                                                    ? <FontAwesomeIcon icon={faCircleCheck} />
+                                                    : meta.eyesClosed
+                                                        ? <FontAwesomeIcon icon={faMoon} />
+                                                        : <FontAwesomeIcon icon={faEye} />}
                                         </span>
                                         <span className="ts-task-item-name">{t(`taskMeta.${id}.name`, { defaultValue: meta.name })}</span>
-                                        <span className="ts-task-item-dur">{meta.duration}s</span>
+                                        <span className="ts-task-item-dur">{locked ? t('taskSelection.locked') : `${meta.duration}s`}</span>
                                     </button>
                                 );
                             })}
@@ -502,7 +515,7 @@ const TaskSelection = () => {
                                 {t('taskSelection.sessionThreeTasks', { defaultValue: 'Session 3 — Moderatory Assessment' })}
                                 {!hasSessionThree && (
                                     <span className="ts-group-lock-hint">
-                                        &nbsp;· {t('taskSelection.sessionThreeLock', { defaultValue: 'Requires 2nd partner booking to unlock' })}
+                                        &nbsp;· {t('taskSelection.sessionThreeLock', { defaultValue: 'Requires 3rd partner booking to unlock' })}
                                     </span>
                                 )}
                                 {hasSessionThree && (
@@ -543,7 +556,7 @@ const TaskSelection = () => {
                             {selectedMeta ? (
                                 <>
                                     <h2 className="ts-detail-name">
-                                        {completedIds.includes(selectedId) && <span className="ts-done-badge"><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 4 }} />{t('taskSelection.completed')}</span>}
+                                        {!selectedLocked && completedIds.includes(selectedId) && <span className="ts-done-badge"><FontAwesomeIcon icon={faCircleCheck} style={{ marginRight: 4 }} />{t('taskSelection.completed')}</span>}
                                         {t(`taskMeta.${selectedId}.name`, { defaultValue: selectedMeta.name })}
                                     </h2>
 
@@ -561,7 +574,12 @@ const TaskSelection = () => {
                                         <p className="ts-detail-desc">{t(`taskMeta.${selectedId}.description`, { defaultValue: selectedMeta.description })}</p>
                                     )}
 
-                                    {completedIds.includes(selectedId) ? (
+                                    {selectedLocked ? (
+                                        <p className="ts-already-done">
+                                            <FontAwesomeIcon icon={faLock} style={{ marginRight: 6 }} />
+                                            {t('taskSelection.lockedTask', { defaultValue: 'This task is locked for the current booking level.' })}
+                                        </p>
+                                    ) : completedIds.includes(selectedId) ? (
                                         <p className="ts-already-done">
                                             <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 6 }} />
                                             {t('taskSelection.alreadyDone')}
@@ -571,9 +589,10 @@ const TaskSelection = () => {
                                     <button
                                         className="ts-start-btn"
                                         onClick={handleStartTask}
+                                        disabled={selectedLocked}
                                     >
                                         <FontAwesomeIcon icon={faPlay} style={{ marginRight: 8 }} />
-                                        {completedIds.includes(selectedId) ? t('taskSelection.runAgain') : t('taskSelection.taskInstructions')}
+                                        {selectedLocked ? t('taskSelection.locked') : completedIds.includes(selectedId) ? t('taskSelection.runAgain') : t('taskSelection.taskInstructions')}
                                     </button>
                                 </>
                             ) : (
