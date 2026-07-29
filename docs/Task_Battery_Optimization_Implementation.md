@@ -5,9 +5,10 @@ MindLink Analyzer. The current stimuli and scoring are a candidate/pilot
 configuration, never validated production norms. Version identifiers in the
 active protocol profile are stored with every task result.
 
-## Implemented session order
+## Implemented session contents
 
-The protocol is cumulative and the task order is fixed:
+The protocol is cumulative. Users may complete the required tasks in any order;
+the lists below define the required tasks, not an enforced sequence:
 
 - Session 1: Task 3, Task 2, Task 1, Task 4.
 - Session 2: Task 3, Task 2, Task 1, Task 4, Task 6, Task 7, eyes-open
@@ -15,10 +16,10 @@ The protocol is cumulative and the task order is fixed:
 - Session 3: Task 3, Task 2, Task 1, Task 4, Task 6, Task 7, Task 11,
   eyes-open baseline, Task 9, Task 5, Task 8, Task 10, Task 12.
 
-The session-1 eyes-closed baseline is required before the first task. The
-eyes-open fixation baseline is a mandatory checkpoint immediately before the
-visual block in sessions 2 and 3. Completion is scoped to both battery version
-and protocol session; an older completion marker cannot unlock a new run.
+The session-1 eyes-closed baseline is required before any task. The eyes-open
+fixation baseline is required before any eyes-open task in sessions 2 and 3.
+Completion is scoped to both battery version and protocol session; an older
+completion marker cannot unlock a new run.
 
 ## Canonical tasks and page-47 block durations
 
@@ -103,8 +104,9 @@ rejected rather than being interpreted as the active protocol.
   matched baseline each require at least 20 contiguous clean seconds.
 - A failed quality check saves neither the recording nor task completion. The
   failed task, or its failed matched baseline, must be recorded again.
-- Once an attempt passes quality control and is committed, it is immutable for
-  that protocol session; voluntary best-attempt reruns are not permitted.
+- A user may rerun any task. The accepted recording and behavioural metadata
+  are replaced only when the new attempt passes quality control; a failed
+  repeat leaves the previously accepted attempt intact.
 - Task-versus-baseline comparison is eye-state matched. Eyes-open tasks are not
   evaluated only against the eyes-closed reference.
 - A session baseline condition is analyzed once and reused by every task that

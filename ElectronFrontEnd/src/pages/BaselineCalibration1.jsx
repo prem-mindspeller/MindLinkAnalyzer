@@ -481,7 +481,7 @@ const BaselineCalibration1 = () => {
                             </div>
                         )}
 
-                        {entryContext.isEyesOpenCheckpoint && (
+                        {(entryContext.isEyesOpenCheckpoint || !entryContext.isRequestedCheckpoint) && (
                             <div className={`cal-phase-card${bothDone ? ' phase-done' : ''}`}>
                                 <span className="cal-phase-icon"><FontAwesomeIcon icon={faEye} /></span>
                                 <div className="cal-phase-info">
@@ -490,7 +490,7 @@ const BaselineCalibration1 = () => {
                                 </div>
                                 <button
                                     className="cal-phase-btn"
-                                    disabled={!baselineStateReady || storageBusy || isBusy || bothDone}
+                                    disabled={!baselineStateReady || storageBusy || isBusy || bothDone || (!entryContext.isEyesOpenCheckpoint && !ecDone)}
                                     onClick={() => setPhase(PHASE.PREP_EO)}
                                 >
                                     {bothDone
@@ -511,7 +511,7 @@ const BaselineCalibration1 = () => {
                 {!entryContext.isEyesOpenCheckpoint && (
                     <button
                         className="btn-next-eeg"
-                        disabled={!ecDone}
+                        disabled={!bothDone}
                         onClick={handleNext}
                     >
                         {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />

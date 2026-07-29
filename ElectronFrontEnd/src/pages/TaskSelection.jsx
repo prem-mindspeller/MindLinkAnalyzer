@@ -45,15 +45,10 @@ import {
 import '../styles/liveEegReading.css';
 import '../styles/taskSelection.css';
 
-// Development convenience: once the mandatory baselines are recorded, allow
-// starting any task in any order instead of enforcing the fixed sequence.
-// Production keeps the controlled sequential administration. (`npm run dev`
-// builds with NODE_ENV=development; the packaged app builds production.)
-const ALLOW_ANY_TASK_ORDER = process.env.NODE_ENV === 'development';
-// Development convenience: allow re-running an already-completed task. Production
-// keeps accepted attempts immutable (one attempt per task) to avoid practice and
-// best-attempt selection bias.
-const ALLOW_RERUN_COMPLETED_TASKS = process.env.NODE_ENV === 'development';
+// Users choose task order. Required matched baselines still gate analysis.
+const ALLOW_ANY_TASK_ORDER = true;
+// A replacement is committed only after its new recording passes quality checks.
+const ALLOW_RERUN_COMPLETED_TASKS = true;
 
 const readCompletedTasks = () => {
     try {
@@ -180,6 +175,7 @@ const TaskSelection = () => {
     const protocolSession = useMemo(() => deriveProtocolSession(sessionStorage), []);
     const sequence = useMemo(() => taskSequenceForSession(sessionDepth), [sessionDepth]);
     const enabledTaskIds = useMemo(() => taskIdsForSession(sessionDepth), [sessionDepth]);
+    const allTaskIds = useMemo(() => taskIdsForSession('session_3'), []);
 
     const [completedIds, setCompletedIds] = useState(() => {
         const storedBatteryVersion = sessionStorage.getItem('taskBatteryVersion');
@@ -236,10 +232,10 @@ const TaskSelection = () => {
 
     useEffect(() => {
         if (!baselineStatus.loaded) return;
-        if (eyesClosedBaselineDone) return;
-        sessionStorage.setItem(BASELINE_PHASE_REQUEST_KEY, BASELINE_RECORDING_PHASE.EYES_CLOSED);
+        if (eyesClosedBaselineDone && eyesOpenBaselineDone) return;
+        sessionStorage.removeItem(BASELINE_PHASE_REQUEST_KEY);
         navigate('/baselineCalibration1', { replace: true });
-    }, [baselineStatus.loaded, eyesClosedBaselineDone, navigate]);
+    }, [baselineStatus.loaded, eyesClosedBaselineDone, eyesOpenBaselineDone, navigate]);
 
     const isSequenceItemComplete = useCallback((item) => (
         item === EYES_OPEN_BASELINE_CHECKPOINT ? eyesOpenBaselineDone : completedIds.includes(item)
@@ -292,11 +288,12 @@ const TaskSelection = () => {
     const positionOf = useCallback((item) => sequence.indexOf(item), [sequence]);
     const nextPosition = nextRequiredItem == null ? sequence.length : positionOf(nextRequiredItem);
     const taskIsUnlocked = useCallback((taskId) => {
-        if (!baselineStatus.loaded || !eyesClosedBaselineDone || baselineStatus.error) return false;
+        if (!baselineStatus.loaded || !eyesClosedBaselineDone || !eyesOpenBaselineDone || baselineStatus.error) return false;
+        if (!enabledTaskIds.includes(taskId)) return false;
         const position = positionOf(taskId);
         if (position < 0) return false;
         if (ALLOW_ANY_TASK_ORDER) {
-            // Any order in dev, but the matched baseline stays mandatory: an
+            // Tasks may run in any order, but the matched baseline stays mandatory: an
             // eyes-open task still needs the eyes-open baseline (its analysis
             // requires it too), so it unlocks only once that baseline is done.
             return TASK_DEFINITIONS[taskId]?.baseline !== 'eyes_open' || eyesOpenBaselineDone;
@@ -348,10 +345,7 @@ const TaskSelection = () => {
             navigate('/baselineCalibration1');
             return;
         }
-        // Accepted attempts are immutable within a protocol session (production):
-        // a repeat is available only from the failed-QC dialog before an attempt
-        // is committed, avoiding practice and best-attempt selection bias.
-        // ALLOW_RERUN_COMPLETED_TASKS lifts this for development testing only.
+        // The existing accepted attempt remains until this replacement passes quality checks.
         if (
             !selectedId
             || (!ALLOW_RERUN_COMPLETED_TASKS && completedIds.includes(selectedId))
@@ -429,7 +423,7 @@ const TaskSelection = () => {
                 <div className="task-selection-page">
                     <div className="ts-page-header">
                         <h1 className="ts-page-title">Optimized Cognitive Task Battery</h1>
-                        <p className="ts-page-subtitle">Session {protocolSession} · {sessionLabel} · Complete the continuous blocks in order</p>
+                        <p className="ts-page-subtitle">Session {protocolSession} · {sessionLabel} · Complete the required blocks in any order</p>
                     </div>
 
                     <div className={`ts-repeatability-notice${allEnabledCompleted ? ' ts-notice-complete' : ''}`}>
@@ -445,10 +439,10 @@ const TaskSelection = () => {
                     <div className="ts-layout">
                         <div className="ts-task-list optimized-sequence-list">
                             <p className="ts-group-label">
-                                Session sequence
+                                Session tasks
                                 <span className="ts-group-progress">{completedEnabledCount}/{enabledTaskIds.length}</span>
                             </p>
-                            {sequence.map((item, index) => {
+                            {allTaskIds.slice().sort((left, right) => TASK_DEFINITIONS[left].number - TASK_DEFINITIONS[right].number).map((item, index) => {
                                 if (item === EYES_OPEN_BASELINE_CHECKPOINT) {
                                     const done = eyesOpenBaselineDone;
                                     const locked = (
@@ -472,8 +466,15 @@ const TaskSelection = () => {
                                 }
                                 const meta = TASK_DEFINITIONS[item];
                                 const done = completedIds.includes(item);
+                                const booked = enabledTaskIds.includes(item);
                                 const unlocked = taskIsUnlocked(item);
                                 return (
+                                    <>
+                                        {[1, 5, 10].includes(meta.number) && (
+                                            <p className="ts-group-label">
+                                                {meta.number === 1 ? 'Session 1 - Tasks 1-4' : meta.number === 5 ? 'Session 2 - Tasks 5-9 - 1+ booking required' : 'Session 3 - Tasks 10-12 - 2+ bookings required'}
+                                            </p>
+                                        )}
                                     <button
                                         key={item}
                                         className={`ts-task-item${selectedId === item ? ' selected' : ''}${done ? ' done' : ''}${!unlocked ? ' locked' : ''}`}
@@ -485,8 +486,9 @@ const TaskSelection = () => {
                                             {done ? <FontAwesomeIcon icon={faCircleCheck} /> : !unlocked ? <FontAwesomeIcon icon={faLock} /> : <FontAwesomeIcon icon={meta.eyeState === 'closed' ? faMoon : faEye} />}
                                         </span>
                                         <span className="ts-task-item-name">{meta.shortName}</span>
-                                        <span className="ts-task-item-dur">{meta.duration}s</span>
+                                        <span className="ts-task-item-dur">{booked ? `${meta.duration}s` : 'Booking required'}</span>
                                     </button>
+                                    </>
                                 );
                             })}
                         </div>
@@ -532,7 +534,7 @@ const TaskSelection = () => {
                                         onClick={startSelected}
                                         disabled={(completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS) || !taskIsUnlocked(selectedId) || !isGoodSignal}
                                     >
-                                        <FontAwesomeIcon icon={completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? faCircleCheck : faPlay} /> {completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? 'Completed · accepted attempt locked' : !isGoodSignal ? 'Wait for good signal' : completedIds.includes(selectedId) ? 'Re-run task (dev)' : 'Read task instructions'}
+                                        <FontAwesomeIcon icon={completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? faCircleCheck : faPlay} /> {completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? 'Completed · accepted attempt locked' : !isGoodSignal ? 'Wait for good signal' : completedIds.includes(selectedId) ? 'Re-run task · replace accepted data' : 'Read task instructions'}
                                     </button>
                                 </>
                             ) : null}
