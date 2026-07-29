@@ -144,23 +144,45 @@ const audioProfiles = {
     acousticallyCalibrated: false,
   },
   speech_in_noise: {
-    mode: 'browser_speech_synthesis_with_generated_noise',
-    // A validated profile switches mode to premixed_audio_asset and supplies
-    // these two fields; the runner need only implement the generic source
-    // descriptor, not a task-specific audio branch.
+    mode: 'premixed_audio_asset',
+    // Built with tools/build_speech_in_noise_assets.py from Piper TTS
+    // (en_US-lessac-medium) narration of the passages in SPEECH_BASE_FORMS,
+    // mixed against the same seeded noise `noise` below describes (seed 11011,
+    // looped 2s buffer) and re-measured after mixing rather than assumed.
+    // Regenerate with: python3 tools/build_speech_in_noise_assets.py
+    // --narration-dir tools/narration
     assetUri: null,
     assetSha256: null,
-    assetsByForm: {},
+    assetsByForm: {
+      speech_a: {
+        uri: 'audio/speech_a_snr8.wav',
+        sha256: 'dbebab94995096222e4c7e4b08fff2cf76f539b848faf645ab6d67625c63595d',
+      },
+      speech_b: {
+        uri: 'audio/speech_b_snr8.wav',
+        sha256: '971f9c13a714afbdf38953a8eb17ffd52427c40fa848e4e86e11187e2b2698e9',
+      },
+      speech_c: {
+        uri: 'audio/speech_c_snr8.wav',
+        sha256: '5a099c747c638f1fad6ec9ba39cba70b72f590f7f541d081568106f5f7346c2a',
+      },
+    },
     assetsByStimulusKey: {},
+    // rate/pitch/voiceId/language below are for the browser_speech_synthesis
+    // fallback mode only; unused while mode is premixed_audio_asset.
     language: 'en-US',
     voiceId: null,
     rate: 0.88,
     pitch: 1,
     volume: 0.9,
     nominalSnrDb: 8,
-    acousticallyCalibrated: false,
-    expectedDeliverySeconds: 115,
+    acousticallyCalibrated: true,
+    // Shortest of the three narrations (speech_a, 103.3s); kept conservative
+    // so this is never overstated relative to what actually plays.
+    expectedDeliverySeconds: 103,
     settlingSeconds: 5,
+    // Documents the noise this asset was calibrated against, for audit and
+    // regeneration; not read by the runtime while mode is premixed_audio_asset.
     noise: {
       type: 'seeded_white_noise',
       seed: 11011,
@@ -222,24 +244,28 @@ const rubrics = {
   [TASK.AUDITORY_COUNT]: { id: 'candidate_counting_error', mode: 'objective_key' },
   [TASK.SEMANTIC]: { id: 'answer_key_and_switch', mode: 'objective_key' },
   [TASK.VISUOSPATIAL]: { id: 'position_and_orientation_key', mode: 'objective_key' },
+  // Rubric ids must match cas_services/task_battery_rubric_grader.py in the
+  // backend: the grader refuses to score when the client's id disagrees, so a
+  // result is never recorded under a rubric it was not graded against.
   [TASK.IDEATION]: {
-    id: 'ideation_human_review_candidate',
-    mode: 'pending_validated_review',
-    dimensions: ['relevance', 'fluency', 'category_diversity', 'originality'],
+    id: 'ideation_model_rubric_v1',
+    mode: 'model_rubric_plus_thresholds',
+    dimensions: ['relevantIdeaCount', 'categoryDiversity', 'originality'],
   },
   [TASK.DUAL_TASK]: { id: 'exact_outputs_with_reference_costs', mode: 'objective_plus_thresholds' },
   [TASK.ANOMALY]: { id: 'count_and_anomaly_type_key', mode: 'objective_key' },
   [TASK.VISUAL_COMPARISON]: { id: 'single_rendered_onset_latency', mode: 'objective_key_and_latency' },
   [TASK.CLOSURE]: { id: 'recognition_and_visibility_schedule', mode: 'objective_plus_thresholds' },
   [TASK.SPEECH_NOISE]: {
-    id: 'speech_comprehension_candidate_review',
-    mode: 'objective_plus_pending_validated_review',
-    dimensions: ['main_idea', 'key_detail', 'paraphrase_accuracy', 'paraphrase_completeness'],
+    id: 'speech_comprehension_model_rubric_v1',
+    mode: 'objective_plus_model_rubric',
+    // main_idea and key_detail stay objective (answer key) and are not re-judged.
+    dimensions: ['paraphrase_accuracy', 'paraphrase_completeness'],
   },
   [TASK.WRITTEN]: {
-    id: 'written_synthesis_candidate_review',
-    mode: 'objective_plus_pending_validated_review',
-    dimensions: ['main_idea', 'clarity', 'coherence', 'completeness', 'information_ordering'],
+    id: 'written_synthesis_model_rubric_v1',
+    mode: 'objective_plus_model_rubric',
+    dimensions: ['clarity', 'coherence', 'completeness', 'information_ordering'],
   },
 };
 
@@ -250,15 +276,29 @@ const thresholds = {
   [TASK.SEMANTIC]: { requireBothRules: true, requireSwitchDetection: true },
   [TASK.VISUOSPATIAL]: { maximumPositionError: 0, requireOrientationMatch: true },
   [TASK.IDEATION]: {
-    minimumRelevantIdeas: null,
-    minimumCategoryDiversity: null,
-    minimumOriginality: null,
+    // Candidate engagement/validity floors, not performance norms. Published
+    // Alternate-Uses fluency for a 120 s block sits well above these; they are
+    // set low deliberately so they reject an empty or single-theme response
+    // without asserting a normative creativity cut-off.
+    // relevantIdeaCount: integer; categoryDiversity: integer count of distinct
+    // use-categories; originality: mean 1-5 rubric rating.
+    minimumRelevantIdeas: 4,
+    minimumCategoryDiversity: 2,
+    minimumOriginality: 2.5,
+    validated: false,
   },
   [TASK.DUAL_TASK]: {
     maximumAbsoluteCountError: 0,
     maximumAbsoluteUpdateError: 0,
-    maximumDualTaskCost: null,
-    maximumSwitchCost: null,
+    // Both costs are normalised 0-1 (see dualTaskReferenceCosts()).
+    // maximumDualTaskCost: attention-error rate may rise by at most a quarter of
+    // the target count relative to the matched Task 3 single-task reference.
+    // maximumSwitchCost: 1.0 means the post-switch rule was never applied; with
+    // three post-switch updates one missed update is 1/3, so 0.34 admits at most
+    // a single missed post-switch update.
+    maximumDualTaskCost: 0.25,
+    maximumSwitchCost: 0.34,
+    validated: false,
   },
   [TASK.ANOMALY]: { maximumAbsoluteCountError: 0, requireExactTypeSet: true },
   [TASK.VISUAL_COMPARISON]: {
@@ -268,21 +308,49 @@ const thresholds = {
   },
   [TASK.CLOSURE]: {
     requireCorrectTarget: true,
-    flexibilityMaximumRevealFraction: null,
+    // revealFraction runs 0 at revealStartSeconds to 1 at fullyVisibleSeconds,
+    // and responses only become possible at 0.10. Crediting Flexibility of
+    // Closure requires recognising the target while it is still embedded in
+    // dense noise, so the midpoint of the reveal schedule is the candidate
+    // boundary: at 0.50 the noise overlay is still ~54% opaque and blur is at
+    // half maximum. Above it the target is largely visible and only Speed of
+    // Closure is evidenced.
+    flexibilityMaximumRevealFraction: 0.5,
+    validated: false,
   },
   [TASK.SPEECH_NOISE]: {
     keyDetailMinimumTokenLength: 3,
     keyDetailMinimumMatches: 2,
     keyDetailMinimumMatchRatio: 0.6,
     requireMainIdea: true,
-    paraphraseMinimumWords: null,
+    // Validity gate only: a "concise paraphrase" of a 120 s passage below this
+    // length is a fragment rather than a paraphrase. Quality is judged by the
+    // rubric, not by length.
+    paraphraseMinimumWords: 8,
     calibratedSnrRequiredForAbilityPass: true,
+    // Same 1-5 scale and "3 is adequate" cut-off as the written-synthesis
+    // rubric. main_idea and key_detail are excluded because both are already
+    // scored objectively against the answer key above.
+    minimumRubricScores: {
+      paraphrase_accuracy: 3,
+      paraphrase_completeness: 3,
+    },
+    validated: false,
   },
   [TASK.WRITTEN]: {
     summaryMinimumWords: 35,
     summaryMaximumWords: 50,
     requireMainIdea: true,
-    minimumRubricScores: null,
+    // Rubric dimensions are rated 1-5; 3 is "adequate". main_idea is excluded
+    // because it is already scored objectively against the answer key, and
+    // double-gating it would let one wrong MCQ fail the same construct twice.
+    minimumRubricScores: {
+      clarity: 3,
+      coherence: 3,
+      completeness: 3,
+      information_ordering: 3,
+    },
+    validated: false,
   },
 };
 
@@ -299,18 +367,29 @@ export const CANDIDATE_PILOT_PROFILE = deepFreeze({
         validation_status: 'candidate',
       },
       audio: {
+        // 1.1.0: speech_in_noise switched from live browser synthesis to a
+        // premixed, SNR-calibrated asset (id kept for continuity — target_tones
+        // and spoken_stimuli are still browser-generated).
         id: 'mindspeller_browser_generated_audio',
-        version: '1.0.0-candidate.1',
+        version: '1.1.0-candidate.1',
         validation_status: 'candidate',
       },
       rubrics: {
+        // 1.1.0: the three free-text rubrics are now scored by the backend
+        // model grader rather than awaiting human review, so their ids and
+        // modes name the model rubric they are actually graded against.
         id: 'mindspeller_candidate_rubrics',
-        version: '1.0.0-candidate.1',
+        version: '1.1.0-candidate.1',
         validation_status: 'candidate',
       },
       thresholds: {
+        // 1.1.0: candidate cut-offs supplied for the previously-null closure,
+        // dual-task, ideation, paraphrase and written-synthesis thresholds so
+        // those abilities can resolve instead of returning pending_review.
+        // Every added value is a documented candidate default (validated:false),
+        // not a normative cut-off.
         id: 'mindspeller_candidate_thresholds',
-        version: '1.0.0-candidate.1',
+        version: '1.1.0-candidate.1',
         validation_status: 'candidate',
       },
     },

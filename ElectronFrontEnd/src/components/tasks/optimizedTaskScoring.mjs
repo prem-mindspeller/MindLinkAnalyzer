@@ -21,6 +21,11 @@ const allAbilities = (taskId, status) => Object.fromEntries(
 );
 
 const numeric = (value) => {
+  // null/undefined/blank mean "not measured" and must not collapse to 0:
+  // Number(null) and Number('') are both 0, which would silently turn a missing
+  // reference cost into "no cost", or an empty answer field into the answer 0.
+  if (value == null) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
@@ -59,12 +64,24 @@ const externalRubricStatus = (runtime, rubric) => {
     : null;
 };
 
-const thresholdRubricStatus = (runtime, minimumRubricScores) => {
+/**
+ * Rubric scores are only usable when they were produced for *this* rubric.
+ * Without the id guard, an assessment carried over from another task or from a
+ * superseded rubric version could silently satisfy these thresholds.
+ */
+const rubricScoresFor = (runtime, rubric) => {
+  const assessment = runtime?.rubricAssessment;
+  if (!assessment || assessment.rubricId !== rubric?.id) return null;
+  const scores = assessment.scores;
+  return scores && typeof scores === 'object' ? scores : null;
+};
+
+const thresholdRubricStatus = (runtime, minimumRubricScores, rubric) => {
   if (!minimumRubricScores || typeof minimumRubricScores !== 'object') return null;
   const entries = Object.entries(minimumRubricScores);
   if (!entries.length) return null;
-  const scores = runtime?.rubricAssessment?.scores;
-  if (!scores || typeof scores !== 'object') return null;
+  const scores = rubricScoresFor(runtime, rubric);
+  if (!scores) return null;
   const decisions = entries.map(([dimension, minimum]) => {
     const score = numeric(scores[dimension]);
     const threshold = numeric(minimum);
@@ -224,9 +241,10 @@ export function scoreOptimizedTask(
 
   if (taskId === TASK_IDS.IDEATION) {
     const ideas = String(response.ideas || '').split(/\n+/).map((idea) => idea.trim()).filter(Boolean);
-    const relevantIdeaCount = numeric(runtime?.rubricAssessment?.scores?.relevantIdeaCount);
-    const originalityScore = numeric(runtime?.rubricAssessment?.scores?.originality);
-    const categoryDiversity = numeric(runtime?.rubricAssessment?.scores?.categoryDiversity);
+    const ideationScores = rubricScoresFor(runtime, rubric) || {};
+    const relevantIdeaCount = numeric(ideationScores.relevantIdeaCount);
+    const originalityScore = numeric(ideationScores.originality);
+    const categoryDiversity = numeric(ideationScores.categoryDiversity);
     const configuredThresholdDecisionAvailable = [
       thresholds.minimumRelevantIdeas,
       thresholds.minimumCategoryDiversity,
@@ -283,9 +301,20 @@ export function scoreOptimizedTask(
     const costsPass = costThresholdsAvailable
       && dualTaskCost <= thresholds.maximumDualTaskCost
       && switchCost <= thresholds.maximumSwitchCost;
-    const abilityValidation = outputsCorrect
-      ? { ...allAbilities(taskId, PASSED), 'Time Sharing': costThresholdsAvailable ? (costsPass ? PASSED : FAILED) : PENDING }
-      : allAbilities(taskId, FAILED);
+    // Time Sharing is deliberately independent of outputsCorrect: with an
+    // exact-output requirement, a passing attempt always has zero measured
+    // cost (see dualTaskReferenceCosts.mjs), which made the cost caps
+    // vacuous — they could accept but never reject. Judging Time Sharing
+    // purely against the cost caps, whatever the raw count/update accuracy
+    // was, lets it actually discriminate degrees of dual-task degradation. A
+    // raw counting/arithmetic error is still a real failure — it fails the
+    // task's other abilities and its overall status below — it just is not,
+    // by itself, evidence about dual-task cost.
+    const timeSharingStatus = costThresholdsAvailable ? (costsPass ? PASSED : FAILED) : PENDING;
+    const abilityValidation = {
+      ...allAbilities(taskId, outputsCorrect ? PASSED : FAILED),
+      'Time Sharing': timeSharingStatus,
+    };
     const status = !outputsCorrect ? FAILED : costThresholdsAvailable ? (costsPass ? PASSED : FAILED) : PENDING;
     return scoredResult(taskId, status, response, {
       actual_target_count: form.targetCount,
@@ -294,13 +323,14 @@ export function scoreOptimizedTask(
       expected_final_value: form.finalValue,
       reported_final_value: reportedValue,
       numerical_update_error: updateError,
+      outputs_correct: outputsCorrect,
       dual_task_cost: dualTaskCost,
       switch_cost: switchCost,
       reference_cost_metrics_available: dualTaskCost != null && switchCost != null,
       cost_thresholds_available: costThresholdsAvailable,
-    }, abilityValidation, 'exact_outputs_with_unthresholded_reference_costs', [
-      'Dual-task and switch-cost fields remain null until matched Task 2/3 reference metrics are supplied.',
-      'No validated cost threshold is bundled, so Time Sharing remains pending even when both final outputs are exact.',
+    }, abilityValidation, 'exact_outputs_plus_cost_gated_time_sharing', [
+      'Dual-task and switch-cost fields remain null until the runner supplies matched Task 2/3 reference metrics (see dualTaskReferenceCosts.mjs).',
+      'Time Sharing is scored independently of exact-output correctness: it can pass on an inexact attempt whose measured cost is within the configured caps, and can fail on an exact attempt only if cost metrics are unavailable (stays pending) or a cost cap is configured and exceeded.',
     ]);
   }
 
@@ -404,7 +434,11 @@ export function scoreOptimizedTask(
     );
     const audioProfile = audioProfileForTask(taskId, profile);
     const snrCalibrated = audioProfile.acousticallyCalibrated === true;
-    const assessmentStatus = externalRubricStatus(runtime, rubric);
+    // Prefer an explicit reviewer verdict; otherwise let the configured
+    // thresholds decide from the rubric scores, so the cut-off stays a
+    // reviewable protocol constant rather than a grader judgement.
+    const assessmentStatus = externalRubricStatus(runtime, rubric)
+      || thresholdRubricStatus(runtime, thresholds.minimumRubricScores, rubric);
     const calibrationPermitsPass = (
       !thresholds.calibratedSnrRequiredForAbilityPass || snrCalibrated
     );
@@ -446,7 +480,7 @@ export function scoreOptimizedTask(
       && summaryWordCount <= thresholds.summaryMaximumWords;
     const objectivePass = (!thresholds.requireMainIdea || mainIdeaCorrect) && lengthValid;
     const assessmentStatus = externalRubricStatus(runtime, rubric)
-      || thresholdRubricStatus(runtime, thresholds.minimumRubricScores);
+      || thresholdRubricStatus(runtime, thresholds.minimumRubricScores, rubric);
     const status = !objectivePass ? FAILED : assessmentStatus || PENDING;
     const abilityValidation = {
       'Written Comprehension': mainIdeaCorrect ? PASSED : FAILED,

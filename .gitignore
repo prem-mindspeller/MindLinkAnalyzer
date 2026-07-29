@@ -26,6 +26,10 @@ newBackend/mindlink/
 ElectronFrontEnd/node_modules/
 ElectronFrontEnd/dist/
 ElectronFrontEnd/release/
+# speech_in_noise_mixer tooling: venv and downloaded Piper voice model are
+# large, environment-specific, and regenerable (see tools/README.md)
+ElectronFrontEnd/tools/.venv/
+ElectronFrontEnd/tools/voices/
 # MindLinkFocusCube generated artifacts
 MindLinkFocusCube/.pytest_cache/
 MindLinkFocusCube/backend/__pycache__/

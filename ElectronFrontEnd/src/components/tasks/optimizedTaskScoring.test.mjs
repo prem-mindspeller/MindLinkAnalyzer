@@ -43,6 +43,106 @@ test('auditory and dual-task scores retain signed error metrics', () => {
   assert.equal(dualResult.ability_validation['Selective Attention'], 'passed');
 });
 
+test('missing values are never coerced into the number zero', () => {
+  // Number(null) and Number('') are both 0, so an unguarded numeric() would
+  // read a blank answer as the answer 0 and an unmeasured cost as "no cost".
+  const numerical = form(TASK_IDS.NUMERICAL);
+  for (const blank of [undefined, null, '', '   ']) {
+    const result = scoreOptimizedTask(TASK_IDS.NUMERICAL, numerical, { finalValue: blank });
+    assert.equal(result.metrics.reported_final_value, null, `blank ${JSON.stringify(blank)} must stay unreported`);
+    assert.equal(result.status, 'failed');
+  }
+
+  const dual = form(TASK_IDS.DUAL_TASK);
+  const unmeasured = scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, {
+    targetCount: dual.targetCount,
+    finalValue: dual.finalValue,
+  }, { dualTaskCost: null, switchCost: null });
+  assert.equal(unmeasured.metrics.dual_task_cost, null);
+  assert.equal(unmeasured.metrics.cost_thresholds_available, false);
+  assert.equal(unmeasured.ability_validation['Time Sharing'], 'pending_review');
+});
+
+test('time sharing resolves once reference costs are supplied by the runner', () => {
+  const dual = form(TASK_IDS.DUAL_TASK);
+  const exactOutputs = { targetCount: dual.targetCount, finalValue: dual.finalValue };
+
+  // Costs measured and inside the configured caps: Time Sharing is evidenced.
+  const withinCaps = scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, exactOutputs, {
+    dualTaskCost: 0,
+    switchCost: 1 / 3,
+  });
+  assert.equal(withinCaps.metrics.cost_thresholds_available, true);
+  assert.equal(withinCaps.ability_validation['Time Sharing'], 'passed');
+  assert.equal(withinCaps.status, 'passed');
+
+  // A switch cost above the cap fails the dual-task-specific ability.
+  const missedSwitch = scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, exactOutputs, {
+    dualTaskCost: 0,
+    switchCost: 1,
+  });
+  assert.equal(missedSwitch.ability_validation['Time Sharing'], 'failed');
+
+  // An attention cost above the cap likewise fails it.
+  const attentionCost = scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, exactOutputs, {
+    dualTaskCost: 0.9,
+    switchCost: 0,
+  });
+  assert.equal(attentionCost.ability_validation['Time Sharing'], 'failed');
+
+  // Missing reference data must not be treated as zero cost.
+  const unmeasured = scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, exactOutputs, {
+    dualTaskCost: null,
+    switchCost: 0,
+  });
+  assert.equal(unmeasured.metrics.cost_thresholds_available, false);
+  assert.equal(unmeasured.ability_validation['Time Sharing'], 'pending_review');
+});
+
+test('time sharing is evaluated independently of exact-output correctness', () => {
+  // With a zero-tolerance exactness gate, a passing attempt always has zero
+  // measured cost, so the cost caps could accept but never reject — Time
+  // Sharing could never actually discriminate degrees of dual-task
+  // degradation. Decoupling it from outputsCorrect fixes that: it is judged
+  // purely against the configured cost caps, whatever the raw count/update
+  // accuracy was.
+  const dual = form(TASK_IDS.DUAL_TASK);
+  const exactOutputs = { targetCount: dual.targetCount, finalValue: dual.finalValue };
+  const inexactOutputs = { targetCount: dual.targetCount + 1, finalValue: dual.finalValue + 1 };
+
+  // Inexact raw outputs, but the runner's measured cost is within the caps:
+  // Time Sharing passes even though the attempt is not otherwise correct.
+  const costOkDespiteError = scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, inexactOutputs, {
+    dualTaskCost: 0,
+    switchCost: 1 / 3,
+  });
+  assert.equal(costOkDespiteError.metrics.outputs_correct, false);
+  assert.equal(costOkDespiteError.ability_validation['Time Sharing'], 'passed');
+  // The overall attempt is still not a full success: raw output was wrong.
+  assert.equal(costOkDespiteError.status, 'failed');
+  // Only Time Sharing is decoupled — the task's other linked abilities still
+  // require exact outputs.
+  assert.equal(costOkDespiteError.ability_validation['Selective Attention'], 'failed');
+  assert.equal(costOkDespiteError.ability_validation['Deductive Reasoning'], 'failed');
+
+  // Inexact raw outputs AND a cost above the cap: Time Sharing fails too, but
+  // for its own, independent reason (the cost cap, not the exactness gate).
+  const costTooHighAndInexact = scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, inexactOutputs, {
+    dualTaskCost: 0.9,
+    switchCost: 1,
+  });
+  assert.equal(costTooHighAndInexact.ability_validation['Time Sharing'], 'failed');
+  assert.equal(costTooHighAndInexact.status, 'failed');
+
+  // Exact raw outputs still resolve exactly as before this change.
+  const exactAndWithinCaps = scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, exactOutputs, {
+    dualTaskCost: 0, switchCost: 0,
+  });
+  assert.equal(exactAndWithinCaps.metrics.outputs_correct, true);
+  assert.equal(exactAndWithinCaps.ability_validation['Time Sharing'], 'passed');
+  assert.equal(exactAndWithinCaps.status, 'passed');
+});
+
 test('reaction time is measured only from an actual rendered mismatch onset', () => {
   const comparison = form(TASK_IDS.VISUAL_COMPARISON);
   const renderedOnsetMs = comparison.mismatchOnset * 1000 + 37;
@@ -81,11 +181,44 @@ test('closure scoring uses the configured reveal fraction instead of total task 
     detected: true,
     responseElapsedMs: halfwaySeconds * 1000,
   });
-  assert.equal(result.status, 'pending_review');
   assert.equal(result.metrics.visibility_threshold_fraction, 0.5);
   assert.equal(result.metrics.response_enabled_at_ms, closure.revealSchedule.responseEnabledSeconds * 1000);
   assert.equal(result.ability_validation['Speed of Closure'], 'passed');
-  assert.equal(result.ability_validation['Flexibility of Closure'], 'pending_review');
+});
+
+test('flexibility of closure resolves against the configured reveal-fraction threshold', () => {
+  const closure = form(TASK_IDS.CLOSURE);
+  const { revealStartSeconds, fullyVisibleSeconds } = closure.revealSchedule;
+  const revealSpan = fullyVisibleSeconds - revealStartSeconds;
+  const atFraction = (fraction) => (revealStartSeconds + fraction * revealSpan) * 1000;
+
+  // Recognised while the target is still embedded in dense noise: flexibility credited.
+  const dense = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
+    detected: true,
+    responseElapsedMs: atFraction(0.3),
+  });
+  assert.equal(dense.metrics.flexibility_threshold_available, true);
+  assert.equal(dense.ability_validation['Flexibility of Closure'], 'passed');
+  assert.equal(dense.ability_validation['Speed of Closure'], 'passed');
+  assert.equal(dense.status, 'passed');
+
+  // Recognised only once the target is largely visible: speed only, not flexibility.
+  const late = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
+    detected: true,
+    responseElapsedMs: atFraction(0.8),
+  });
+  assert.equal(late.ability_validation['Speed of Closure'], 'passed');
+  assert.equal(late.ability_validation['Flexibility of Closure'], 'failed');
+
+  // With no configured threshold the ability must fall back to pending review.
+  const profile = JSON.parse(JSON.stringify(ACTIVE_BATTERY_PROFILE));
+  profile.thresholds[TASK_IDS.CLOSURE].flexibilityMaximumRevealFraction = null;
+  const unthresholded = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
+    detected: true,
+    responseElapsedMs: atFraction(0.3),
+  }, profile);
+  assert.equal(unthresholded.ability_validation['Flexibility of Closure'], 'pending_review');
+  assert.equal(unthresholded.status, 'pending_review');
 });
 
 test('anomaly-type scoring rejects checkbox over-selection', () => {
@@ -104,7 +237,7 @@ test('anomaly-type scoring rejects checkbox over-selection', () => {
   assert.equal(overSelected.metrics.anomaly_type_recall_correct, false);
 });
 
-test('speech key-detail matching rejects stopword-only answers and keeps uncalibrated abilities pending', () => {
+test('speech key-detail matching rejects stopword-only answers and stays pending without a rubric assessment', () => {
   const speech = form(TASK_IDS.SPEECH_NOISE);
   const stopwordOnly = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
     mainIdea: speech.mainIdea,
@@ -114,16 +247,32 @@ test('speech key-detail matching rejects stopword-only answers and keeps uncalib
   assert.equal(stopwordOnly.status, 'failed');
   assert.equal(stopwordOnly.metrics.key_detail_correct, false);
 
+  // The bundled default audio is now calibrated, but with no rubric
+  // assessment supplied here, the paraphrase-dependent abilities still cannot
+  // resolve — pending for a different reason than an uncalibrated SNR.
   const discriminativeDetail = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
     mainIdea: speech.mainIdea,
     keyDetail: 'The marsh slowed it.',
-    paraphrase: 'A short candidate paraphrase.',
+    paraphrase: 'The expedition lost time because the marshy ground slowed their crossing.',
   });
   assert.equal(discriminativeDetail.status, 'pending_review');
   assert.equal(discriminativeDetail.metrics.key_detail_correct, true);
-  assert.equal(discriminativeDetail.metrics.snr_calibrated, false);
+  assert.equal(discriminativeDetail.metrics.paraphrase_length_valid, true);
+  assert.equal(discriminativeDetail.metrics.snr_calibrated, true);
   assert.equal(discriminativeDetail.ability_validation['Speech Recognition'], 'pending_review');
   assert.equal(discriminativeDetail.ability_validation['Auditory Attention'], 'pending_review');
+});
+
+test('a paraphrase below the configured minimum length fails the validity gate', () => {
+  const speech = form(TASK_IDS.SPEECH_NOISE);
+  const tooShort = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
+    mainIdea: speech.mainIdea,
+    keyDetail: 'The marsh slowed it.',
+    paraphrase: 'Marsh slowed them.',
+  });
+  assert.equal(tooShort.metrics.paraphrase_length_valid, false);
+  assert.equal(tooShort.status, 'failed');
+  assert.equal(tooShort.ability_validation['Oral Comprehension'], 'failed');
 });
 
 test('free-text constructs remain pending review', () => {
@@ -142,6 +291,106 @@ test('free-text constructs remain pending review', () => {
   assert.equal(writtenResult.status, 'pending_review');
   assert.equal(writtenResult.ability_validation['Written Comprehension'], 'passed');
   assert.equal(writtenResult.ability_validation['Written Expression'], 'pending_review');
+});
+
+test('ideation abilities resolve once a rubric assessment is supplied', () => {
+  const ideation = form(TASK_IDS.IDEATION);
+  const rubricId = scoringRubricFor(TASK_IDS.IDEATION).id;
+  const ideas = { ideas: 'door stop\nplant marker\npaper weight\ndoorstop wedge\nbook end' };
+
+  const strong = scoreOptimizedTask(TASK_IDS.IDEATION, ideation, ideas, {
+    rubricAssessment: {
+      rubricId,
+      scores: { relevantIdeaCount: 5, categoryDiversity: 3, originality: 3.5 },
+    },
+  });
+  assert.equal(strong.status, 'passed');
+  assert.equal(strong.ability_validation['Fluency of Ideas'], 'passed');
+  assert.equal(strong.ability_validation.Originality, 'passed');
+
+  // Below the configured ideation floors.
+  const weak = scoreOptimizedTask(TASK_IDS.IDEATION, ideation, ideas, {
+    rubricAssessment: {
+      rubricId,
+      scores: { relevantIdeaCount: 1, categoryDiversity: 1, originality: 1 },
+    },
+  });
+  assert.equal(weak.ability_validation.Originality, 'failed');
+
+  // Scores graded against a different rubric must not be honoured.
+  const foreign = scoreOptimizedTask(TASK_IDS.IDEATION, ideation, ideas, {
+    rubricAssessment: {
+      rubricId: 'some_other_rubric',
+      scores: { relevantIdeaCount: 5, categoryDiversity: 3, originality: 3.5 },
+    },
+  });
+  assert.equal(foreign.ability_validation.Originality, 'pending_review');
+});
+
+test('written expression resolves once a rubric assessment is supplied', () => {
+  const written = form(TASK_IDS.WRITTEN);
+  const rubricId = scoringRubricFor(TASK_IDS.WRITTEN).id;
+  const summary = Array.from({ length: 40 }, (_, index) => `word${index}`).join(' ');
+  const response = { mainIdea: written.mainIdea, summary };
+
+  const adequate = scoreOptimizedTask(TASK_IDS.WRITTEN, written, response, {
+    rubricAssessment: {
+      rubricId,
+      scores: { clarity: 4, coherence: 4, completeness: 3, information_ordering: 3 },
+    },
+  });
+  assert.equal(adequate.ability_validation['Written Expression'], 'passed');
+  assert.equal(adequate.ability_validation['Written Comprehension'], 'passed');
+  assert.equal(adequate.status, 'passed');
+
+  const belowBar = scoreOptimizedTask(TASK_IDS.WRITTEN, written, response, {
+    rubricAssessment: {
+      rubricId,
+      scores: { clarity: 2, coherence: 2, completeness: 2, information_ordering: 2 },
+    },
+  });
+  assert.equal(belowBar.ability_validation['Written Expression'], 'failed');
+
+  // A partial assessment cannot decide the threshold.
+  const partial = scoreOptimizedTask(TASK_IDS.WRITTEN, written, response, {
+    rubricAssessment: { rubricId, scores: { clarity: 5 } },
+  });
+  assert.equal(partial.ability_validation['Written Expression'], 'pending_review');
+});
+
+test('oral comprehension needs both a rubric assessment and calibrated audio', () => {
+  const speech = form(TASK_IDS.SPEECH_NOISE);
+  const rubricId = scoringRubricFor(TASK_IDS.SPEECH_NOISE).id;
+  const response = {
+    mainIdea: speech.mainIdea,
+    keyDetail: 'The marsh slowed it.',
+    paraphrase: 'The expedition lost time because the marshy ground slowed their crossing.',
+  };
+  const assessment = {
+    rubricAssessment: { rubricId, scores: { paraphrase_accuracy: 4, paraphrase_completeness: 4 } },
+  };
+
+  // Graded, but on a profile whose audio is still browser TTS at an
+  // uncalibrated SNR (the bundled default's prior state, kept here as an
+  // explicit override so this behaviour stays covered).
+  const uncalibratedProfile = JSON.parse(JSON.stringify(ACTIVE_BATTERY_PROFILE));
+  uncalibratedProfile.audioProfiles.speech_in_noise.mode = 'browser_speech_synthesis_with_generated_noise';
+  uncalibratedProfile.audioProfiles.speech_in_noise.acousticallyCalibrated = false;
+
+  const uncalibrated = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, response, assessment, uncalibratedProfile);
+  assert.equal(uncalibrated.metrics.snr_calibrated, false);
+  assert.equal(uncalibrated.ability_validation['Oral Comprehension'], 'pending_review');
+  assert.equal(uncalibrated.ability_validation['Speech Recognition'], 'pending_review');
+
+  // The bundled default is now a calibrated premixed asset (built by
+  // tools/build_speech_in_noise_assets.py), so both abilities resolve without
+  // any profile override.
+  const calibrated = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, response, assessment);
+  assert.equal(calibrated.metrics.snr_calibrated, true);
+  assert.equal(calibrated.status, 'passed');
+  assert.equal(calibrated.ability_validation['Oral Comprehension'], 'passed');
+  assert.equal(calibrated.ability_validation['Speech Recognition'], 'passed');
+  assert.equal(calibrated.ability_validation['Auditory Attention'], 'passed');
 });
 
 test('an injected profile changes thresholds, rubric identity, audio and timing data', () => {

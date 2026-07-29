@@ -26,6 +26,9 @@ import {
   visualRouteState,
 } from './optimizedBatteryConfig.mjs';
 import { scoreOptimizedTask } from './optimizedTaskScoring.mjs';
+import { dualTaskReferenceCosts } from './dualTaskReferenceCosts.mjs';
+import { loadTaskAttempt } from '../../service/taskQualityGate.mjs';
+import { requestRubricAssessment, taskNeedsRubricGrading } from '../../service/rubricGradingService.mjs';
 import '../../styles/taskSelection.css';
 
 const RUNNER_PROTOCOL = runnerProtocolFor();
@@ -1171,15 +1174,53 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     };
   }
 
-  const submitResponse = useCallback((event) => {
+  // Task 7 is the only task whose scoring depends on earlier tasks: Task 3
+  // supplies the matched single-task attention reference (and Task 2 the
+  // working-memory reference kept for traceability). Loading is best-effort —
+  // when an attempt is unavailable the cost stays unmeasured, which correctly
+  // leaves Time Sharing pending instead of asserting a cost never measured.
+  const resolveRuntimeWithReferenceCosts = useCallback(async (baseRuntime) => {
+    if (taskId !== TASK_IDS.DUAL_TASK) return baseRuntime;
+    let references = {};
+    try {
+      const [auditory, workingMemory] = await Promise.all([
+        loadTaskAttempt(TASK_IDS.AUDITORY_COUNT),
+        loadTaskAttempt(TASK_IDS.WORKING_MEMORY),
+      ]);
+      references = {
+        [TASK_IDS.AUDITORY_COUNT]: auditory?.metadata?.behavioral_evidence || null,
+        [TASK_IDS.WORKING_MEMORY]: workingMemory?.metadata?.behavioral_evidence || null,
+      };
+    } catch {
+      references = {};
+    }
+    const { dualTaskCost, switchCost, diagnostics } = dualTaskReferenceCosts({ form, response, references });
+    return { ...baseRuntime, dualTaskCost, switchCost, referenceCostDiagnostics: diagnostics };
+  }, [form, response, taskId]);
+
+  // Tasks 6, 11 and 12 carry free text that no answer key can score. A null
+  // assessment (offline, timeout, malformed) is a normal outcome and leaves the
+  // dependent abilities pending rather than blocking the participant.
+  const resolveRuntimeWithRubricAssessment = useCallback(async (baseRuntime) => {
+    if (!taskNeedsRubricGrading(taskId)) return baseRuntime;
+    const rubricAssessment = await requestRubricAssessment(taskId, form, response);
+    return rubricAssessment ? { ...baseRuntime, rubricAssessment } : baseRuntime;
+  }, [form, response, taskId]);
+
+  const submitResponse = useCallback(async (event) => {
     event.preventDefault();
     if (!finalRecordingRef.current) return;
-    const behavioralEvidence = scoreOptimizedTask(taskId, form, response, buttonRuntime || finalRecordingRef.current.runtime);
-    const metadata = buildMetadata(finalRecordingRef.current, behavioralEvidence);
+    const baseRuntime = buttonRuntime || finalRecordingRef.current.runtime;
+    // Switching to 'saving' first unmounts the response form, so the awaited
+    // reference lookup below cannot be double-submitted.
     setRunState('saving');
+    const withCosts = await resolveRuntimeWithReferenceCosts(baseRuntime);
+    const runtime = await resolveRuntimeWithRubricAssessment(withCosts);
+    const behavioralEvidence = scoreOptimizedTask(taskId, form, response, runtime);
+    const metadata = buildMetadata(finalRecordingRef.current, behavioralEvidence);
     Promise.resolve(onComplete(finalRecordingRef.current.samples, { ...signalStatsRef.current }, metadata)).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buttonRuntime, form, onComplete, response, taskId]);
+  }, [buttonRuntime, form, onComplete, resolveRuntimeWithReferenceCosts, resolveRuntimeWithRubricAssessment, response, taskId]);
 
   useEffect(() => () => {
     audioDeliveryRef.current.finalized = true;

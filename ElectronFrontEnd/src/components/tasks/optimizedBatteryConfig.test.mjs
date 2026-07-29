@@ -283,7 +283,10 @@ test('stimulus schedules cover the corrected continuous windows', () => {
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE]) {
     const wordCount = form.passage.trim().split(/\s+/).length;
     assert.ok(wordCount >= 240 && wordCount <= 310, `${form.id}: ${wordCount} words`);
-    assert.equal(form.audioProfile.expectedDeliverySeconds, 115);
+    // 103 = the shortest of the three calibrated Piper narrations
+    // (tools/build_speech_in_noise_assets.py), kept conservative rather than
+    // overstated.
+    assert.equal(form.audioProfile.expectedDeliverySeconds, 103);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.WRITTEN]) {
     assert.equal(form.readingDurationSeconds, 120);
@@ -384,5 +387,39 @@ test('every eyes-open task is reached only after the eyes-open baseline checkpoi
       assert.ok(checkpointIndex >= 0, `${depth} runs an eyes-open task without the checkpoint`);
       assert.ok(index > checkpointIndex, `${depth}: ${entry} precedes the eyes-open baseline`);
     });
+  }
+});
+
+test('acoustic calibration can only be claimed for a real premixed asset', () => {
+  // `acousticallyCalibrated: true` unlocks Speech Recognition and Oral
+  // Comprehension, so it must never be assertable while audio is still being
+  // synthesised by the browser at an unmeasured SNR. Calibration is a property
+  // of a measured audio file, not a flag.
+  const profiles = ACTIVE_BATTERY_PROFILE.audioProfiles;
+  for (const [name, profile] of Object.entries(profiles)) {
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) continue;
+    if (profile.acousticallyCalibrated !== true) continue;
+    assert.equal(
+      profile.mode, 'premixed_audio_asset',
+      `audio profile "${name}" claims calibration but is delivered by ${profile.mode}`,
+    );
+    const hasAsset = Boolean(
+      profile.assetUri
+      || Object.keys(profile.assetsByForm || {}).length
+      || Object.keys(profile.assetsByStimulusKey || {}).length,
+    );
+    assert.ok(hasAsset, `audio profile "${name}" claims calibration without supplying an asset`);
+  }
+});
+
+test('the bundled speech-in-noise audio is a calibrated premixed asset with a matching form for each parallel form', () => {
+  const speech = audioProfileForTask(TASK_IDS.SPEECH_NOISE);
+  assert.equal(speech.acousticallyCalibrated, true);
+  assert.equal(speech.mode, 'premixed_audio_asset');
+  assert.ok(speech.nominalSnrDb, 'the calibrated SNR is recorded for audit');
+  for (const formId of ['speech_a', 'speech_b', 'speech_c']) {
+    const asset = speech.assetsByForm[formId];
+    assert.ok(asset?.uri, `${formId} must have an asset uri`);
+    assert.match(asset.sha256, /^[0-9a-f]{64}$/, `${formId} must record a sha256`);
   }
 });
