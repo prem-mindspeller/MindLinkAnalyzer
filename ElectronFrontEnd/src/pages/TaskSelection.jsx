@@ -523,7 +523,7 @@ const TaskSelection = () => {
                                     <>
                                         {[1, 5, 10].includes(meta.number) && (
                                             <p className="ts-group-label">
-                                                {meta.number === 1 ? 'Session 1 - Tasks 1-4' : meta.number === 5 ? 'Session 2 - Tasks 5-9 - 1+ booking required' : 'Session 3 - Tasks 10-12 - 2+ bookings required'}
+                                                {meta.number === 1 ? 'Session 1' : meta.number === 5 ? 'Session 2' : 'Session 3'}
                                             </p>
                                         )}
                                     <button

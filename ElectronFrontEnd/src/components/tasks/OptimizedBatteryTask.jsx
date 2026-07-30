@@ -12,9 +12,6 @@ import {
   TASK_DEFINITIONS,
   TASK_IDS,
   audioProfileForTask,
-  closureRevealState,
-  countWords,
-  pacedPassageChunk,
   profileComponentRefs,
   protocolProfileRefForTask,
   runnerProtocolFor,
@@ -22,9 +19,13 @@ import {
   taskPresentationFor,
   taskFormForSession,
   taskIntroduction,
-  visualComparisonFrame,
-  visualRouteState,
 } from './optimizedBatteryConfig.mjs';
+import {
+  initialResponseFor,
+  taskModuleFor,
+  taskScheduleEvents,
+} from './optimized/index.js';
+import { renderRuleWithOrderEmphasis } from './optimized/taskShared.jsx';
 import { scoreOptimizedTask } from './optimizedTaskScoring.mjs';
 import { dualTaskReferenceCosts } from './dualTaskReferenceCosts.mjs';
 import { loadTaskAttempt } from '../../service/taskQualityGate.mjs';
@@ -97,20 +98,6 @@ function playTaskCompletionCue() {
   }
 }
 
-// Emphasise the ordering clause of the anomaly rule wherever it is shown, so
-// participants notice the letter–hyphen–digits sequence must be in that order.
-const RULE_ORDER_PHRASE = 'in that same order';
-function renderRuleWithOrderEmphasis(text) {
-  const value = String(text ?? '');
-  const index = value.indexOf(RULE_ORDER_PHRASE);
-  if (index < 0) return value;
-  return [
-    value.slice(0, index),
-    <strong key="rule-order-emphasis">{RULE_ORDER_PHRASE}</strong>,
-    value.slice(index + RULE_ORDER_PHRASE.length),
-  ];
-}
-
 function normalizeAssetDescriptor(value) {
   if (typeof value === 'string') return { uri: value, sha256: null };
   if (!value || typeof value !== 'object') return null;
@@ -178,15 +165,9 @@ function configuredAssetManifest(profile, formId, schedule) {
   return [...byAsset.values()];
 }
 
-function directionSymbol(orientation) {
-  return { north: '↑', east: '→', south: '↓', west: '←' }[orientation] || '↑';
-}
-
-function initialResponseFor(taskId) {
-  if (taskId === TASK_IDS.ANOMALY) return { anomalyTypes: [], confidence: 3 };
-  return {};
-}
-
+// Phase, speech and tone events are common to every task and derived from the
+// form. Anything beyond that is task-specific and contributed by the task's own
+// module (see ./optimized/index.js).
 function auditSchedule(taskId, form, definition, presentation) {
   const events = [];
   for (const taskPhase of definition.phases.slice(1)) {
@@ -198,116 +179,14 @@ function auditSchedule(taskId, form, definition, presentation) {
   for (const [index, tone] of (form.toneEvents || []).entries()) {
     events.push({ key: `tone:${index}`, at: tone.at, type: 'tone_onset', target: tone.target, frequency_hz: tone.frequency, duration_ms: tone.durationMs });
   }
-  if (taskId === TASK_IDS.VISUOSPATIAL) {
-    form.moves.forEach((move, index) => events.push({ key: `route:${index}`, at: move.at, type: 'route_turn', turn: move.turn }));
-  }
-  if (taskId === TASK_IDS.ANOMALY) {
-    form.entries.forEach((entry, index) => events.push({
-      key: `code:${index}`,
-      at: entry.at ?? index * presentation.entryIntervalSeconds,
-      type: 'code_entry_onset',
-      stimulus_index: index,
-      anomaly: Boolean(entry.type),
-      anomaly_type: entry.type,
-    }));
-  }
-  if (taskId === TASK_IDS.VISUAL_COMPARISON) {
-    events.push({ key: 'mismatch_due', at: form.mismatchOnset, type: 'mismatch_reveal_due' });
-  }
-  if (taskId === TASK_IDS.SPEECH_NOISE) {
-    events.push({
-      key: 'passage',
-      at: form.passageOnsetSeconds ?? presentation.passageOnsetSeconds,
-      type: 'spoken_passage_onset',
-      text: form.passage,
-      asset_uri: form.audioAssetUri || null,
-    });
-  }
-  if (taskId === TASK_IDS.WRITTEN) {
-    const chunkInterval = presentation.readingDurationSeconds / presentation.chunkCount;
-    for (let index = 0; index < presentation.chunkCount; index += 1) {
-      events.push({
-        key: `passage_chunk:${index}`,
-        at: index * chunkInterval,
-        type: 'paced_text_chunk',
-        chunk_index: index,
-      });
-    }
-  }
+  events.push(...taskScheduleEvents(taskId, { form, definition, presentation }));
   return events.sort((left, right) => left.at - right.at);
-}
-
-function ResponseField({ label, children }) {
-  return (
-    <label className="optimized-response-field">
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function ComparisonLine({ frame, revealMismatch, revealSeconds }) {
-  return (
-    <div
-      className="optimized-comparison-line"
-      aria-label={revealMismatch ? frame.changed : frame.base}
-      style={{ '--mismatch-reveal-duration': `${revealSeconds}s` }}
-    >
-      {[...frame.base].map((character, index) => {
-        if (index !== frame.mismatchIndex) return <span key={index}>{character}</span>;
-        return (
-          <span
-            key={index}
-            className={`optimized-comparison-character${revealMismatch ? ' is-revealing' : ''}`}
-            aria-hidden="true"
-          >
-            <span className="optimized-comparison-original">{character}</span>
-            {revealMismatch && (
-              <span className="optimized-comparison-replacement">{frame.changed[index]}</span>
-            )}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-function FragmentedClosureTarget({ form, reveal, fragmentOrder }) {
-  return (
-    <div
-      className="optimized-closure-fragments"
-      style={{ filter: `blur(${reveal.blurPx}px)` }}
-      role="img"
-      aria-label="Fragmented target embedded in visual noise"
-    >
-      {Array.from({ length: 16 }, (_, fragmentIndex) => {
-        const row = Math.floor(fragmentIndex / 4);
-        const column = fragmentIndex % 4;
-        const revealRank = fragmentOrder.indexOf(fragmentIndex);
-        const threshold = revealRank / 16;
-        const fragmentOpacity = Math.max(
-          0,
-          Math.min(1, (reveal.fragmentProgress - threshold) * 20),
-        ) * reveal.symbolOpacity;
-        return (
-          <span
-            key={fragmentIndex}
-            className="optimized-closure-fragment"
-            aria-hidden="true"
-            style={{
-              clipPath: `inset(${row * 25}% ${(3 - column) * 25}% ${(3 - row) * 25}% ${column * 25}%)`,
-              opacity: fragmentOpacity,
-            }}
-          >{form.symbol}</span>
-        );
-      })}
-    </div>
-  );
 }
 
 const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   const { t } = useTranslation();
   const definition = TASK_DEFINITIONS[taskId];
+  const taskModule = useMemo(() => taskModuleFor(taskId), [taskId]);
   const form = useMemo(() => taskFormForSession(taskId, sessionDepth), [taskId, sessionDepth]);
   const presentation = useMemo(() => taskPresentationFor(taskId), [taskId]);
   const audioProfile = useMemo(() => audioProfileForTask(taskId), [taskId]);
@@ -1264,26 +1143,11 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           <span className="task-eyes-badge task-duration-badge">⏱ {definition.duration}s EEG</span>
           <span className="task-eyes-badge optimized-language-badge">Stimulus: English</span>
         </div>
-        {taskId === TASK_IDS.AUDITORY_COUNT && (
-          <div className="task-runner-tone-preview">
-            <p className="task-runner-tone-preview-label">Listen to the two tones before you start:</p>
-            <div className="task-runner-tone-preview-buttons">
-              <button
-                type="button"
-                className="task-runner-btn-preview task-runner-btn-preview-low"
-                onClick={() => playPreviewTone('low')}
-              >
-                {previewingTone === 'low' ? '🔊' : '▶'} Low tone (ignore)
-              </button>
-              <button
-                type="button"
-                className="task-runner-btn-preview task-runner-btn-preview-high"
-                onClick={() => playPreviewTone('high')}
-              >
-                {previewingTone === 'high' ? '🔊' : '▶'} High tone (count)
-              </button>
-            </div>
-          </div>
+        {taskModule.IdleExtras && (
+          <taskModule.IdleExtras
+            previewingTone={previewingTone}
+            onPreviewTone={playPreviewTone}
+          />
         )}
         <div className="task-runner-intro">
           <ul className="task-runner-intro-bullets">
@@ -1310,20 +1174,6 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   }
 
   if (runState === 'running') {
-    const route = taskId === TASK_IDS.VISUOSPATIAL ? visualRouteState(form, elapsedSeconds) : null;
-    const anomalyEntry = taskId === TASK_IDS.ANOMALY
-      ? form.entries[Math.min(form.entries.length - 1, Math.floor(elapsedSeconds / 2))]
-      : null;
-    const writtenChunk = taskId === TASK_IDS.WRITTEN
-      && elapsedSeconds < presentation.readingDurationSeconds
-      ? pacedPassageChunk(form, elapsedSeconds)
-      : null;
-    const closureReveal = taskId === TASK_IDS.CLOSURE
-      ? closureRevealState(form, elapsedSeconds)
-      : null;
-    const comparisonFrame = taskId === TASK_IDS.VISUAL_COMPARISON
-      ? visualComparisonFrame(form, elapsedSeconds)
-      : null;
     return (
       <div className={`task-runner-card task-runner-phase phase-recording optimized-running optimized-${definition.type}`}>
         <div className="optimized-running-header">
@@ -1338,86 +1188,15 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           </div>
         )}
 
-        {taskId === TASK_IDS.VISUOSPATIAL && route && (
-          <div className="optimized-route-wrap" aria-label="Five by five route grid">
-            <div className="optimized-route-column-labels" aria-hidden="true">
-              {[1, 2, 3, 4, 5].map((column) => <span key={column}>{column}</span>)}
-            </div>
-            <div className="optimized-route-grid-row">
-              <div className="optimized-route-row-labels" aria-hidden="true">
-                {[1, 2, 3, 4, 5].map((rowNumber) => <span key={rowNumber}>{rowNumber}</span>)}
-              </div>
-              <div className="optimized-route-grid">
-                {Array.from({ length: 25 }, (_, index) => {
-                  const x = index % 5;
-                  const y = Math.floor(index / 5);
-                  const active = x === route.x && y === route.y;
-                  return (
-                    <div
-                      key={index}
-                      aria-label={`Row ${y + 1}, column ${x + 1}${active ? `, facing ${route.orientation}` : ''}`}
-                      className={`optimized-route-cell${active ? ' active' : ''}`}
-                    >{active ? directionSymbol(route.orientation) : ''}</div>
-                  );
-                })}
-              </div>
-            </div>
-            <p>Track position and direction. Turns become denser after the phase boundary.</p>
-          </div>
-        )}
-
-        {taskId === TASK_IDS.ANOMALY && anomalyEntry && (
-          <div className="optimized-code-stimulus">
-            <small>{renderRuleWithOrderEmphasis(form.rule)}</small>
-            <strong>{anomalyEntry.value}</strong>
-            <p>Count silently · no response during recording</p>
-          </div>
-        )}
-
-        {taskId === TASK_IDS.VISUAL_COMPARISON && comparisonFrame && (
-          <div className="optimized-comparison-stimulus">
-            <div>{comparisonFrame.base}</div>
-            <ComparisonLine
-              frame={comparisonFrame}
-              revealMismatch={comparisonMismatchDue}
-              revealSeconds={form.mismatchRevealSeconds}
-            />
-            <button
-              type="button"
-              className="optimized-detect-button"
-              onClick={handleDetection}
-              disabled={buttonRuntime?.detected === true}
-            >{buttonRuntime?.detected ? 'RESPONSE REGISTERED · REMAIN STILL' : 'DETECT MISMATCH'}</button>
-          </div>
-        )}
-
-        {taskId === TASK_IDS.CLOSURE && closureReveal && (
-          <div className="optimized-closure-stimulus">
-            <FragmentedClosureTarget
-              form={form}
-              reveal={closureReveal}
-              fragmentOrder={form.revealSchedule?.fragmentOrder || presentation.fragmentOrder}
-            />
-            <div className="optimized-noise-layer" style={{ opacity: closureReveal.noiseOpacity }} />
-            <button
-              type="button"
-              className="optimized-detect-button"
-              onClick={handleDetection}
-              disabled={!closureReveal.responseEnabled || buttonRuntime?.detected === true}
-            >{
-              buttonRuntime?.detected
-                ? 'RESPONSE REGISTERED · REMAIN STILL'
-                : closureReveal.responseEnabled ? 'RECOGNIZED' : 'SEARCH…'
-            }</button>
-          </div>
-        )}
-
-        {taskId === TASK_IDS.WRITTEN && (
-          <div className="optimized-paced-reading">
-            {writtenChunk
-              ? <p>{writtenChunk}</p>
-              : <><strong>Silent synthesis</strong><p>Keep your eyes open. Organize the main idea and supporting details in your mind. Do not type yet.</p></>}
-          </div>
+        {taskModule.Stimulus && (
+          <taskModule.Stimulus
+            form={form}
+            presentation={presentation}
+            elapsedSeconds={elapsedSeconds}
+            mismatchDue={comparisonMismatchDue}
+            buttonRuntime={buttonRuntime}
+            onDetect={handleDetection}
+          />
         )}
 
         <div className="task-runner-progress-wrap">
@@ -1439,131 +1218,27 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     );
   }
 
-  const wordCount = countWords(response.summary);
-  const writtenLengthValid = (
-    wordCount >= scoringThresholds.summaryMinimumWords
-    && wordCount <= scoringThresholds.summaryMaximumWords
-  );
+  const responseValid = taskModule.isResponseValid
+    ? taskModule.isResponseValid({ form, response, scoringThresholds })
+    : true;
   return (
     <form className="task-runner-card optimized-response-card" onSubmit={submitResponse}>
       <p className="optimized-task-kicker">EEG scoring stopped · behavioral response</p>
       <h2>{definition.name}</h2>
       <p>You may now speak, type, or move to enter the requested answer. This output is not included in EEG scoring.</p>
 
-      {taskId === TASK_IDS.NUMERICAL && (
-        <ResponseField label="What was the final value?">
-          <input type="number" required value={response.finalValue || ''} onChange={(event) => setResponse({ ...response, finalValue: event.target.value })} />
-        </ResponseField>
-      )}
-      {taskId === TASK_IDS.WORKING_MEMORY && (
-        <ResponseField label="Enter the final sequence in order (for example 4-7-2-5).">
-          <input required value={response.finalSequence || ''} onChange={(event) => setResponse({ ...response, finalSequence: event.target.value })} />
-        </ResponseField>
-      )}
-      {taskId === TASK_IDS.AUDITORY_COUNT && (
-        <ResponseField label="How many high target tones did you count?">
-          <input type="number" min="0" required value={response.targetCount || ''} onChange={(event) => setResponse({ ...response, targetCount: event.target.value })} />
-        </ResponseField>
-      )}
-      {taskId === TASK_IDS.SEMANTIC && (
-        <>
-          <ResponseField label="First organising principle">
-            <select required value={response.ruleOne || ''} onChange={(event) => setResponse({ ...response, ruleOne: event.target.value })}>
-              <option value="">Select…</option>
-              {form.ruleOptions.map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </ResponseField>
-          <ResponseField label="Second organising principle">
-            <select required value={response.ruleTwo || ''} onChange={(event) => setResponse({ ...response, ruleTwo: event.target.value })}>
-              <option value="">Select…</option>
-              {form.secondRuleOptions.map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </ResponseField>
-          <ResponseField label="Did you notice the rule switch?">
-            <select required value={response.switchDetected || ''} onChange={(event) => setResponse({ ...response, switchDetected: event.target.value })}>
-              <option value="">Select…</option><option value="yes">Yes</option><option value="no">No</option>
-            </select>
-          </ResponseField>
-        </>
-      )}
-      {taskId === TASK_IDS.VISUOSPATIAL && (
-        <div className="optimized-response-grid">
-          <ResponseField label="Final column (1–5)"><input type="number" min="1" max="5" required value={response.x == null ? '' : Number(response.x) + 1} onChange={(event) => setResponse({ ...response, x: Number(event.target.value) - 1 })} /></ResponseField>
-          <ResponseField label="Final row (1–5)"><input type="number" min="1" max="5" required value={response.y == null ? '' : Number(response.y) + 1} onChange={(event) => setResponse({ ...response, y: Number(event.target.value) - 1 })} /></ResponseField>
-          <ResponseField label="Final orientation">
-            <select required value={response.orientation || ''} onChange={(event) => setResponse({ ...response, orientation: event.target.value })}>
-              <option value="">Select…</option>{['north', 'east', 'south', 'west'].map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </ResponseField>
-        </div>
-      )}
-      {taskId === TASK_IDS.IDEATION && (
-        <ResponseField label="Enter one idea per line. Relevance, category diversity, and originality remain pending expert/validated scoring.">
-          <textarea rows="8" required value={response.ideas || ''} onChange={(event) => setResponse({ ...response, ideas: event.target.value })} />
-        </ResponseField>
-      )}
-      {taskId === TASK_IDS.DUAL_TASK && (
-        <div className="optimized-response-grid">
-          <ResponseField label="High-tone count"><input type="number" min="0" required value={response.targetCount || ''} onChange={(event) => setResponse({ ...response, targetCount: event.target.value })} /></ResponseField>
-          <ResponseField label="Final number"><input type="number" required value={response.finalValue || ''} onChange={(event) => setResponse({ ...response, finalValue: event.target.value })} /></ResponseField>
-        </div>
-      )}
-      {taskId === TASK_IDS.ANOMALY && (
-        <>
-          <ResponseField label="How many anomalies did you count?"><input type="number" min="0" required value={response.anomalyCount || ''} onChange={(event) => setResponse({ ...response, anomalyCount: event.target.value })} /></ResponseField>
-          <fieldset className="optimized-checkboxes">
-            <legend>Which anomaly types did you notice?</legend>
-            {['extra_letter', 'wrong_order', 'missing_separator', 'missing_digit', 'wrong_separator'].map((type) => (
-              <label key={type}><input type="checkbox" checked={response.anomalyTypes.includes(type)} onChange={(event) => {
-                const values = event.target.checked ? [...response.anomalyTypes, type] : response.anomalyTypes.filter((value) => value !== type);
-                setResponse({ ...response, anomalyTypes: values });
-              }} /> {type.replaceAll('_', ' ')}</label>
-            ))}
-          </fieldset>
-          <ResponseField label={`Confidence: ${response.confidence}/5`}><input type="range" min="1" max="5" value={response.confidence} onChange={(event) => setResponse({ ...response, confidence: event.target.value })} /></ResponseField>
-        </>
-      )}
-      {taskId === TASK_IDS.CLOSURE && (
-        <ResponseField label="What target did you recognize?">
-          <select required value={response.target || ''} onChange={(event) => setResponse({ ...response, target: event.target.value })}>
-            <option value="">Select…</option>{form.options.map((option) => <option key={option}>{option}</option>)}
-          </select>
-        </ResponseField>
-      )}
-      {taskId === TASK_IDS.SPEECH_NOISE && (
-        <>
-          <ResponseField label="Select the main interpretation.">
-            <select required value={response.mainIdea || ''} onChange={(event) => setResponse({ ...response, mainIdea: event.target.value })}>
-              <option value="">Select…</option>{form.mainIdeaOptions.map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </ResponseField>
-          <ResponseField label={form.keyDetailQuestion}><input required value={response.keyDetail || ''} onChange={(event) => setResponse({ ...response, keyDetail: event.target.value })} /></ResponseField>
-          <ResponseField label="Give one concise paraphrase of the passage."><textarea rows="4" required value={response.paraphrase || ''} onChange={(event) => setResponse({ ...response, paraphrase: event.target.value })} /></ResponseField>
-        </>
-      )}
-      {taskId === TASK_IDS.WRITTEN && (
-        <>
-          <ResponseField label="Select the main idea.">
-            <select required value={response.mainIdea || ''} onChange={(event) => setResponse({ ...response, mainIdea: event.target.value })}>
-              <option value="">Select…</option>{form.mainIdeaOptions.map((option) => <option key={option}>{option}</option>)}
-            </select>
-          </ResponseField>
-          <ResponseField label={`Write a ${scoringThresholds.summaryMinimumWords}–${scoringThresholds.summaryMaximumWords} word summary (${wordCount} words).`}>
-            <textarea rows="7" required value={response.summary || ''} onChange={(event) => setResponse({ ...response, summary: event.target.value })} />
-          </ResponseField>
-          {!writtenLengthValid && (
-            <p className="optimized-response-warning">
-              The summary must contain {scoringThresholds.summaryMinimumWords}–{scoringThresholds.summaryMaximumWords} words before it can be saved.
-            </p>
-          )}
-        </>
+      {taskModule.ResponseFields && (
+        <taskModule.ResponseFields
+          form={form}
+          response={response}
+          setResponse={setResponse}
+          scoringThresholds={scoringThresholds}
+          buttonRuntime={buttonRuntime}
+        />
       )}
 
-      {buttonRuntime?.timedOut && (taskId === TASK_IDS.CLOSURE) && (
-        <p className="optimized-response-warning">No recognition button was pressed during the block; this attempt will fail behavioral validation.</p>
-      )}
       <div className="task-runner-actions">
-        <button type="submit" className="task-runner-btn-start" disabled={taskId === TASK_IDS.WRITTEN && !writtenLengthValid}>Save response & check signal</button>
+        <button type="submit" className="task-runner-btn-start" disabled={!responseValid}>Save response & check signal</button>
       </div>
     </form>
   );

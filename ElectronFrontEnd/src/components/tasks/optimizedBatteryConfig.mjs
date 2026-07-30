@@ -89,7 +89,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'numerical',
     abilities: ['Mathematical Reasoning', 'Number Facility', 'Information Ordering', 'Deductive Reasoning'],
     blocked: ['Inductive Reasoning', 'Memorization', 'Reaction Time', 'Oral Comprehension', 'Oral Expression'],
-    description: 'Silently maintain one spoken calculation chain as its pace and operation mix increase.',
+    description: 'Listen to simple maths steps, one after another. Keep the answer in your head, and give it at the end.',
   },
   [TASK_IDS.WORKING_MEMORY]: {
     number: 2,
@@ -101,7 +101,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'working_memory',
     abilities: ['Memorization', 'Information Ordering', 'Deductive Reasoning'],
     blocked: ['Inductive Reasoning', 'Category Flexibility', 'Time Sharing', 'Number Facility', 'Mathematical Reasoning', 'Oral Comprehension'],
-    description: 'Maintain and update a spoken sequence without giving an intermediate answer.',
+    description: 'Listen to 4 numbers, then follow instructions that change their order. Give the final order at the end.',
   },
   [TASK_IDS.AUDITORY_COUNT]: {
     number: 3,
@@ -113,7 +113,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'auditory_count',
     abilities: ['Selective Attention', 'Auditory Attention'],
     blocked: ['Reaction Time', 'Speech Recognition', 'Oral Comprehension', 'Time Sharing', 'Problem Sensitivity'],
-    description: 'Count high tones silently in a continuous, irregular stream while ignoring low tones.',
+    description: 'Listen for beeps. Silently count the high tones. Ignore the low tones.',
   },
   [TASK_IDS.SEMANTIC]: {
     number: 4,
@@ -125,7 +125,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'semantic',
     abilities: ['Inductive Reasoning', 'Category Flexibility'],
     blocked: ['Deductive Reasoning', 'Memorization', 'Fluency of Ideas', 'Originality', 'Oral Comprehension'],
-    description: 'Infer two organising principles from one uninterrupted spoken word stream and notice the switch.',
+    description: 'Listen to a list of words and find out what connects them. Halfway through, the words change to a new category. Find that link too.',
   },
   [TASK_IDS.VISUOSPATIAL]: {
     number: 5,
@@ -137,7 +137,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'visuospatial',
     abilities: ['Visualization', 'Spatial Orientation'],
     blocked: ['Perceptual Speed', 'Speed of Closure', 'Flexibility of Closure', 'Reaction Time', 'Visual sensory abilities'],
-    description: 'Track a centrally displayed arrow as every route turn changes its position and orientation.',
+    description: 'Watch an arrow on a grid. Each time it turns, follow where it moves and which way it points.',
   },
   [TASK_IDS.IDEATION]: {
     number: 6,
@@ -149,7 +149,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'ideation',
     abilities: ['Category Flexibility', 'Fluency of Ideas', 'Originality'],
     blocked: ['Written Expression', 'Oral Expression', 'Inductive Reasoning', 'Deductive Reasoning', 'Visualization'],
-    description: 'Generate varied uses for one prompt silently, then capture the ideas only after EEG scoring stops.',
+    description: 'Think of as many different uses for one object as you can. Do not write anything until the task ends.',
   },
   [TASK_IDS.DUAL_TASK]: {
     number: 7,
@@ -161,7 +161,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'dual_task',
     abilities: ['Time Sharing', 'Category Flexibility', 'Deductive Reasoning', 'Selective Attention', 'Information Ordering'],
     blocked: ['Mathematical Reasoning', 'Number Facility', 'Memorization', 'Reaction Time', 'Auditory Attention'],
-    description: 'Count targets while updating a number, then apply one new update rule without pausing.',
+    description: 'Do two things at once: count the high tones, and keep a running number that changes with each spoken update.',
   },
   [TASK_IDS.ANOMALY]: {
     number: 8,
@@ -173,7 +173,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'anomaly',
     abilities: ['Problem Sensitivity', 'Deductive Reasoning', 'Selective Attention', 'Information Ordering'],
     blocked: ['Inductive Reasoning', 'Perceptual Speed', 'Reaction Time', 'Speed of Closure', 'Flexibility of Closure'],
-    description: 'Monitor one continuous code stream against a stated rule and report anomalies only afterward.',
+    description: 'Watch a stream of codes. Each one should follow one simple rule. Silently count the number of codes that break that rule.',
   },
   [TASK_IDS.VISUAL_COMPARISON]: {
     number: 9,
@@ -185,7 +185,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'visual_comparison',
     abilities: ['Perceptual Speed', 'Reaction Time'],
     blocked: ['Speed of Closure', 'Flexibility of Closure', 'Visualization', 'Spatial Orientation', 'Problem Sensitivity'],
-    description: 'Watch two centrally aligned strings and press once when a single gradual mismatch appears.',
+    description: 'Watch two rows of letters and numbers. Press the button as soon as you notice a mismatch.',
   },
   [TASK_IDS.CLOSURE]: {
     number: 10,
@@ -197,7 +197,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'closure',
     abilities: ['Speed of Closure', 'Flexibility of Closure'],
     blocked: ['Perceptual Speed', 'Spatial Orientation', 'Problem Sensitivity', 'Reaction Time', 'Selective Attention'],
-    description: 'Search for one target in dense visual noise and respond once when it becomes recognizable.',
+    description: 'Look at a fuzzy, noisy picture. It slowly becomes clearer. Press the button as soon as you know what it is.',
   },
   [TASK_IDS.SPEECH_NOISE]: {
     number: 11,
@@ -209,7 +209,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'speech_noise',
     abilities: ['Oral Comprehension', 'Speech Recognition', 'Auditory Attention'],
     blocked: ['Oral Expression', 'Speech Clarity', 'Reaction Time', 'Written Comprehension', 'Written Expression'],
-    description: 'Listen silently to one continuous passage in moderate background noise and answer afterward.',
+    description: 'Listen to a short story, even though there is background noise. Answer some questions about it afterward.',
   },
   [TASK_IDS.WRITTEN]: {
     number: 12,
@@ -221,7 +221,7 @@ export const TASK_DEFINITIONS = Object.freeze({
     type: 'written',
     abilities: ['Written Comprehension', 'Written Expression', 'Inductive Reasoning', 'Information Ordering'],
     blocked: ['Oral Comprehension', 'Oral Expression', 'Speech Recognition', 'Speech Clarity', 'Fluency of Ideas', 'Originality'],
-    description: 'Read a centrally paced passage, plan a synthesis silently, then write only after EEG stops.',
+    description: 'Read a short passage on the screen. Think about how to sum it up in your head, then write it after the task ends.',
   },
 });
 
@@ -604,9 +604,9 @@ const ROUTE_FORMS = [
 ];
 
 const IDEATION_FORMS = [
-  { id: 'ideas_a', prompt: 'Generate as many different uses as possible for a brick.' },
-  { id: 'ideas_b', prompt: 'Generate as many different uses as possible for a paper cup.' },
-  { id: 'ideas_c', prompt: 'Generate as many different uses as possible for a shoelace.' },
+  { id: 'ideas_a', prompt: 'Think of as many different uses for a brick as you can.' },
+  { id: 'ideas_b', prompt: 'Think of as many different uses for a paper cup as you can.' },
+  { id: 'ideas_c', prompt: 'Think of as many different uses for a shoelace as you can.' },
 ];
 
 function dualTaskForm(id, seed, toneCount, targetCount, startValue, beforeDelta, afterDelta) {
@@ -680,7 +680,7 @@ function anomalyForm(id, offset) {
   const anomalyTypes = [...new Set(entries.filter((entry) => entry.type).map((entry) => entry.type))];
   return {
     id,
-    rule: 'Every code must contain exactly one letter, a hyphen, and two digits in that same order.',
+    rule: 'A correct code has 1 letter, then a hyphen, then 2 digits, in that same order. For example: A-47.',
     entries,
     entryIntervalSeconds: presentation.entryIntervalSeconds,
     anomalyCount: anomalySlots.length,
@@ -906,23 +906,79 @@ export function pacedPassageChunk(form, elapsedSeconds, options = {}) {
 export function taskIntroduction(taskId, form) {
   const definition = TASK_DEFINITIONS[taskId];
   const common = [
-    `This is one uninterrupted ${definition.duration}-second EEG scoring block.`,
-    `Keep your eyes ${definition.eyeState} and minimise blinking, jaw tension, and movement.`,
-    'Do not speak or type until the recording has ended and the response form appears.',
+    `This task takes ${definition.duration} seconds. Do not stop until it is finished.`,
+    `Keep your eyes ${definition.eyeState} the whole time. Try not to blink, clench your jaw, or move.`,
+    'Wait to speak, write or type. You can give your answer after this task ends.',
   ];
   const specificFactory = {
-    [TASK_IDS.NUMERICAL]: () => [`Start at ${form.startValue}; follow every spoken operation silently and give only the final value.`],
-    [TASK_IDS.WORKING_MEMORY]: () => ['The initial sequence is presented only after EEG scoring starts. Encode it then, maintain every spoken update, and report only the final order.'],
-    [TASK_IDS.AUDITORY_COUNT]: () => ['Count every high tone silently and ignore the low tones. Report one count afterward.', 'Use the buttons above to hear an example of the low tone and the high tone before you begin.'],
-    [TASK_IDS.SEMANTIC]: () => ['Infer the organising principle of the first word stream and the new principle after the seamless switch.'],
-    [TASK_IDS.VISUOSPATIAL]: () => [`Start at row ${form.start.y + 1}, column ${form.start.x + 1}, facing ${form.start.orientation}. Every displayed turn changes both direction and grid position. Row numbers run top to bottom and columns left to right.`],
-    [TASK_IDS.IDEATION]: () => [`Prompt: ${form.prompt}`, 'Generate ideas silently; you will capture each idea on a separate line afterward.'],
-    [TASK_IDS.DUAL_TASK]: () => [`Start at ${form.startValue}. Before the switch, ${form.beforeDelta < 0 ? `subtract ${Math.abs(form.beforeDelta)}` : `add ${form.beforeDelta}`} at every “Update” cue. After “Switch”, ${form.afterDelta < 0 ? `subtract ${Math.abs(form.afterDelta)}` : `add ${form.afterDelta}`} at every “Update” cue. Count high tones throughout.`],
-    [TASK_IDS.ANOMALY]: () => [form.rule, 'Silently count anomalies and remember their types; do not click during the stream.'],
-    [TASK_IDS.VISUAL_COMPARISON]: () => ['Maintain central gaze while both code strings update in synchrony. Press DETECT once, as soon as one gradual mismatch appears, then remain still until the timed block ends.'],
-    [TASK_IDS.CLOSURE]: () => ['A fragmented target will emerge gradually from dense visual noise. Press RECOGNIZED once when you know what it is, then remain still until the timed block ends.'],
-    [TASK_IDS.SPEECH_NOISE]: () => ['Listen to the entire passage in moderate background noise. Answer only after the sound and EEG scoring stop.'],
-    [TASK_IDS.WRITTEN]: () => ['Read each centrally paced section. Then plan a concise synthesis silently; typing begins only after EEG stops.'],
+    [TASK_IDS.NUMERICAL]: () => [
+      `You will start at ${form.startValue}.`,
+      'Then you will hear steps like "add 7" or "subtract 6". Do the maths in your head after each one.',
+      'Give only your final answer, after the task ends.',
+    ],
+    [TASK_IDS.WORKING_MEMORY]: () => [
+      'First you will hear 4 numbers, like "9-1-2-8". Nothing is written down, you only hear them.',
+      'Then you will hear instructions, one at a time. Each one changes the order of the numbers. Keep track in your head.',
+      'When the task ends, give the 4 numbers in their new, final order.',
+    ],
+    [TASK_IDS.AUDITORY_COUNT]: () => [
+      'You will hear many short beeps. Some tones are high, some are low.',
+      'Count only the high tones in your head. Do not count the low tones.',
+      'At the end, say how many high tones you counted.',
+      'Use the buttons above to hear an example of the low tone and the high tone before you begin.',
+    ],
+    [TASK_IDS.SEMANTIC]: () => [
+      'You will hear many words, one after another.',
+      'The first words all belong to one category. Try to work out what connects them.',
+      'Halfway through, the words quietly change to a new category. Try to notice when this happens, and work out that new connection too.',
+      'Give your answers only after the task ends.',
+    ],
+    [TASK_IDS.VISUOSPATIAL]: () => [
+      `The arrow starts at a specific cell, facing a specific direction.`,
+      'The arrow moves one cell at a time, it can also change its direction. Follow it with your eyes.',
+      'Rows are counted from top to bottom. Columns are counted from left to right.',
+      'At the end, give the arrow’s final column, row, and direction.',
+    ],
+    [TASK_IDS.IDEATION]: () => [
+      `Prompt: ${form.prompt}`,
+      'Think of as many different uses for a single object as you can.',
+      'Generate as many ideas as possible. Keep them in your head, do not say or write anything yet.',
+      'After the task ends, type one idea on each line. (Shift+Enter will start a new line.)',
+    ],
+    [TASK_IDS.DUAL_TASK]: () => [
+      'Read this very carefully, because you will not see it again during the task!',
+      `Start your number at ${form.startValue}.`,
+      `Every time you hear "Update", ${form.beforeDelta < 0 ? `subtract ${Math.abs(form.beforeDelta)}` : `add ${form.beforeDelta}`} to your number.`,
+      `When you hear "Switch", the rule changes: from then on, ${form.afterDelta < 0 ? `subtract ${Math.abs(form.afterDelta)}` : `add ${form.afterDelta}`} at every "Update" instead.`,
+      'At the same time, count every high tone you hear, from start to finish.',
+      'At the end, give your final number and your number of counted high tones.',
+    ],
+    [TASK_IDS.ANOMALY]: () => [
+      form.rule,
+      'Watch each code and check it against the rule. When a code breaks the rule, count it in your head.',
+      'Try to remember the different kind of mistakes you encountered.',
+    ],
+    [TASK_IDS.VISUAL_COMPARISON]: () => [
+      'Two rows of letters and numbers will update together, again and again.',
+      'At some point, one character in one row will slowly change, so the two rows no longer match.',
+      'As soon as you notice this, press the DETECT MISMATCH button. Press it only once.',
+      'After you press it, stay still until the task ends.',
+    ],
+    [TASK_IDS.CLOSURE]: () => [
+      'A picture is hidden in visual noise. It will slowly become clearer.',
+      'As soon as you can tell what it is, press the RECOGNIZED button. Press it only once.',
+      'After you press it, stay still until the task ends.',
+    ],
+    [TASK_IDS.SPEECH_NOISE]: () => [
+      'You will hear a short passage. There is background noise, so listen carefully.',
+      'Just listen during the recording, until it ends.',
+      'Afterward, you will answer a few questions about what you heard.',
+    ],
+    [TASK_IDS.WRITTEN]: () => [
+      'Read the text as it appears on the screen, one part at a time.',
+      'After you finish reading, think about the main idea. Do not type yet.',
+      'At the end, you will pick the main idea from a list and write a short summary.',
+    ],
   }[taskId];
   const specific = specificFactory ? specificFactory() : [];
   return [...specific, ...common];

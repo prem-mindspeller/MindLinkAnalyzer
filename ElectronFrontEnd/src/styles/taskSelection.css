@@ -392,16 +392,6 @@
     color: #b45309;
 }
 
-.task-runner-sound-notice {
-    font-size: 0.85rem;
-    color: #92400e;
-    background: #fef3c7;
-    border: 1px solid #fde68a;
-    border-radius: 8px;
-    padding: 8px 14px;
-    text-align: center;
-}
-
 .task-runner-intro {
     font-size: 0.95rem;
     color: #475569;
@@ -417,12 +407,6 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-}
-
-.task-runner-countdown-hint {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    text-align: center;
 }
 
 .task-runner-actions {
@@ -561,11 +545,6 @@
     gap: 18px;
 }
 
-.phase-cue {
-    border-color: #3b82f6;
-    background: #eff6ff;
-}
-
 .phase-recording {
     border-color: #ef4444;
     background: #fef2f2;
@@ -579,29 +558,6 @@
     font-weight: 700;
     background: rgba(0, 0, 0, 0.07);
     color: #1f2937;
-}
-
-.task-runner-phase-instruction {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #1f2937;
-    line-height: 1.6;
-    text-align: center;
-}
-
-.task-runner-face-image {
-    display: block;
-    max-height: 260px;
-    max-width: 100%;
-    margin: 12px auto;
-    border-radius: 8px;
-    object-fit: contain;
-}
-
-.task-runner-eyes-hint {
-    text-align: center;
-    font-size: 0.9rem;
-    color: #64748b;
 }
 
 .task-runner-progress-wrap {
@@ -647,30 +603,6 @@
 
 .task-runner-btn-abort:hover {
     background: #fecaca;
-}
-
-/* Done screen */
-.task-runner-done-screen {
-    align-items: center;
-    text-align: center;
-    background: #f0fdf4;
-    border-color: #059669;
-}
-
-.task-runner-done-icon {
-    font-size: 3.5rem;
-}
-
-.task-runner-done-title {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #065f46;
-}
-
-.task-runner-done-msg {
-    font-size: 0.95rem;
-    color: #047857;
-    line-height: 1.6;
 }
 
 /* Optimized continuous task battery */
