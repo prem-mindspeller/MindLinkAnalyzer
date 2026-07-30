@@ -76,7 +76,11 @@ export function gradingRequestFor(taskId, form, response, profile) {
 export function normalizeAssessment(payload, expectedRubricId) {
   const assessment = payload?.assessment;
   if (!assessment || typeof assessment !== 'object') return null;
-  if (assessment.rubricId !== expectedRubricId) return null;
+  // Requiring expectedRubricId to be truthy (not just !==) closes the case
+  // where both sides are null/undefined, which would otherwise "match" and
+  // defeat the entire point of this check: proving the assessment was
+  // actually graded against the rubric this client is about to score with.
+  if (!expectedRubricId || assessment.rubricId !== expectedRubricId) return null;
   const scores = assessment.scores;
   if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return null;
   if (!Object.keys(scores).length) return null;

@@ -76,6 +76,8 @@ export function postSwitchUpdateCount(form) {
  * @returns {{dualTaskCost: number|null, switchCost: number|null, diagnostics: object}}
  */
 export function dualTaskReferenceCosts({ form, response = {}, references = {} } = {}) {
+  // Destructuring defaults only cover an omitted key, not an explicit null.
+  references = references || {};
   const auditoryMetrics = metricsOf(references[TASK_IDS.AUDITORY_COUNT]);
   const workingMemoryMetrics = metricsOf(references[TASK_IDS.WORKING_MEMORY]);
 

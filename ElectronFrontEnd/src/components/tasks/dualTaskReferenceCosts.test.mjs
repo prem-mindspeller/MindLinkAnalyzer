@@ -120,6 +120,16 @@ test('a missing response leaves both costs unmeasured', () => {
   assert.equal(switchCost, null);
 });
 
+test('an explicit null form, response, or references does not throw', () => {
+  const form = dualForm();
+  assert.doesNotThrow(() => dualTaskReferenceCosts({ form: null, response: {}, references: {} }));
+  assert.doesNotThrow(() => dualTaskReferenceCosts({ form, response: null, references: {} }));
+  assert.doesNotThrow(() => dualTaskReferenceCosts({ form, response: {}, references: null }));
+  const result = dualTaskReferenceCosts({ form, response: {}, references: null });
+  assert.equal(result.dualTaskCost, null);
+  assert.equal(result.switchCost, null);
+});
+
 test('the working-memory reference is reported for traceability, not folded into the cost', () => {
   const form = dualForm();
   const withWm = dualTaskReferenceCosts({

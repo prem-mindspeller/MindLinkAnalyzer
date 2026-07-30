@@ -63,6 +63,19 @@ test('missing values are never coerced into the number zero', () => {
   assert.equal(unmeasured.ability_validation['Time Sharing'], 'pending_review');
 });
 
+test('an explicit null response or runtime does not throw', () => {
+  // Default parameters only cover an omitted/undefined argument, not an
+  // explicit null -- a real risk at this exported, multiply-called boundary.
+  const numerical = form(TASK_IDS.NUMERICAL);
+  assert.doesNotThrow(() => scoreOptimizedTask(TASK_IDS.NUMERICAL, numerical, null));
+  assert.equal(scoreOptimizedTask(TASK_IDS.NUMERICAL, numerical, null).status, 'failed');
+
+  const dual = form(TASK_IDS.DUAL_TASK);
+  const exactOutputs = { targetCount: dual.targetCount, finalValue: dual.finalValue };
+  assert.doesNotThrow(() => scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, exactOutputs, null));
+  assert.equal(scoreOptimizedTask(TASK_IDS.DUAL_TASK, dual, exactOutputs, null).ability_validation['Time Sharing'], 'pending_review');
+});
+
 test('time sharing resolves once reference costs are supplied by the runner', () => {
   const dual = form(TASK_IDS.DUAL_TASK);
   const exactOutputs = { targetCount: dual.targetCount, finalValue: dual.finalValue };
@@ -418,4 +431,24 @@ test('an injected profile changes thresholds, rubric identity, audio and timing 
   assert.equal(scoringRubricFor(TASK_IDS.AUDITORY_COUNT, profile).id, 'validated_count_tolerance');
   assert.equal(audioProfileForTask(TASK_IDS.SPEECH_NOISE, profile).mode, 'premixed_audio_asset');
   assert.equal(taskTimingFor(TASK_IDS.AUDITORY_COUNT, profile).durationSeconds, 135);
+});
+
+test('a rubric config missing its own id can never accidentally match an assessment that is equally missing one', () => {
+  // Every rubric in the shipped profile has a real id, so this cannot happen
+  // today -- but the whole point of the rubricId comparison is proving an
+  // assessment was actually graded against a specific rubric, and undefined
+  // !== undefined being false would otherwise defeat that silently if a
+  // future profile edit ever left an id unset.
+  const profile = JSON.parse(JSON.stringify(ACTIVE_BATTERY_PROFILE));
+  delete profile.rubrics[TASK_IDS.WRITTEN].id;
+
+  const written = form(TASK_IDS.WRITTEN);
+  const summary = Array.from({ length: 40 }, (_, index) => `word${index}`).join(' ');
+  const result = scoreOptimizedTask(TASK_IDS.WRITTEN, written, { mainIdea: written.mainIdea, summary }, {
+    // Also has no rubricId -- would "match" an unguarded undefined !== undefined.
+    rubricAssessment: { scores: { clarity: 5, coherence: 5, completeness: 5, information_ordering: 5 } },
+  }, profile);
+
+  assert.equal(result.ability_validation['Written Expression'], 'pending_review');
+  assert.notEqual(result.status, 'passed');
 });

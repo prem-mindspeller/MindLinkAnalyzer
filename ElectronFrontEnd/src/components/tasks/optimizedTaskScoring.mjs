@@ -58,7 +58,9 @@ const keyDetailMatches = (value, expected, thresholds) => {
 
 const externalRubricStatus = (runtime, rubric) => {
   const assessment = runtime?.rubricAssessment;
-  if (!assessment || assessment.rubricId !== rubric.id) return null;
+  // rubric?.id (not just !==) so a rubric config missing its own id can never
+  // "match" an assessment that is equally missing one.
+  if (!assessment || !rubric?.id || assessment.rubricId !== rubric.id) return null;
   return assessment.status === PASSED || assessment.status === FAILED
     ? assessment.status
     : null;
@@ -71,7 +73,7 @@ const externalRubricStatus = (runtime, rubric) => {
  */
 const rubricScoresFor = (runtime, rubric) => {
   const assessment = runtime?.rubricAssessment;
-  if (!assessment || assessment.rubricId !== rubric?.id) return null;
+  if (!assessment || !rubric?.id || assessment.rubricId !== rubric.id) return null;
   const scores = assessment.scores;
   return scores && typeof scores === 'object' ? scores : null;
 };
@@ -125,6 +127,11 @@ export function scoreOptimizedTask(
   runtime = {},
   profile = ACTIVE_BATTERY_PROFILE,
 ) {
+  // Default parameters only cover an omitted/undefined argument; an explicit
+  // null (a real risk at this exported boundary, called from several sites
+  // and directly by tests) would otherwise throw before any task branch runs.
+  response = response || {};
+  runtime = runtime || {};
   const rubric = scoringRubricFor(taskId, profile);
   const thresholds = scoringThresholdsFor(taskId, profile);
   const profileMetadata = profile.protocolProfile || PROTOCOL_PROFILE_METADATA;

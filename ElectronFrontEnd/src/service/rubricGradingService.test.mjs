@@ -84,6 +84,15 @@ test('an assessment is accepted only when its rubric id matches', () => {
   assert.equal(normalizeAssessment({ assessment: { rubricId: 'other', scores: { clarity: 4 } } }, 'r1'), null);
 });
 
+test('a falsy expected rubric id can never accidentally match a falsy payload id', () => {
+  // Both-sides-falsy must not "match": that would defeat the entire point of
+  // the check, which is proving the assessment was graded against a real,
+  // specific rubric -- not merely that neither side named one.
+  assert.equal(normalizeAssessment({ assessment: { rubricId: null, scores: { a: 1 } } }, null), null);
+  assert.equal(normalizeAssessment({ assessment: { scores: { a: 1 } } }, undefined), null);
+  assert.equal(normalizeAssessment({ assessment: { rubricId: '', scores: { a: 1 } } }, ''), null);
+});
+
 test('malformed assessments are rejected', () => {
   for (const payload of [
     null,
