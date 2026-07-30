@@ -148,23 +148,25 @@ const audioProfiles = {
     // Built with tools/build_speech_in_noise_assets.py from Piper TTS
     // (en_US-lessac-medium) narration of the passages in SPEECH_BASE_FORMS,
     // mixed against the same seeded noise `noise` below describes (seed 11011,
-    // looped 2s buffer) and re-measured after mixing rather than assumed.
+    // looped 2s buffer) and re-measured after mixing rather than assumed. The
+    // narration itself was trimmed (see SPEECH_BASE_FORMS comments and
+    // tools/README.md) so it still fits the 120s block at playbackRate below.
     // Regenerate with: python3 tools/build_speech_in_noise_assets.py
-    // --narration-dir tools/narration
+    // --narration-dir tools/narration --target-snr-db 11.5
     assetUri: null,
     assetSha256: null,
     assetsByForm: {
       speech_a: {
-        uri: 'audio/speech_a_snr8.wav',
-        sha256: 'dbebab94995096222e4c7e4b08fff2cf76f539b848faf645ab6d67625c63595d',
+        uri: 'audio/speech_a_snr11p5.wav',
+        sha256: '599e6c6af872336b2ac91a151600c5795a2d676d97fb7f49ce3fd8dcc4ecea2a',
       },
       speech_b: {
-        uri: 'audio/speech_b_snr8.wav',
-        sha256: '971f9c13a714afbdf38953a8eb17ffd52427c40fa848e4e86e11187e2b2698e9',
+        uri: 'audio/speech_b_snr11p5.wav',
+        sha256: 'a8ac1c45a34b3f1ef4051e9da10bee278d1f3a2c759dc12ffca86e0228361175',
       },
       speech_c: {
-        uri: 'audio/speech_c_snr8.wav',
-        sha256: '5a099c747c638f1fad6ec9ba39cba70b72f590f7f541d081568106f5f7346c2a',
+        uri: 'audio/speech_c_snr11p5.wav',
+        sha256: '468e9370fb36166ae27bfa66ab51bacab349d719b9ddc75ecb862bb23b8b3d8c',
       },
     },
     assetsByStimulusKey: {},
@@ -175,11 +177,19 @@ const audioProfiles = {
     rate: 0.88,
     pitch: 1,
     volume: 0.9,
-    nominalSnrDb: 8,
+    // <1 slows delivery down (Chromium/Electron's HTMLMediaElement applies
+    // pitch-preserving time-stretching by default, so this narrows the pace
+    // without a chipmunk/deep-voice pitch shift). Only meaningful for
+    // premixed_audio_asset playback; read by speak() in OptimizedBatteryTask.jsx.
+    playbackRate: 0.85,
+    // 11.5 dB == noise RMS at 75% of its level at the previous 9 dB setting
+    // (noise 25% quieter than before, not 25% quieter than the speech itself).
+    nominalSnrDb: 11.5,
     acousticallyCalibrated: true,
-    // Shortest of the three narrations (speech_a, 103.3s); kept conservative
-    // so this is never overstated relative to what actually plays.
-    expectedDeliverySeconds: 103,
+    // Shortest of the three (now-trimmed) narrations (speech_b, 89.9s) played
+    // at playbackRate above; kept conservative so this is never overstated
+    // relative to what actually plays.
+    expectedDeliverySeconds: 105,
     settlingSeconds: 5,
     // Documents the noise this asset was calibrated against, for audit and
     // regeneration; not read by the runtime while mode is premixed_audio_asset.

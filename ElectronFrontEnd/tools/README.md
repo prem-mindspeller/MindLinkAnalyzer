@@ -75,3 +75,23 @@ for (const f of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE]) {
 
 then repeat the Piper + mixing steps above with a new target SNR via
 `--target-snr-db`.
+
+### Narration length vs. playbackRate
+
+`speech_in_noise.playbackRate` in `optimizedBatteryProfile.mjs` slows down
+in-browser delivery (Chromium/Electron time-stretches premixed_audio_asset
+playback while preserving pitch). Task 11's block is a fixed 120 seconds, so
+at a given playbackRate the raw narration must be short enough that
+`onset (0.5s) + narration_duration / playbackRate` finishes with a safe
+margin (aim for >= 8s) before the block ends — otherwise the passage gets cut
+off mid-sentence and the attempt fails its audio-delivery check.
+
+The checked-in `narration/*.wav` are already trimmed to the sentence count
+that keeps a safe margin at the current playbackRate (0.85): `speech_a` ends
+after its 9th continuation sentence, `speech_b` after its 8th, `speech_c`
+after its 9th (trimmed at a real inter-sentence pause, verified against the
+waveform, not mid-word). `SPEECH_BASE_FORMS` in `optimizedBatteryConfig.mjs`
+carries a comment on each trimmed `continuation` recording the original
+sentence count. If `playbackRate` changes again, recompute the margin above
+first — a slower rate will likely need the passages trimmed further (or the
+rate raised back up) before re-running Piper and the mixer.

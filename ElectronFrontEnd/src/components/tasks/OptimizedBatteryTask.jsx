@@ -469,6 +469,9 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
         const asset = new window.Audio(assetDescriptor.uri);
         asset.preload = 'auto';
         asset.volume = Math.max(0, Math.min(1, Number(speechProfile.volume ?? 1)));
+        // Pitch-preserving by default in Chromium/Electron, so a rate below 1
+        // slows delivery without a chipmunk/deep-voice pitch shift.
+        asset.playbackRate = Math.max(0.1, Number(speechProfile.playbackRate) || 1);
         assetAudioRefsRef.current.add(asset);
         asset.onplaying = () => {
           if (!auditIsCurrent()) return;
