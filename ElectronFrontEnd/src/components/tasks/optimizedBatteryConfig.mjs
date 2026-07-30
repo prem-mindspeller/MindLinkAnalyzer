@@ -603,10 +603,14 @@ const ROUTE_FORMS = [
   ]),
 ];
 
+function ideationForm(id, prompt) {
+  return { id, prompt, spokenEvents: [{ at: 0, text: prompt }] };
+}
+
 const IDEATION_FORMS = [
-  { id: 'ideas_a', prompt: 'Think of as many different uses for a brick as you can.' },
-  { id: 'ideas_b', prompt: 'Think of as many different uses for a paper cup as you can.' },
-  { id: 'ideas_c', prompt: 'Think of as many different uses for a shoelace as you can.' },
+  ideationForm('ideas_a', 'A brick.'),
+  ideationForm('ideas_b', 'A paper cup.'),
+  ideationForm('ideas_c', 'A shoelace.'),
 ];
 
 function dualTaskForm(id, seed, toneCount, targetCount, startValue, beforeDelta, afterDelta) {
@@ -940,8 +944,8 @@ export function taskIntroduction(taskId, form) {
       'At the end, give the arrow’s final column, row, and direction.',
     ],
     [TASK_IDS.IDEATION]: () => [
-      `Prompt: ${form.prompt}`,
       'Think of as many different uses for a single object as you can.',
+      'You will hear the object’s name at the beginning of the task',
       'Generate as many ideas as possible. Keep them in your head, do not say or write anything yet.',
       'After the task ends, type one idea on each line. (Shift+Enter will start a new line.)',
     ],

@@ -6,8 +6,10 @@ import { ResponseField } from './taskShared.jsx';
 /**
  * Task 6 — Divergent Ideation.
  *
- * Silent generation block: the prompt is given in the pre-recording
- * instructions, and nothing is presented or scheduled during the block itself.
+ * Silent generation block: the prompt is shown in the pre-recording
+ * instructions and spoken once at task start (see IDEATION_FORMS'
+ * spokenEvents in optimizedBatteryConfig.mjs); nothing else is presented or
+ * scheduled during the block itself.
  */
 
 function ResponseFields({ response, setResponse }) {
