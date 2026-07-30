@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+    useCallback, useEffect, useMemo, useRef, useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -24,6 +26,8 @@ import {
     BATTERY_VERSION,
     EYES_OPEN_BASELINE_CHECKPOINT,
     TASK_DEFINITIONS,
+    TASK_IDS,
+    audioProfileForTask,
     resolveSessionDepth,
     taskIdsForSession,
     taskSequenceForSession,
@@ -196,6 +200,42 @@ const TaskSelection = () => {
         eyesClosed: false,
         error: null,
     });
+
+    const [soundChecking, setSoundChecking] = useState(false);
+    const soundCheckContextRef = useRef(null);
+
+    useEffect(() => () => {
+        try { soundCheckContextRef.current?.close(); } catch (_) { /* ignore */ }
+    }, []);
+
+    // A single, page-level volume check: the same high (target) tone Task 3
+    // counts, played through a standalone Web Audio oscillator rather than the
+    // task runner. Lets a participant confirm their sound works once, before
+    // picking a task, instead of every task's instructions repeating the
+    // "audio is part of this form" reminder.
+    const playSoundCheck = useCallback(() => {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!soundCheckContextRef.current) soundCheckContextRef.current = new AudioContextClass();
+        const context = soundCheckContextRef.current;
+        if (context.state === 'suspended') context.resume().catch(() => {});
+        const tone = audioProfileForTask(TASK_IDS.AUDITORY_COUNT);
+        if (tone.mode !== 'web_audio_oscillator') return;
+        const durationMs = Math.max(1, Number(tone.durationMs) || 115);
+        const outputGain = Math.max(0.001, Number(tone.outputGain) || 0.22);
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.type = tone.waveform || 'sine';
+        oscillator.frequency.value = tone.targetFrequencyHz;
+        gain.gain.setValueAtTime(outputGain, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + durationMs / 1000);
+        oscillator.onended = () => setSoundChecking(false);
+        oscillator.start();
+        oscillator.stop(context.currentTime + durationMs / 1000);
+        setSoundChecking(true);
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -434,6 +474,17 @@ const TaskSelection = () => {
                                 ? 'The matched baselines and every task required for this session are ready for analysis.'
                                 : 'The device remains connected between tasks. Responses are collected only after EEG scoring ends; a task with less than 20 contiguous clean seconds must be repeated.'}</p>
                         </div>
+                    </div>
+
+                    <div className="ts-sound-check-notice">
+                        <span className="ts-notice-icon">🔊</span>
+                        <div className="ts-notice-content">
+                            <strong>Audio is part of this task battery.</strong>
+                            <p>Check your volume before starting a task.</p>
+                        </div>
+                        <button type="button" className="ts-sound-check-btn" onClick={playSoundCheck}>
+                            {soundChecking ? '🔊' : '▶'} Test volume
+                        </button>
                     </div>
 
                     <div className="ts-layout">

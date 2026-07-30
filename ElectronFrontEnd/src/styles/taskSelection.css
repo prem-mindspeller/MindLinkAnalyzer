@@ -66,6 +66,51 @@
     font-size: 0.825rem;
 }
 
+/* ── Sound check banner ── */
+.ts-sound-check-notice {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 18px;
+    background: #eef2ff;
+    border: 1.5px solid #c7d2fe;
+    border-radius: 12px;
+    color: #3730a3;
+}
+
+.ts-sound-check-notice .ts-notice-icon {
+    color: #4338ca;
+}
+
+.ts-sound-check-notice .ts-notice-content {
+    flex: 1;
+}
+
+.ts-sound-check-notice .ts-notice-content strong {
+    color: #312e81;
+}
+
+.ts-sound-check-notice .ts-notice-content p {
+    color: #3730a3;
+}
+
+.ts-sound-check-btn {
+    flex-shrink: 0;
+    padding: 10px 20px;
+    border: 1.5px solid #4338ca;
+    border-radius: 999px;
+    background: #e0e7ff;
+    color: #312e81;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.ts-sound-check-btn:hover {
+    background: #c7d2fe;
+}
+
 
 .ts-page-header {
     text-align: center;

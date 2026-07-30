@@ -1265,7 +1265,6 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           <span className="task-eyes-badge task-duration-badge">⏱ {definition.duration}s EEG</span>
           <span className="task-eyes-badge optimized-language-badge">Stimulus: English</span>
         </div>
-        <div className="task-runner-sound-notice">🔊 Audio is part of this candidate pilot form. Check your volume before starting.</div>
         {taskId === TASK_IDS.AUDITORY_COUNT && (
           <div className="task-runner-tone-preview">
             <p className="task-runner-tone-preview-label">Listen to the two tones before you start:</p>
