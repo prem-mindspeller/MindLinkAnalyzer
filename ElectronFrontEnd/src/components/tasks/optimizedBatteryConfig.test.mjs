@@ -216,7 +216,7 @@ test('rapid visual comparison continuously updates synchronized code pairs', () 
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.VISUAL_COMPARISON]) {
     assert.ok(form.mismatchOnset >= 20 && form.mismatchOnset <= 30, form.id);
     assert.ok(form.frames.length >= duration / form.updateIntervalSeconds, form.id);
-    assert.ok(new Set(form.frames).size > 30, form.id);
+    assert.ok(new Set(form.frames).size > form.frames.length / 2, form.id);
 
     const early = visualComparisonFrame(form, form.mismatchOnset - 1);
     const later = visualComparisonFrame(form, form.mismatchOnset + 1);

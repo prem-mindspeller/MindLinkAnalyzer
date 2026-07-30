@@ -735,7 +735,7 @@ function visualComparisonForm(id, seed, mismatchOnset, mismatchIndex, replacemen
 }
 
 const VISUAL_COMPARISON_FORMS = [
-  visualComparisonForm('compare_a', 9101, 25, 11, 5),
+  visualComparisonForm('compare_a', 9101, 27, 11, 5),
   visualComparisonForm('compare_b', 9102, 26, 6, 7),
   visualComparisonForm('compare_c', 9103, 24, 13, 9),
 ];
@@ -965,14 +965,16 @@ export function taskIntroduction(taskId, form) {
       'Try to remember the different kind of mistakes you encountered (e.g. "an extra letter").',
     ],
     [TASK_IDS.VISUAL_COMPARISON]: () => [
-      'Two rows of letters and numbers will update together, again and again.',
-      'At some point, one character in one row will slowly change, so the two rows no longer match.',
-      'As soon as you notice this, press the DETECT MISMATCH button. Press it only once.',
+      'Two rows of letters and numbers will update at the same time, again and again.',
+      'E.g.: "YF4M-D5AJ-FRYE" and "YF4M-D5AJ-FRYE"',
+      'At some point, characters in one row will slowly differ, so the two rows no longer match.',
+      'E.g.: "YF4M-D5AJ-FRYE" and "YF4M-D5AM-FRYE"',
+      'As soon as you notice the rows are no longer the same, press the DETECT MISMATCH button. Press it only once when you first notice it.',
       'After you press it, stay still until the task ends.',
     ],
     [TASK_IDS.CLOSURE]: () => [
-      'A picture is hidden in visual noise. It will slowly become clearer.',
-      'As soon as you can tell what it is, press the RECOGNIZED button. Press it only once.',
+      'A picture is hidden in visual noise. After 20 seconds, it will slowly become clearer.',
+      'As soon as you can tell what it is, press the RECOGNIZED button. Press it only once you are sure.',
       'After you press it, stay still until the task ends.',
     ],
     [TASK_IDS.SPEECH_NOISE]: () => [
