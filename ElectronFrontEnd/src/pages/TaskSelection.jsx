@@ -519,7 +519,7 @@ const TaskSelection = () => {
                                 <>
                                     <h2 className="ts-detail-name">
                                         {completedIds.includes(selectedId) && <span className="ts-done-badge"><FontAwesomeIcon icon={faCircleCheck} /> Completed</span>}
-                                        Task {selectedMeta.number}: {selectedMeta.name}
+                                        {selectedMeta.name}
                                     </h2>
                                     <div className="ts-detail-tags">
                                         <span className={`ts-tag tag-${selectedMeta.eyeState === 'closed' ? 'ec' : 'eo'}`}>
