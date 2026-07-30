@@ -635,6 +635,7 @@ function dualTaskForm(id, seed, toneCount, targetCount, startValue, beforeDelta,
     updateTimes,
     finalValue,
     spokenEvents: [
+      { at: 0, text: `Start with ${startValue}.` },
       ...updateTimes.map((at) => ({ at, text: 'Update.' })),
       { at: switchAt, text: 'Switch.' },
     ],
@@ -952,8 +953,8 @@ export function taskIntroduction(taskId, form) {
     [TASK_IDS.DUAL_TASK]: () => [
       'Read this very carefully, because you will not see it again during the task!',
       `Start your number at ${form.startValue}.`,
-      `Every time you hear "Update", ${form.beforeDelta < 0 ? `subtract ${Math.abs(form.beforeDelta)}` : `add ${form.beforeDelta}`} to your number.`,
-      `When you hear "Switch", the rule changes: from then on, ${form.afterDelta < 0 ? `subtract ${Math.abs(form.afterDelta)}` : `add ${form.afterDelta}`} at every "Update" instead.`,
+      `Every time you hear "Update", add ${form.beforeDelta} to your number.`,
+      `When you hear "Switch", the rule changes: from then on, add ${form.afterDelta} at every "Update" instead.`,
       'At the same time, count every high tone you hear, from start to finish.',
       'At the end, give your final number and your number of counted high tones.',
     ],

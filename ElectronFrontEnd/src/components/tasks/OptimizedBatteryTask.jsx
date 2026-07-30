@@ -213,6 +213,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   const [response, setResponse] = useState(() => initialResponseFor(taskId));
   const [buttonRuntime, setButtonRuntime] = useState(null);
   const [previewingTone, setPreviewingTone] = useState(null);
+  const [previewingSpeech, setPreviewingSpeech] = useState(null);
 
   const startClockRef = useRef(null);
   const taskTimerRef = useRef(null);
@@ -404,6 +405,37 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     const resetAfterMs = Math.max(150, Number(audioProfile.durationMs) || 115) + 150;
     window.setTimeout(() => setPreviewingTone((current) => (current === kind ? null : current)), resetAfterMs);
   }, [audioProfile, getAudioContext, playTone]);
+
+  // Lets a participant audition a spoken cue (e.g. Task 7's "Update"/"Switch")
+  // on the idle screen. Speaks directly via speechSynthesis rather than the
+  // audited speak() below, so the preview is invisible to the delivery audit —
+  // it is not a scheduled task stimulus. Holds a live utterance reference,
+  // like speak() does, so Chromium/Electron does not GC it before onend fires.
+  const playPreviewSpeech = useCallback((kind, text) => {
+    try {
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance || !text) return;
+      const utterance = new window.SpeechSynthesisUtterance(text);
+      utterance.lang = speechProfile.language;
+      utterance.rate = speechProfile.rate;
+      utterance.pitch = speechProfile.pitch;
+      utterance.volume = speechProfile.volume;
+      if (speechProfile.voiceId) {
+        const configuredVoice = window.speechSynthesis.getVoices?.().find((voice) => (
+          voice.voiceURI === speechProfile.voiceId || voice.name === speechProfile.voiceId
+        ));
+        if (configuredVoice) utterance.voice = configuredVoice;
+      }
+      const release = () => {
+        speechUtteranceRefsRef.current.delete(utterance);
+        setPreviewingSpeech((current) => (current === kind ? null : current));
+      };
+      speechUtteranceRefsRef.current.add(utterance);
+      utterance.onstart = () => setPreviewingSpeech(kind);
+      utterance.onend = release;
+      utterance.onerror = release;
+      window.speechSynthesis.speak(utterance);
+    } catch (_) { /* preview is best-effort */ }
+  }, [speechProfile]);
 
   const speak = useCallback((text, scheduled = {}) => {
     const auditKey = String(scheduled.key || `speech:${scheduled.at || 0}:${text}`);
@@ -1147,6 +1179,8 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           <taskModule.IdleExtras
             previewingTone={previewingTone}
             onPreviewTone={playPreviewTone}
+            previewingSpeech={previewingSpeech}
+            onPreviewSpeech={playPreviewSpeech}
           />
         )}
         <div className="task-runner-intro">

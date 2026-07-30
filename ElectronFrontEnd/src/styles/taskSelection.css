@@ -501,6 +501,26 @@
     background: #c7d2fe;
 }
 
+.task-runner-btn-preview-update {
+    border: 1.5px solid #15803d;
+    background: #dcfce7;
+    color: #166534;
+}
+
+.task-runner-btn-preview-update:hover {
+    background: #bbf7d0;
+}
+
+.task-runner-btn-preview-switch {
+    border: 1.5px solid #b45309;
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.task-runner-btn-preview-switch:hover {
+    background: #fde68a;
+}
+
 /* Countdown screen */
 .task-runner-countdown-screen {
     align-items: center;

@@ -16,19 +16,26 @@ export function ResponseField({ label, children }) {
   );
 }
 
-// Emphasise the ordering clause of the anomaly rule wherever it is shown, so
-// participants notice the letter–hyphen–digits sequence must be in that order.
-// Used by the runner's instruction list and by the Task 8 stimulus, which both
-// render the same rule string.
-const RULE_ORDER_PHRASE = 'in that same order';
+// Emphasise fixed phrases wherever they appear in task copy, so participants
+// notice them at a glance — e.g. the anomaly rule's ordering clause, or
+// Task 7's warning that its instructions are shown only once. Used by the
+// runner's instruction list and by the Task 8 stimulus, which both render
+// rule/instruction strings through this same helper.
+const EMPHASIZED_PHRASES = [
+  'in that same order',
+  'Read this very carefully',
+];
 
 export function renderRuleWithOrderEmphasis(text) {
   const value = String(text ?? '');
-  const index = value.indexOf(RULE_ORDER_PHRASE);
-  if (index < 0) return value;
-  return [
-    value.slice(0, index),
-    <strong key="rule-order-emphasis">{RULE_ORDER_PHRASE}</strong>,
-    value.slice(index + RULE_ORDER_PHRASE.length),
-  ];
+  for (const phrase of EMPHASIZED_PHRASES) {
+    const index = value.indexOf(phrase);
+    if (index < 0) continue;
+    return [
+      value.slice(0, index),
+      <strong key={`emphasis-${phrase}`}>{phrase}</strong>,
+      value.slice(index + phrase.length),
+    ];
+  }
+  return value;
 }

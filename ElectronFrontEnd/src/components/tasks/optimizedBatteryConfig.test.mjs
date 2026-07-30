@@ -179,7 +179,10 @@ test('pre-recording instructions do not leak Task-2 encoding and fully state Tas
   const dualIntro = taskIntroduction(TASK_IDS.DUAL_TASK, dual).join(' ');
   assert.match(dualIntro, new RegExp(String(Math.abs(dual.beforeDelta))));
   assert.match(dualIntro, new RegExp(String(Math.abs(dual.afterDelta))));
-  assert.equal(dual.spokenEvents.some((event) => event.at === 0), false);
+  assert.deepEqual(
+    dual.spokenEvents.filter((event) => event.at === 0).map((event) => event.text),
+    [`Start with ${dual.startValue}.`],
+  );
   const switchAt = TASK_DEFINITIONS[TASK_IDS.DUAL_TASK].phases[1].start;
   assert.deepEqual(
     dual.spokenEvents.filter((event) => event.at === switchAt).map((event) => event.text),
