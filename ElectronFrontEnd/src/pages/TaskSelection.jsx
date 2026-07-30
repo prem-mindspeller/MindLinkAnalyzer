@@ -433,7 +433,7 @@ const TaskSelection = () => {
                     <div className="task-selection-page">
                         <div className="ts-task-exec-header">
                             <h1 className="ts-page-title">{task.name}</h1>
-                            <p className="ts-page-subtitle">Continuous task block · Session {protocolSession}</p>
+                            <p className="ts-page-subtitle">Session {protocolSession}</p>
                         </div>
                         <OptimizedBatteryTask
                             key={`${activeTaskId}:${sessionDepth}`}
@@ -579,7 +579,6 @@ const TaskSelection = () => {
                                         <span className="ts-tag tag-dur"><FontAwesomeIcon icon={faClock} /> {selectedMeta.duration}s EEG</span>
                                     </div>
                                     <p className="ts-detail-desc">{selectedMeta.description}</p>
-                                    <p className="optimized-detail-baseline">Matched reference: {selectedMeta.baseline.replace('_', ' ')} · Form rotates between sessions.</p>
                                     <button
                                         className="ts-start-btn"
                                         onClick={startSelected}

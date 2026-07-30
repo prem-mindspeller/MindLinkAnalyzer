@@ -1258,7 +1258,6 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   if (runState === 'idle') {
     return (
       <div className="task-runner-card optimized-task-card">
-        <p className="optimized-task-kicker">Candidate/pilot · Task {definition.number} · {form.id}</p>
         <h2 className="task-runner-name">{t('taskRunner.readInstruction')}</h2>
         <div className="task-runner-badges">
           <span className={`task-eyes-badge eyes-${definition.eyeState}`}>Eyes {definition.eyeState}</span>
