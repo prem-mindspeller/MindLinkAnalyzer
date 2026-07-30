@@ -333,6 +333,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [response, setResponse] = useState(() => initialResponseFor(taskId));
   const [buttonRuntime, setButtonRuntime] = useState(null);
+  const [previewingTone, setPreviewingTone] = useState(null);
 
   const startClockRef = useRef(null);
   const taskTimerRef = useRef(null);
@@ -510,6 +511,20 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       return false;
     }
   }, [audioProfile, form.id, getAudioContext, recordedSampleCount]);
+
+  // Lets a participant audition the low (distractor) and high (target) tones
+  // on the idle screen, before EEG scoring starts. Reuses playTone with no
+  // auditKey so the preview is inaudible to the delivery audit — it is not a
+  // scheduled task stimulus.
+  const playPreviewTone = useCallback((kind) => {
+    const frequency = kind === 'high' ? audioProfile.targetFrequencyHz : audioProfile.distractorFrequencyHz;
+    if (!Number.isFinite(frequency)) return;
+    getAudioContext();
+    if (!playTone(frequency)) return;
+    setPreviewingTone(kind);
+    const resetAfterMs = Math.max(150, Number(audioProfile.durationMs) || 115) + 150;
+    window.setTimeout(() => setPreviewingTone((current) => (current === kind ? null : current)), resetAfterMs);
+  }, [audioProfile, getAudioContext, playTone]);
 
   const speak = useCallback((text, scheduled = {}) => {
     const auditKey = String(scheduled.key || `speech:${scheduled.at || 0}:${text}`);
@@ -1251,6 +1266,27 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           <span className="task-eyes-badge optimized-language-badge">Stimulus: English</span>
         </div>
         <div className="task-runner-sound-notice">🔊 Audio is part of this candidate pilot form. Check your volume before starting.</div>
+        {taskId === TASK_IDS.AUDITORY_COUNT && (
+          <div className="task-runner-tone-preview">
+            <p className="task-runner-tone-preview-label">Listen to the two tones before you start:</p>
+            <div className="task-runner-tone-preview-buttons">
+              <button
+                type="button"
+                className="task-runner-btn-preview task-runner-btn-preview-low"
+                onClick={() => playPreviewTone('low')}
+              >
+                {previewingTone === 'low' ? '🔊' : '▶'} Low tone (ignore)
+              </button>
+              <button
+                type="button"
+                className="task-runner-btn-preview task-runner-btn-preview-high"
+                onClick={() => playPreviewTone('high')}
+              >
+                {previewingTone === 'high' ? '🔊' : '▶'} High tone (count)
+              </button>
+            </div>
+          </div>
+        )}
         <div className="task-runner-intro">
           <ul className="task-runner-intro-bullets">
             {introductions.map((line) => <li key={line}>{renderRuleWithOrderEmphasis(line)}</li>)}

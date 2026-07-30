@@ -913,7 +913,7 @@ export function taskIntroduction(taskId, form) {
   const specificFactory = {
     [TASK_IDS.NUMERICAL]: () => [`Start at ${form.startValue}; follow every spoken operation silently and give only the final value.`],
     [TASK_IDS.WORKING_MEMORY]: () => ['The initial sequence is presented only after EEG scoring starts. Encode it then, maintain every spoken update, and report only the final order.'],
-    [TASK_IDS.AUDITORY_COUNT]: () => ['Count every high tone silently and ignore the low tones. Report one count afterward.'],
+    [TASK_IDS.AUDITORY_COUNT]: () => ['Count every high tone silently and ignore the low tones. Report one count afterward.', 'Use the buttons above to hear an example of the low tone and the high tone before you begin.'],
     [TASK_IDS.SEMANTIC]: () => ['Infer the organising principle of the first word stream and the new principle after the seamless switch.'],
     [TASK_IDS.VISUOSPATIAL]: () => [`Start at row ${form.start.y + 1}, column ${form.start.x + 1}, facing ${form.start.orientation}. Every displayed turn changes both direction and grid position. Row numbers run top to bottom and columns left to right.`],
     [TASK_IDS.IDEATION]: () => [`Prompt: ${form.prompt}`, 'Generate ideas silently; you will capture each idea on a separate line afterward.'],

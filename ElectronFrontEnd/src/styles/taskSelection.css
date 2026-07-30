@@ -418,6 +418,60 @@
     background: #1d4ed8;
 }
 
+.task-runner-tone-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.task-runner-tone-preview-label {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #3730a3;
+}
+
+.task-runner-tone-preview-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.task-runner-btn-preview {
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.task-runner-btn-preview-low {
+    border: 1.5px solid #94a3b8;
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.task-runner-btn-preview-low:hover {
+    background: #e2e8f0;
+}
+
+.task-runner-btn-preview-high {
+    border: 1.5px solid #4338ca;
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.task-runner-btn-preview-high:hover {
+    background: #c7d2fe;
+}
+
 /* Countdown screen */
 .task-runner-countdown-screen {
     align-items: center;
