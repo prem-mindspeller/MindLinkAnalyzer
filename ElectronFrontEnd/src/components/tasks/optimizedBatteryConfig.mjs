@@ -961,7 +961,8 @@ export function taskIntroduction(taskId, form) {
     [TASK_IDS.ANOMALY]: () => [
       form.rule,
       'Watch each code and check it against the rule. When a code breaks the rule, count it in your head.',
-      'Try to remember the different kind of mistakes you encountered.',
+      'An example of a incorrect code is "AB-7", which has an extra letter. Another example is "4-C7", which has the wrong order.',
+      'Try to remember the different kind of mistakes you encountered (e.g. "an extra letter").',
     ],
     [TASK_IDS.VISUAL_COMPARISON]: () => [
       'Two rows of letters and numbers will update together, again and again.',
