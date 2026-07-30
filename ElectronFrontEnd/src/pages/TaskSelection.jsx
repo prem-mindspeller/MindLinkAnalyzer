@@ -284,9 +284,21 @@ const TaskSelection = () => {
     const allEnabledCompleted = nextRequiredItem == null;
     const completedEnabledCount = enabledTaskIds.filter((id) => completedIds.includes(id)).length;
 
+    // The sidebar lists tasks by task number (1, 2, 3, ...), not by their order in
+    // SESSION_SEQUENCES (a scientific grouping that starts with Task 3 for every
+    // session). Default/auto-selection should follow what the participant sees, so
+    // find the first incomplete task in that same number order instead of reusing
+    // nextRequiredItem, which would otherwise always land on Task 3 on a fresh load.
+    const firstIncompleteByDisplayOrder = useMemo(() => (
+        enabledTaskIds
+            .slice()
+            .sort((left, right) => TASK_DEFINITIONS[left].number - TASK_DEFINITIONS[right].number)
+            .find((id) => !completedIds.includes(id))
+    ), [completedIds, enabledTaskIds]);
+
     const firstSelectable = nextRequiredItem === EYES_OPEN_BASELINE_CHECKPOINT
         ? EYES_OPEN_BASELINE_CHECKPOINT
-        : nextRequiredItem || enabledTaskIds[0];
+        : firstIncompleteByDisplayOrder || enabledTaskIds[0];
     const [selectedId, setSelectedId] = useState(firstSelectable);
     const [activeTaskId, setActiveTaskId] = useState(null);
     const [qualityCheckTaskId, setQualityCheckTaskId] = useState(null);
