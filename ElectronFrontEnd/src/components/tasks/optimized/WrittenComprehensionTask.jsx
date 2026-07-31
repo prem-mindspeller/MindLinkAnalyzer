@@ -1,6 +1,8 @@
 import React from 'react';
 
-import { TASK_IDS, countWords, pacedPassageChunk } from '../optimizedBatteryConfig.mjs';
+import {
+  TASK_IDS, countWords, maximumWordsFor, pacedPassageChunk,
+} from '../optimizedBatteryConfig.mjs';
 import { ResponseField } from './taskShared.jsx';
 
 /**
@@ -45,12 +47,15 @@ function Stimulus({ form, presentation, elapsedSeconds }) {
 function isResponseValid({ response, scoringThresholds }) {
   const wordCount = countWords(response.summary);
   return wordCount >= scoringThresholds.summaryMinimumWords
-    && wordCount <= scoringThresholds.summaryMaximumWords;
+    && wordCount <= maximumWordsFor(response.summary, scoringThresholds.summaryMaximumWords);
 }
 
 function ResponseFields({ form, response, setResponse, scoringThresholds }) {
   const wordCount = countWords(response.summary);
   const lengthValid = isResponseValid({ response, scoringThresholds });
+  // Shown rather than the raw threshold so the stated range always matches the
+  // one being enforced for the script the participant is actually writing in.
+  const maximumWords = maximumWordsFor(response.summary, scoringThresholds.summaryMaximumWords);
   return (
     <>
       <ResponseField label="Select the main idea.">
@@ -63,7 +68,7 @@ function ResponseFields({ form, response, setResponse, scoringThresholds }) {
           {form.mainIdeaOptions.map((option) => <option key={option}>{option}</option>)}
         </select>
       </ResponseField>
-      <ResponseField label={`Write a ${scoringThresholds.summaryMinimumWords}–${scoringThresholds.summaryMaximumWords} word summary (${wordCount} words).`}>
+      <ResponseField label={`Write a ${scoringThresholds.summaryMinimumWords}–${maximumWords} word summary (${wordCount} words).`}>
         <textarea
           rows="7"
           required
@@ -73,7 +78,7 @@ function ResponseFields({ form, response, setResponse, scoringThresholds }) {
       </ResponseField>
       {!lengthValid && (
         <p className="optimized-response-warning">
-          The summary must contain {scoringThresholds.summaryMinimumWords}–{scoringThresholds.summaryMaximumWords} words before it can be saved.
+          The summary must contain {scoringThresholds.summaryMinimumWords}–{maximumWords} words before it can be saved.
         </p>
       )}
     </>

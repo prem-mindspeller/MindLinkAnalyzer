@@ -332,9 +332,9 @@ const thresholds = {
     validated: false,
   },
   [TASK.SPEECH_NOISE]: {
-    keyDetailMinimumTokenLength: 3,
-    keyDetailMinimumMatches: 2,
-    keyDetailMinimumMatchRatio: 0.6,
+    // The key detail is selected from `keyDetailOptions`, not typed, so it is
+    // scored by exact comparison like the main idea. The token-overlap
+    // thresholds this used to carry are gone with the free-text field.
     requireMainIdea: true,
     // Validity gate only: a "concise paraphrase" of a 120 s passage below this
     // length is a fragment rather than a paraphrase. Quality is judged by the

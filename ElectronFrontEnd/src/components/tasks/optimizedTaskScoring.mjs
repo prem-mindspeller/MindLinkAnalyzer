@@ -6,6 +6,7 @@ import {
   audioProfileForTask,
   closureRevealState,
   countWords,
+  maximumWordsFor,
   normalizeText,
   normalizedSequence,
   scoringRubricFor,
@@ -30,31 +31,15 @@ const numeric = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const KEY_DETAIL_STOPWORDS = new Set([
-  'a', 'an', 'and', 'are', 'at', 'be', 'because', 'by', 'for', 'from', 'in',
-  'is', 'it', 'of', 'on', 'or', 'that', 'the', 'their', 'they', 'to', 'was',
-  'were', 'with',
-]);
-
-const contentTokens = (value) => normalizeText(value)
-  .split(' ')
-  .filter((token) => token.length >= 3 && !KEY_DETAIL_STOPWORDS.has(token));
-
-const keyDetailMatches = (value, expected, thresholds) => {
-  const minimumTokenLength = thresholds.keyDetailMinimumTokenLength;
-  const expectedTokens = [...new Set(contentTokens(expected)
-    .filter((token) => token.length >= minimumTokenLength))];
-  if (!expectedTokens.length) return false;
-  const actualTokens = new Set(contentTokens(value));
-  const matches = expectedTokens.filter((token) => actualTokens.has(token)).length;
-  const requiredMatches = expectedTokens.length === 1
-    ? 1
-    : Math.max(
-      thresholds.keyDetailMinimumMatches,
-      Math.ceil(expectedTokens.length * thresholds.keyDetailMinimumMatchRatio),
-    );
-  return matches >= requiredMatches;
-};
+// The key detail is chosen from `keyDetailOptions`, so it compares exactly the
+// way the main idea does. It was previously free text matched by token overlap
+// against an English answer key, which marked a correct answer written in any
+// of the app's other nine languages as a failure — and could not distinguish
+// that from a genuinely wrong answer. Selecting removes the language dependency
+// entirely; the distractors carry the difficulty instead.
+const keyDetailMatches = (value, expected) => (
+  normalizeText(value) === normalizeText(expected)
+);
 
 const externalRubricStatus = (runtime, rubric) => {
   const assessment = runtime?.rubricAssessment;
@@ -430,7 +415,7 @@ export function scoreOptimizedTask(
 
   if (taskId === TASK_IDS.SPEECH_NOISE) {
     const mainIdeaCorrect = normalizeText(response.mainIdea) === normalizeText(form.mainIdea);
-    const keyDetailCorrect = keyDetailMatches(response.keyDetail, form.keyDetail, thresholds);
+    const keyDetailCorrect = keyDetailMatches(response.keyDetail, form.keyDetail);
     const paraphraseWords = countWords(response.paraphrase);
     const paraphraseLengthValid = thresholds.paraphraseMinimumWords == null
       || paraphraseWords >= thresholds.paraphraseMinimumWords;
@@ -483,8 +468,9 @@ export function scoreOptimizedTask(
   if (taskId === TASK_IDS.WRITTEN) {
     const mainIdeaCorrect = normalizeText(response.mainIdea) === normalizeText(form.mainIdea);
     const summaryWordCount = countWords(response.summary);
+    const summaryMaximumWords = maximumWordsFor(response.summary, thresholds.summaryMaximumWords);
     const lengthValid = summaryWordCount >= thresholds.summaryMinimumWords
-      && summaryWordCount <= thresholds.summaryMaximumWords;
+      && summaryWordCount <= summaryMaximumWords;
     const objectivePass = (!thresholds.requireMainIdea || mainIdeaCorrect) && lengthValid;
     const assessmentStatus = externalRubricStatus(runtime, rubric)
       || thresholdRubricStatus(runtime, thresholds.minimumRubricScores, rubric);
@@ -502,9 +488,11 @@ export function scoreOptimizedTask(
       summary_quality: null,
       coherence: null,
       information_ordering: null,
+      // The range actually applied, so this stays consistent with
+      // summary_length_valid when a denser script widened the maximum.
       configured_summary_word_range: [
         thresholds.summaryMinimumWords,
-        thresholds.summaryMaximumWords,
+        summaryMaximumWords,
       ],
     }, abilityValidation, 'objective_main_idea_plus_pending_summary_rubric', [
       'Written Expression and synthesis characteristics remain pending until the summary is reviewed.',

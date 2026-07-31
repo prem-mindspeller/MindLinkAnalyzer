@@ -763,9 +763,13 @@ const SPEECH_BASE_FORMS = [
     passage: 'A town by the coast used to flood every winter. The town did not build one huge wall to stop the water. Instead, workers rebuilt the sand dunes, made a marsh bigger, and raised the lowest paths. The next big storm still brought high water. But the marsh slowed the wave, and the dunes kept the water away from homes. Engineers said no single fix could remove all danger. So the town also built clear escape routes and ran regular warning tests. The plan worked because nature, planning, and ready people all helped each other. It also gave new homes to animals and made the coast nicer to visit on calm days.',
     continuation: 'Before the work started, workers checked where water came into the streets. They also found which older people would need help leaving their homes. People practiced the escape routes on a dry day. This is how they found out that one bridge was too narrow for trucks. So the plan was fixed before the next storm season. Local shops agreed to keep flood barriers ready. Schools taught children what to do if a flood came. After each storm, workers checked the marsh and the dunes and fixed the parts that wore away the most.',
     mainIdea: 'Many different steps together lowered the flood risk.',
-    mainIdeaOptions: ['Many different steps together lowered the flood risk.', 'One giant wall stopped every future flood.', 'The town stopped caring for the coast once the project ended.'],
+    mainIdeaOptions: ['One giant wall stopped every future flood.', 'Many different steps together lowered the flood risk.', 'The town stopped caring for the coast once the project ended.'],
     keyDetailQuestion: 'What slowed the wave?',
     keyDetail: 'the marsh',
+    // Every distractor is a flood defence the passage actually describes, so
+    // the item cannot be solved by picking the most sensible-sounding answer —
+    // only by recalling which one the passage credited with slowing the wave.
+    keyDetailOptions: ['the sand dunes', 'the marsh', 'the raised paths', 'the flood barriers'],
   },
   {
     id: 'speech_b',
@@ -773,9 +777,13 @@ const SPEECH_BASE_FORMS = [
     passage: 'A hospital saw that medicine often arrived late. This happened even though every team worked fast. A review found that each team used different names for the same things. So staff kept stopping to check different labels. The hospital gave everyone one shared code instead. It also moved common supplies closer to the patient rooms. Short handover checks were added too. Delivery got faster, and nobody had to rush. The real problem was not effort. It was how things were organized and laid out. Leaders still kept a paper backup plan, in case the computer system failed. After three months, mistakes dropped and nurses had more time with patients.',
     continuation: 'The review team followed medicine orders from the pharmacy all the way to the patient bed. They found many small mix-ups added up over time. One storage room used a short name for a ward. A cart was restocked at random times. Urgent orders waited in the same line as normal orders. Workers from many teams designed the fix together. They tested the new shared code on one floor first. They checked if the labels were easy to read in different light. If a code looked too much like another one, they changed it. The hospital also made it clear who should fix each kind of problem.',
     mainIdea: 'Shared systems and better layout made medicine delivery faster.',
-    mainIdeaOptions: ['Shared systems and better layout made medicine delivery faster.', 'Nurses were told to walk and work faster.', 'The hospital got rid of every backup plan.'],
+    mainIdeaOptions: ['Nurses were told to walk and work faster.', 'The hospital got rid of every backup plan.', 'Shared systems and better layout made medicine delivery faster.'],
     keyDetailQuestion: 'Why did staff keep stopping?',
     keyDetail: 'to check different labels',
+    // Each distractor is a delay the passage genuinely names (the randomly
+    // restocked cart, supplies that were far from the wards, urgent orders
+    // queued with routine ones), so all four read as credible causes.
+    keyDetailOptions: ['to wait for the restocking cart', 'to walk to distant storage rooms', 'to check different labels', 'to let urgent orders pass first'],
   },
   {
     id: 'speech_c',
@@ -783,9 +791,13 @@ const SPEECH_BASE_FORMS = [
     passage: 'A school library wanted more students to use its science books. Buying more books had not helped much. So the librarian tried something new. Small displays connected science topics to class projects. Teachers got short guides showing where to find good material. Students could also leave questions on a board for the next class to answer. More books got borrowed. But the biggest change was that students started talking about their sources and comparing ideas. The library kept changing the displays so they matched what each class was learning. Things improved because information was easy to see, came at the right time, and had a clear purpose.',
     continuation: 'At first, the displays covered a space project and a water quality project. Each display had books at different reading levels, a picture, a short article, and a question with more than one possible source. Teachers brought their class to the display before starting research. This helped students see how the books connected to a question they already understood. The librarian tracked which books were borrowed. She also tracked which questions appeared on the board and which sources students used to answer them. If a display got little attention, its position or label was changed. Students helped pick new topics for later displays too.',
     mainIdea: 'Connecting visible materials to class projects made the library more useful.',
-    mainIdeaOptions: ['Connecting visible materials to class projects made the library more useful.', 'The library only succeeded by buying many new books.', 'The displays never changed once they were set up.'],
+    mainIdeaOptions: ['The library only succeeded by buying many new books.', 'Connecting visible materials to class projects made the library more useful.', 'The displays never changed once they were set up.'],
     keyDetailQuestion: 'Where could students leave questions?',
     keyDetail: 'on a board',
+    // The displays and the librarian are both central to the passage, and a
+    // question box is the answer a listener would expect from a school library
+    // without having heard this one, so no option is dismissible on sight.
+    keyDetailOptions: ['at the display', 'with the librarian', 'in a question box', 'on a board'],
   },
 ];
 
@@ -807,21 +819,21 @@ const WRITTEN_BASE_FORMS = [
     // main idea as before.
     passage: 'Cities get very hot in summer. Many people turn on air conditioners to stay cool. But a city can also cool itself in other ways. Trees give shade to walls and streets. Plants and soil hold water and slowly release it into the air, which cools things down. Light-colored roofs stay cooler than dark roofs, because they reflect more sunlight. One roof only cools one building. But many trees together can cool a whole street and the homes near it. These ideas do not work on their own. New trees take years to grow big enough to give real shade. Shiny roofs can create annoying glare if they are placed the wrong way. Water for new plants can also be hard to find. Because of this, a good city plan needs more than one idea. It needs local weather facts, money for care, and input from the people who live there. No single fix solves the whole problem by itself. Cities also need cooling centers for very hot days. These help people whose homes cannot be fixed quickly.',
     mainIdea: 'Cities cool down best when several ideas work together, not just one.',
-    mainIdeaOptions: ['Cities cool down best when several ideas work together, not just one.', 'Air conditioners are the only way to cool a city.', 'Planting trees fixes city heat right away and needs no care.'],
+    mainIdeaOptions: ['Air conditioners are the only way to cool a city.', 'Planting trees fixes city heat right away and needs no care.', 'Cities cool down best when several ideas work together, not just one.'],
   },
   {
     id: 'written_b',
     // Simplified (see written_a's comment).
     passage: 'Some people think more numbers always lead to better choices. But too many numbers can make a decision harder, not easier. This happens when nobody agrees on what each number should tell you to do. A good chart should start with the choice you need to make, not with the data. First, decide who makes the choice and how often. Then decide what result should make them act. After that, pick only a few numbers that show that result clearly. The numbers still need context. A sudden change might just be a mistake in how the data was collected, not a real change. Because of this, good charts explain what each number means and who is in charge of it. They also let people check the original data if something looks wrong. Being simple does not mean hiding problems. It means showing the important facts clearly and removing anything that is not needed. Old numbers that nobody uses anymore should be removed. A good chart helps people go from information to a smart choice quickly. It is not about having the most numbers possible.',
     mainIdea: 'Good charts use a few clear numbers that are picked to help people decide.',
-    mainIdeaOptions: ['Good charts use a few clear numbers that are picked to help people decide.', 'The best chart always shows as many numbers as possible.', 'Charts should hide problems so users do not get confused.'],
+    mainIdeaOptions: ['The best chart always shows as many numbers as possible.', 'Good charts use a few clear numbers that are picked to help people decide.', 'Charts should hide problems so users do not get confused.'],
   },
   {
     id: 'written_c',
     // Simplified (see written_a's comment).
     passage: 'Fixing broken things can save money and materials. But whether a thing can be fixed depends on choices made before it ever breaks. A product is easy to fix if its screws can be opened. It also helps if broken parts can be swapped out and repair guides are easy to find. Even a fixable product might still get thrown away, if new parts take too long to arrive or cost almost as much as a new item. New rules can help by making manuals and spare parts easier to find. Companies can also design products so parts can be swapped later, which makes the product last longer. People who fix their own things need good instructions too, because a bad repair can be unsafe. Fixing things is not just one shop’s job. Designers, sellers, repair shops, lawmakers, and users all play a part. Just counting repairs is not enough. Strong, well-made products need less repair in the first place, and simple care can stop many problems before they start. The best plan combines strong design, regular care, repair, reuse, and safe recycling. Each choice should depend on safety, cost, and how worn the item is.',
     mainIdea: 'Whether something can be fixed depends on many people working together, not just repair shops.',
-    mainIdeaOptions: ['Whether something can be fixed depends on many people working together, not just repair shops.', 'Every broken item should always be repaired, no matter the cost or danger.', 'Only repair shops decide whether something can be fixed.'],
+    mainIdeaOptions: ['Every broken item should always be repaired, no matter the cost or danger.', 'Only repair shops decide whether something can be fixed.', 'Whether something can be fixed depends on many people working together, not just repair shops.'],
   },
 ];
 
@@ -995,6 +1007,7 @@ export function taskIntroduction(taskId, form) {
       'You will hear the object’s name at the beginning of the task',
       'Generate as many ideas as possible. Keep them in your head, do not say or write anything yet.',
       'After the task ends, type one idea on each line. (Shift+Enter will start a new line.)',
+      'You may type your answer in your preferred language.',
     ],
     [TASK_IDS.DUAL_TASK]: () => [
       'Read this very carefully, because you will not see it again during the task!',
@@ -1027,19 +1040,69 @@ export function taskIntroduction(taskId, form) {
       'You will hear a short passage. There is background noise, so listen carefully.',
       'Just listen during the recording, until it ends.',
       'Afterward, you will answer a few questions about what you heard.',
+      'You may type your answer in your preferred language.'
     ],
     [TASK_IDS.WRITTEN]: () => [
       'Read the text as it appears on the screen, one part at a time.',
       'After you finish reading, think about the main idea. Do not type yet.',
-      'At the end, you will pick the main idea from a list and write a short summary.',
+      'At the end, you will pick the main idea from a list and write a short summary in your preferred language.',
     ],
   }[taskId];
   const specific = specificFactory ? specificFactory() : [];
   return [...specific, ...common];
 }
 
+// Splits free text into words for every language the app is offered in. The
+// battery ships ten locales, and Japanese (like Chinese and Thai) writes
+// without spaces between words — splitting on whitespace counted a whole
+// Japanese summary as one word, which made Task 12's 35–50 word gate
+// impossible to satisfy and blocked submission outright.
+function segmentWords(value) {
+  const text = String(value || '').trim();
+  if (!text) return [];
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
+    return text.split(/\s+/).filter(Boolean);
+  }
+  const segments = [...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(text)];
+  const words = [];
+  for (let index = 0; index < segments.length; index += 1) {
+    const { segment, isWordLike } = segments[index];
+    if (!isWordLike) continue;
+    // ICU reports "well-made" as two word-like segments. Re-joining them keeps
+    // this identical to the whitespace splitting it replaced for every
+    // space-delimited language, so the change only affects scripts that were
+    // previously miscounted.
+    const continuesHyphenatedWord = segments[index - 1]?.segment === '-'
+      && segments[index - 2]?.isWordLike === true;
+    if (continuesHyphenatedWord) words[words.length - 1] += `-${segment}`;
+    else words.push(segment);
+  }
+  return words;
+}
+
 export function countWords(value) {
-  return String(value || '').trim().split(/\s+/).filter(Boolean).length;
+  return segmentWords(value).length;
+}
+
+// Han, Kana and Thai are written without spaces between words.
+const DENSE_SCRIPT_PATTERN = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Thai}]/u;
+
+const usesDenseScript = (value) => DENSE_SCRIPT_PATTERN.test(String(value || ''));
+
+// Those scripts segment into more words than English for the same content —
+// Japanese counts every particle and inflection separately (measured ~1.55x on
+// parallel summaries), though Chinese sits near 1x. Rather than a per-language
+// table for what is only a coarse validity gate, one generous allowance covers
+// all of them: being slightly permissive about length is harmless here, while
+// rejecting a valid answer blocks the participant entirely. Minimums need no
+// such adjustment — a denser count only makes a minimum easier to clear.
+const DENSE_SCRIPT_MAXIMUM_ALLOWANCE = 1.6;
+
+export function maximumWordsFor(text, maximumWords) {
+  if (maximumWords == null) return maximumWords;
+  return usesDenseScript(text)
+    ? Math.round(maximumWords * DENSE_SCRIPT_MAXIMUM_ALLOWANCE)
+    : maximumWords;
 }
 
 export function normalizedSequence(value) {
@@ -1049,7 +1112,16 @@ export function normalizedSequence(value) {
 }
 
 export function normalizeText(value) {
-  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, ' ');
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    // Keep letters, digits and combining marks from every script. The previous
+    // a-z0-9 class erased non-Latin text completely (an Arabic or Japanese
+    // answer normalized to an empty string) and stripped accents off Latin
+    // text ("café" became "caf"). Punctuation is still removed.
+    .replace(/[^\p{L}\p{N}\p{M}\s-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export const FORM_REGISTRY_FOR_TESTS = ACTIVE_STIMULUS_PACK.formsByTask;

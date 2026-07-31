@@ -250,22 +250,22 @@ test('anomaly-type scoring rejects checkbox over-selection', () => {
   assert.equal(overSelected.metrics.anomaly_type_recall_correct, false);
 });
 
-test('speech key-detail matching rejects stopword-only answers and stays pending without a rubric assessment', () => {
+test('speech key-detail rejects a wrong option and stays pending without a rubric assessment', () => {
   const speech = form(TASK_IDS.SPEECH_NOISE);
-  const stopwordOnly = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
+  const wrongOption = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
     mainIdea: speech.mainIdea,
-    keyDetail: 'the',
+    keyDetail: speech.keyDetailOptions.find((option) => option !== speech.keyDetail),
     paraphrase: 'A short candidate paraphrase.',
   });
-  assert.equal(stopwordOnly.status, 'failed');
-  assert.equal(stopwordOnly.metrics.key_detail_correct, false);
+  assert.equal(wrongOption.status, 'failed');
+  assert.equal(wrongOption.metrics.key_detail_correct, false);
 
   // The bundled default audio is now calibrated, but with no rubric
   // assessment supplied here, the paraphrase-dependent abilities still cannot
   // resolve — pending for a different reason than an uncalibrated SNR.
   const discriminativeDetail = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
     mainIdea: speech.mainIdea,
-    keyDetail: 'The marsh slowed it.',
+    keyDetail: speech.keyDetail,
     paraphrase: 'The expedition lost time because the marshy ground slowed their crossing.',
   });
   assert.equal(discriminativeDetail.status, 'pending_review');
@@ -280,7 +280,7 @@ test('a paraphrase below the configured minimum length fails the validity gate',
   const speech = form(TASK_IDS.SPEECH_NOISE);
   const tooShort = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
     mainIdea: speech.mainIdea,
-    keyDetail: 'The marsh slowed it.',
+    keyDetail: speech.keyDetail,
     paraphrase: 'Marsh slowed them.',
   });
   assert.equal(tooShort.metrics.paraphrase_length_valid, false);
@@ -376,7 +376,7 @@ test('oral comprehension needs both a rubric assessment and calibrated audio', (
   const rubricId = scoringRubricFor(TASK_IDS.SPEECH_NOISE).id;
   const response = {
     mainIdea: speech.mainIdea,
-    keyDetail: 'The marsh slowed it.',
+    keyDetail: speech.keyDetail,
     paraphrase: 'The expedition lost time because the marshy ground slowed their crossing.',
   };
   const assessment = {

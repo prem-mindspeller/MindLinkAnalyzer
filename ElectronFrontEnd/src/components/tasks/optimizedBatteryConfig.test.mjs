@@ -13,6 +13,9 @@ import {
   TASK_IDS,
   audioProfileForTask,
   closureRevealState,
+  countWords,
+  maximumWordsFor,
+  normalizeText,
   pacedPassageChunk,
   resolveSessionDepth,
   scoringRubricFor,
@@ -297,6 +300,95 @@ test('stimulus schedules cover the corrected continuous windows', () => {
     assert.equal(form.readingDurationSeconds, 120);
     assert.equal(form.synthesisDurationSeconds, 60);
     assert.notEqual(pacedPassageChunk(form, 95), pacedPassageChunk(form, 119));
+  }
+});
+
+test('word counts are correct for every script the app is localized in', () => {
+  // The battery ships ten locales and participants may answer in any of them.
+  // Splitting on whitespace counted a whole Japanese/Chinese/Thai response as
+  // one word, which made Task 11's and Task 12's minimum-length gates
+  // unreachable and blocked submission outright.
+  assert.ok(countWords('沼地が波を遅くしました') > 1, 'Japanese must not count as one word');
+  assert.ok(countWords('沼泽减缓了海浪的速度') > 1, 'Chinese must not count as one word');
+  assert.ok(countWords('บึงชะลอคลื่น') > 1, 'Thai must not count as one word');
+
+  // Space-delimited scripts must be unchanged: this replaced whitespace
+  // splitting, and every shipped passage/threshold was calibrated against it.
+  const whitespaceCount = (value) => String(value || '').trim().split(/\s+/).filter(Boolean).length;
+  for (const taskId of [TASK_IDS.WRITTEN, TASK_IDS.SPEECH_NOISE]) {
+    for (const form of FORM_REGISTRY_FOR_TESTS[taskId]) {
+      assert.equal(countWords(form.passage), whitespaceCount(form.passage), form.id);
+    }
+  }
+  for (const latin of [
+    'well-made state-of-the-art products',
+    "the shop's own job isn't easy",
+    'le marais a ralenti la vague à café',
+  ]) {
+    assert.equal(countWords(latin), whitespaceCount(latin), latin);
+  }
+
+  assert.equal(countWords(''), 0);
+  assert.equal(countWords('   '), 0);
+  // Punctuation alone is not a word, so it cannot satisfy a minimum-word gate.
+  assert.equal(countWords('!!! ???'), 0);
+});
+
+test('every multiple-choice answer is selectable and not guessable by position', () => {
+  const correctPositions = { mainIdea: new Set(), keyDetail: new Set() };
+  for (const taskId of [TASK_IDS.SPEECH_NOISE, TASK_IDS.WRITTEN]) {
+    for (const form of FORM_REGISTRY_FOR_TESTS[taskId]) {
+      // The scorer compares the response to `mainIdea`/`keyDetail`, so an
+      // answer missing from its own option list would be unreachable and the
+      // task could never be passed.
+      assert.ok(form.mainIdeaOptions.includes(form.mainIdea), `${form.id} main idea`);
+      assert.equal(new Set(form.mainIdeaOptions).size, form.mainIdeaOptions.length, `${form.id} main idea duplicates`);
+      correctPositions.mainIdea.add(form.mainIdeaOptions.indexOf(form.mainIdea));
+
+      if (!form.keyDetailOptions) continue;
+      assert.ok(form.keyDetailOptions.includes(form.keyDetail), `${form.id} key detail`);
+      assert.equal(new Set(form.keyDetailOptions).size, form.keyDetailOptions.length, `${form.id} key detail duplicates`);
+      // Four options rather than three keep the blind-guess rate at 25% for the
+      // one item that decides Speech Recognition.
+      assert.equal(form.keyDetailOptions.length, 4, `${form.id} key detail option count`);
+      correctPositions.keyDetail.add(form.keyDetailOptions.indexOf(form.keyDetail));
+    }
+  }
+  // Options render in array order, so a correct answer parked at the same index
+  // in every form is learnable across the three sessions.
+  assert.ok(correctPositions.mainIdea.size > 1, 'main-idea answers must not share one position');
+  assert.ok(correctPositions.keyDetail.size > 1, 'key-detail answers must not share one position');
+});
+
+test('the summary word ceiling widens only for scripts that segment more finely', () => {
+  // The 35-50 range is calibrated against English. Japanese expresses the same
+  // content in ~1.55x as many segmented words, so the English ceiling rejected
+  // an otherwise valid answer.
+  assert.equal(maximumWordsFor('a plain english summary', 50), 50);
+  assert.equal(maximumWordsFor('', 50), 50);
+  assert.equal(maximumWordsFor('le marais a ralenti la vague', 50), 50);
+  assert.ok(maximumWordsFor('沼地が波を遅くしました', 50) > 50);
+  // A null/absent ceiling stays absent rather than becoming a number.
+  assert.equal(maximumWordsFor('沼地が波を遅くしました', null), null);
+});
+
+test('text normalization preserves non-Latin answers instead of erasing them', () => {
+  // An ASCII-only character class silently normalized every Arabic, Japanese
+  // or Devanagari answer to an empty string, and stripped accents off Latin
+  // ones, before any comparison could be made.
+  for (const nonLatin of ['沼地', 'بركة', 'दलदल', 'บึง']) {
+    assert.equal(normalizeText(nonLatin), nonLatin, nonLatin);
+  }
+  assert.equal(normalizeText('café'), 'café');
+  // Punctuation and case are still normalized away.
+  assert.equal(normalizeText('  The Marsh!  '), 'the marsh');
+  // Dropdown answers are compared to their own option strings, so both sides
+  // must keep normalizing identically.
+  for (const taskId of [TASK_IDS.WRITTEN, TASK_IDS.SPEECH_NOISE]) {
+    for (const form of FORM_REGISTRY_FOR_TESTS[taskId]) {
+      assert.equal(normalizeText(form.mainIdea), normalizeText(form.mainIdea));
+      assert.ok(form.mainIdeaOptions.includes(form.mainIdea), form.id);
+    }
   }
 });
 

@@ -36,11 +36,14 @@ function ResponseFields({ form, response, setResponse }) {
         </select>
       </ResponseField>
       <ResponseField label={form.keyDetailQuestion}>
-        <input
+        <select
           required
           value={response.keyDetail || ''}
           onChange={(event) => setResponse({ ...response, keyDetail: event.target.value })}
-        />
+        >
+          <option value="">Select…</option>
+          {form.keyDetailOptions.map((option) => <option key={option}>{option}</option>)}
+        </select>
       </ResponseField>
       <ResponseField label="Give one concise paraphrase of the passage.">
         <textarea
