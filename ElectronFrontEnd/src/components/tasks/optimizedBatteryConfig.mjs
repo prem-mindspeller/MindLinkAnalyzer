@@ -992,7 +992,7 @@ export function taskIntroduction(taskId, form) {
     ],
     [TASK_IDS.SEMANTIC]: () => [
       'You will hear many words, one after another.',
-      'The first words all belong to one category. Try to work out what connects them.',
+      'The first words all belong to one category. Try to work out what connects them with your eyes closed.',
       'Halfway through, the words quietly change to a new category. Try to notice when this happens, and work out that new connection too.',
       'Give your answers only after the task ends.',
     ],
@@ -1005,13 +1005,13 @@ export function taskIntroduction(taskId, form) {
     [TASK_IDS.IDEATION]: () => [
       'Think of as many different uses for a single object as you can.',
       'You will hear the object’s name at the beginning of the task',
-      'Generate as many ideas as possible. Keep them in your head, do not say or write anything yet.',
+      'Generate as many ideas as possible with your eyes closed. Keep them in your head, do not say or write anything yet.',
       'After the task ends, type one idea on each line. (Shift+Enter will start a new line.)',
       'You may type your answer in your preferred language.',
     ],
     [TASK_IDS.DUAL_TASK]: () => [
       'Read this very carefully, because you will not see it again during the task!',
-      `Start your number at ${form.startValue}.`,
+      `Start with the number ${form.startValue}.`,
       `Every time you hear "Update", add ${form.beforeDelta} to your number.`,
       `When you hear "Switch", the rule changes: from then on, add ${form.afterDelta} at every "Update" instead.`,
       'At the same time, count every high tone you hear, from start to finish.',
@@ -1032,17 +1032,14 @@ export function taskIntroduction(taskId, form) {
       'After you press it, stay still until the task ends.',
     ],
     [TASK_IDS.CLOSURE]: () => [
-      'A picture is hidden in visual noise. After 20 seconds, it will slowly become clearer.',
+      'A picture is hidden in visual noise. After some time, it will slowly become clearer.',
       'As soon as you can tell what it is, press the RECOGNIZED button. Press it only once you are sure.',
       'After you press it, stay still until the task ends.',
     ],
     [TASK_IDS.SPEECH_NOISE]: () => [
       'You will hear a short passage. There is background noise, so listen carefully.',
       'Just listen during the recording, until it ends.',
-      // Two of the three answers are picked from a list and one is typed, so
-      // this must not promise that everything can be answered in any language:
-      // only the paraphrase is free text.
-      'Afterward, you will pick two answers from a list, and write one short summary of the passage in your preferred language.',
+      'Afterward, two questions will be shown. Choose your answers from a list of options.',
     ],
     [TASK_IDS.WRITTEN]: () => [
       'Read the text as it appears on the screen, one part at a time.',
