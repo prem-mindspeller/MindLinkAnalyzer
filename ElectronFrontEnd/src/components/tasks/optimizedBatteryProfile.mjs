@@ -270,10 +270,10 @@ const rubrics = {
   [TASK.VISUAL_COMPARISON]: { id: 'single_rendered_onset_latency', mode: 'objective_key_and_latency' },
   [TASK.CLOSURE]: { id: 'recognition_and_visibility_schedule', mode: 'objective_plus_thresholds' },
   [TASK.SPEECH_NOISE]: {
-    id: 'speech_comprehension_model_rubric_v1',
-    mode: 'objective_plus_model_rubric',
-    // main_idea and key_detail stay objective (answer key) and are not re-judged.
-    dimensions: ['paraphrase_accuracy', 'paraphrase_completeness'],
+    // Both main_idea and key_detail are selected from a fixed option list and
+    // scored against the answer key — no free text, no model rubric.
+    id: 'main_idea_and_key_detail_selection',
+    mode: 'objective_key',
   },
   [TASK.WRITTEN]: {
     id: 'written_synthesis_model_rubric_v1',
@@ -329,22 +329,11 @@ const thresholds = {
     flexibilityMaximumRevealFraction: 0.5,
   },
   [TASK.SPEECH_NOISE]: {
-    // The key detail is selected from `keyDetailOptions`, not typed, so it is
-    // scored by exact comparison like the main idea. The token-overlap
-    // thresholds this used to carry are gone with the free-text field.
+    // Both main_idea and key_detail are selected from a fixed option list, so
+    // both are scored by exact comparison against the answer key — no free
+    // text, no rubric, no length thresholds.
     requireMainIdea: true,
-    // Validity gate only: a "concise paraphrase" of a 120 s passage below this
-    // length is a fragment rather than a paraphrase. Quality is judged by the
-    // rubric, not by length.
-    paraphraseMinimumWords: 8,
     calibratedSnrRequiredForAbilityPass: true,
-    // Same 1-5 scale and "3 is adequate" cut-off as the written-synthesis
-    // rubric. main_idea and key_detail are excluded because both are already
-    // scored objectively against the answer key above.
-    minimumRubricScores: {
-      paraphrase_accuracy: 3,
-      paraphrase_completeness: 3,
-    },
   },
   [TASK.WRITTEN]: {
     summaryMinimumWords: 35,

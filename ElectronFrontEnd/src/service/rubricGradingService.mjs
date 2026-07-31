@@ -1,11 +1,13 @@
 /**
  * Client for the backend free-text rubric grader.
  *
- * Three tasks in the battery produce responses that no answer key can score:
- * Task 6 (ideas), Task 11 (paraphrase) and Task 12 (written summary). This
- * module posts those responses to the backend grader and returns an assessment
- * shaped for `runtime.rubricAssessment`, which the scorer then evaluates
- * against the battery profile's configured thresholds.
+ * Two tasks in the battery produce responses that no answer key can score:
+ * Task 6 (ideas) and Task 12 (written summary). This module posts those
+ * responses to the backend grader and returns an assessment shaped for
+ * `runtime.rubricAssessment`, which the scorer then evaluates against the
+ * battery profile's configured thresholds. Task 11 is not graded here: both
+ * of its answers are selected from a fixed option list and scored objectively
+ * (see optimizedTaskScoring.mjs), not typed.
  *
  * Failure is always silent and always safe: a missing token, an offline
  * backend, a timeout, a mismatched rubric id or any malformed payload yields
@@ -31,7 +33,6 @@ export const GRADING_TIMEOUT_MS = 20000;
 /** Tasks whose scoring depends on a free-text rubric assessment. */
 export const GRADED_TASK_IDS = Object.freeze([
   TASK_IDS.IDEATION,
-  TASK_IDS.SPEECH_NOISE,
   TASK_IDS.WRITTEN,
 ]);
 
@@ -41,7 +42,6 @@ export const taskNeedsRubricGrading = (taskId) => GRADED_TASK_IDS.includes(taskI
 // source material the grader judges it against.
 const GRADING_INPUTS = {
   [TASK_IDS.IDEATION]: { responseField: 'ideas', referenceField: 'prompt' },
-  [TASK_IDS.SPEECH_NOISE]: { responseField: 'paraphrase', referenceField: 'passage' },
   [TASK_IDS.WRITTEN]: { responseField: 'summary', referenceField: 'passage' },
 };
 

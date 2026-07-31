@@ -236,6 +236,15 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   const finishingRef = useRef(false);
   const mismatchRenderedElapsedMsRef = useRef(null);
   const renderFrameRef = useRef(null);
+  // Task 11's passage is shorter than the 120s block ceiling once slowed down
+  // and trimmed for timing safety, which otherwise left a long silent tail
+  // still being scored as EEG. Set by speak()'s onended for the
+  // spoken_passage_onset event only (nothing else schedules that type), then
+  // polled by the existing task timer below rather than calling
+  // finishRecording directly from speak() — that would make speak and
+  // finishRecording depend on each other's useCallback identity, since
+  // finishRecording already depends on speak via runDueEvents/fireScheduledEvent.
+  const passageEndedRef = useRef(false);
 
   const comparisonMismatchDue = taskId === TASK_IDS.VISUAL_COMPARISON
     && runState === 'running'
@@ -487,6 +496,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           if (!auditIsCurrent()) return;
           audit.endedSpeech.add(auditKey);
           pushPlaybackMarker('speech_playback_ended', { source_mode: sourceMode });
+          if (scheduled.type === 'spoken_passage_onset') passageEndedRef.current = true;
         };
         asset.onerror = () => {
           assetAudioRefsRef.current.delete(asset);
@@ -547,6 +557,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
         if (!auditIsCurrent()) return;
         audit.endedSpeech.add(auditKey);
         pushPlaybackMarker('speech_playback_ended', { source_mode: sourceMode });
+        if (scheduled.type === 'spoken_passage_onset') passageEndedRef.current = true;
       };
       utterance.onerror = (event) => {
         speechUtteranceRefsRef.current.delete(utterance);
@@ -911,6 +922,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     setButtonRuntime(null);
     finishingRef.current = false;
     mismatchRenderedElapsedMsRef.current = null;
+    passageEndedRef.current = false;
     if (renderFrameRef.current != null) window.cancelAnimationFrame(renderFrameRef.current);
     renderFrameRef.current = null;
     startClockRef.current = nowMs();
@@ -928,7 +940,13 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       const elapsedMs = Math.max(0, nowMs() - startClockRef.current);
       runDueEvents(elapsedMs);
       setElapsedSeconds(Math.min(definition.duration, elapsedMs / 1000));
-      if (elapsedMs >= definition.duration * 1000) finishRecording({ detected: false, timedOut: true });
+      const durationElapsed = elapsedMs >= definition.duration * 1000;
+      // Task 11 ends here once its passage finishes (see passageEndedRef);
+      // every other task only ever hits the duration branch, since nothing
+      // else sets that ref.
+      if (durationElapsed || passageEndedRef.current) {
+        finishRecording({ detected: false, timedOut: durationElapsed });
+      }
     }, 50);
   }, [attachRecording, definition.duration, finishRecording, runDueEvents, schedule, startModerateNoise, taskId]);
 
@@ -1127,7 +1145,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     return { ...baseRuntime, dualTaskCost, switchCost, referenceCostDiagnostics: diagnostics };
   }, [form, response, taskId]);
 
-  // Tasks 6, 11 and 12 carry free text that no answer key can score. A null
+  // Tasks 6 and 12 carry free text that no answer key can score. A null
   // assessment (offline, timeout, malformed) is a normal outcome and leaves the
   // dependent abilities pending rather than blocking the participant.
   const resolveRuntimeWithRubricAssessment = useCallback(async (baseRuntime) => {

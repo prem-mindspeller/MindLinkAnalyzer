@@ -229,18 +229,23 @@ ability score. Tasks without one are reported descriptively.
 
 ### 11. Speech-in-Noise Comprehension
 
-- **Protocol:** 120 seconds, eyes closed, eyes-closed baseline; a continuous
-  passage is delivered with nominal 8 dB generated noise, followed by answers.
-- **Behavioural evidence:** main-idea correctness, token-based key-detail
-  match, paraphrase word count, and optional paraphrase-rubric outcome.
+- **Protocol:** up to 120 seconds, eyes closed, eyes-closed baseline; a
+  continuous passage is delivered with background noise. Recording ends as
+  soon as the passage finishes rather than continuing to a fixed ceiling, so
+  the scored window tracks each form's own (shorter) length instead of
+  including a long silent tail.
+- **Behavioural evidence:** main idea and key detail are each chosen from a
+  fixed option list and scored against the answer key; the task collects no
+  free text.
 - **Candidate abilities:** Oral Comprehension, Speech Recognition, and
   Auditory Attention.
 - **Expected signature:** none fixed; the report describes modulation in the
   context of listening effort, speech-in-noise attention, and attention drift.
-- **Report effect:** browser TTS/noise is not acoustically calibrated. All
-  SNR-dependent abilities remain pending until a calibrated audio profile and
-  approved paraphrase rubric are supplied. Failed objective items are recorded
-  as failed rather than silently upgraded by EEG.
+- **Report effect:** fully objective — both items are compared to the answer
+  key directly, so nothing here waits on a rubric. SNR-dependent abilities
+  still remain pending if the active audio profile is not acoustically
+  calibrated. Failed objective items are recorded as failed rather than
+  silently upgraded by EEG.
 
 ### 12. Written Comprehension and Concise Synthesis
 

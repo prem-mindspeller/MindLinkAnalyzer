@@ -138,7 +138,7 @@ export function scoreOptimizedTask(
     configuredResponse,
     metrics,
     abilityValidation,
-    _scoringMethod,
+    scoringMethod,
     notes = [],
   ) => result(
     configuredTaskId,
@@ -146,7 +146,12 @@ export function scoreOptimizedTask(
     configuredResponse,
     metrics,
     abilityValidation,
-    rubric.id,
+    // Each call site's own descriptive string (what algorithm actually scored
+    // this), not rubric.id (which rubric config was nominally attached) — the
+    // two were conflated here, silently discarding every call site's argument
+    // in favour of rubric.id. The rubric identity is still fully recorded,
+    // unconditionally, as configuration.applied_rubric_id below.
+    scoringMethod,
     notes,
     scoringConfiguration,
   );
@@ -414,54 +419,36 @@ export function scoreOptimizedTask(
   }
 
   if (taskId === TASK_IDS.SPEECH_NOISE) {
+    // Both answers are selected from a fixed option list (see
+    // SpeechInNoiseTask.jsx), so this task is fully objective — no free text,
+    // no rubric grading, no PENDING-on-assessment state. The only thing that
+    // can still leave an ability PENDING rather than PASSED is the audio
+    // itself not being acoustically calibrated.
     const mainIdeaCorrect = normalizeText(response.mainIdea) === normalizeText(form.mainIdea);
     const keyDetailCorrect = keyDetailMatches(response.keyDetail, form.keyDetail);
-    const paraphraseWords = countWords(response.paraphrase);
-    const paraphraseLengthValid = thresholds.paraphraseMinimumWords == null
-      || paraphraseWords >= thresholds.paraphraseMinimumWords;
-    const objectivePass = (
-      (!thresholds.requireMainIdea || mainIdeaCorrect)
-      && keyDetailCorrect
-      && paraphraseLengthValid
-    );
+    const objectivePass = (!thresholds.requireMainIdea || mainIdeaCorrect) && keyDetailCorrect;
     const audioProfile = audioProfileForTask(taskId, profile);
     const snrCalibrated = audioProfile.acousticallyCalibrated === true;
-    // Prefer an explicit reviewer verdict; otherwise let the configured
-    // thresholds decide from the rubric scores, so the cut-off stays a
-    // reviewable protocol constant rather than a grader judgement.
-    const assessmentStatus = externalRubricStatus(runtime, rubric)
-      || thresholdRubricStatus(runtime, thresholds.minimumRubricScores, rubric);
     const calibrationPermitsPass = (
       !thresholds.calibratedSnrRequiredForAbilityPass || snrCalibrated
     );
-    const status = !objectivePass
-      ? FAILED
-      : assessmentStatus === FAILED
-        ? FAILED
-        : assessmentStatus === PASSED && calibrationPermitsPass
-          ? PASSED
-          : PENDING;
+    const status = !objectivePass ? FAILED : calibrationPermitsPass ? PASSED : PENDING;
     const abilityValidation = {
       'Oral Comprehension': !objectivePass ? FAILED : status,
-      'Speech Recognition': !keyDetailCorrect ? FAILED : calibrationPermitsPass && status === PASSED ? PASSED : PENDING,
-      'Auditory Attention': !objectivePass ? FAILED : calibrationPermitsPass && status === PASSED ? PASSED : PENDING,
+      'Speech Recognition': !keyDetailCorrect ? FAILED : status,
+      'Auditory Attention': !objectivePass ? FAILED : status,
     };
     return scoredResult(taskId, status, response, {
       main_idea_correct: mainIdeaCorrect,
       key_detail_correct: keyDetailCorrect,
-      paraphrase_word_count: paraphraseWords,
-      paraphrase_length_valid: paraphraseLengthValid,
-      paraphrase_minimum_words: thresholds.paraphraseMinimumWords,
-      paraphrase_quality: null,
       nominal_snr_db: audioProfile.nominalSnrDb,
       snr_calibrated: snrCalibrated,
       calibrated_snr_required_for_ability_pass: thresholds.calibratedSnrRequiredForAbilityPass,
-    }, abilityValidation, 'objective_items_plus_pending_paraphrase_rubric', snrCalibrated
-      ? ['Oral Comprehension remains pending until the configured paraphrase rubric returns a decision.']
+    }, abilityValidation, 'objective_items', snrCalibrated
+      ? []
       : [
         'The WebAudio/TTS candidate form records a nominal, not acoustically calibrated, SNR.',
         'All SNR-dependent abilities remain pending because browser TTS and noise playback are not acoustically calibrated.',
-        'Oral Comprehension also remains pending until paraphrase quality is reviewed.',
       ]);
   }
 
@@ -469,10 +456,9 @@ export function scoreOptimizedTask(
     const mainIdeaCorrect = normalizeText(response.mainIdea) === normalizeText(form.mainIdea);
     const summaryWordCount = countWords(response.summary);
     const summaryMaximumWords = maximumWordsFor(response.summary, thresholds.summaryMaximumWords);
-    // A null bound means "no limit", matching how paraphraseMinimumWords is
-    // treated above — spelled out explicitly rather than relying on `>= null`
-    // / `<= null` numeric coercion (only one direction of which comes out
-    // right, and neither documents the intent at the call site).
+    // A null bound means "no limit" — spelled out explicitly rather than
+    // relying on `>= null` / `<= null` numeric coercion (only one direction of
+    // which comes out right, and neither documents the intent at the call site).
     const lengthValid = (thresholds.summaryMinimumWords == null || summaryWordCount >= thresholds.summaryMinimumWords)
       && (summaryMaximumWords == null || summaryWordCount <= summaryMaximumWords);
     const objectivePass = (!thresholds.requireMainIdea || mainIdeaCorrect) && lengthValid;

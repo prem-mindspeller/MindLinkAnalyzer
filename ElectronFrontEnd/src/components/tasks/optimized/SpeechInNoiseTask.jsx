@@ -45,14 +45,6 @@ function ResponseFields({ form, response, setResponse }) {
           {form.keyDetailOptions.map((option) => <option key={option}>{option}</option>)}
         </select>
       </ResponseField>
-      <ResponseField label="Give one concise paraphrase of the passage.">
-        <textarea
-          rows="4"
-          required
-          value={response.paraphrase || ''}
-          onChange={(event) => setResponse({ ...response, paraphrase: event.target.value })}
-        />
-      </ResponseField>
     </>
   );
 }

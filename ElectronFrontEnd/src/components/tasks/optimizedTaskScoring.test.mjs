@@ -250,49 +250,37 @@ test('anomaly-type scoring rejects checkbox over-selection', () => {
   assert.equal(overSelected.metrics.anomaly_type_recall_correct, false);
 });
 
-test('speech key-detail rejects a wrong option and stays pending without a rubric assessment', () => {
+test('speech key-detail rejects a wrong option and passes outright once calibrated and correct', () => {
+  // Both answers are selected from a fixed option list (see
+  // SpeechInNoiseTask.jsx), so this task is fully objective now — no free
+  // text, no rubric, no PENDING-on-assessment state.
   const speech = form(TASK_IDS.SPEECH_NOISE);
   const wrongOption = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
     mainIdea: speech.mainIdea,
     keyDetail: speech.keyDetailOptions.find((option) => option !== speech.keyDetail),
-    paraphrase: 'A short candidate paraphrase.',
   });
   assert.equal(wrongOption.status, 'failed');
   assert.equal(wrongOption.metrics.key_detail_correct, false);
+  assert.equal(wrongOption.ability_validation['Speech Recognition'], 'failed');
 
-  // The bundled default audio is now calibrated, but with no rubric
-  // assessment supplied here, the paraphrase-dependent abilities still cannot
-  // resolve — pending for a different reason than an uncalibrated SNR.
-  const discriminativeDetail = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
+  // The bundled default audio is a calibrated premixed asset, so a fully
+  // correct, fully objective response resolves straight to passed.
+  const correct = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
     mainIdea: speech.mainIdea,
     keyDetail: speech.keyDetail,
-    paraphrase: 'The expedition lost time because the marshy ground slowed their crossing.',
   });
-  assert.equal(discriminativeDetail.status, 'pending_review');
-  assert.equal(discriminativeDetail.metrics.key_detail_correct, true);
-  assert.equal(discriminativeDetail.metrics.paraphrase_length_valid, true);
-  assert.equal(discriminativeDetail.metrics.snr_calibrated, true);
-  assert.equal(discriminativeDetail.ability_validation['Speech Recognition'], 'pending_review');
-  assert.equal(discriminativeDetail.ability_validation['Auditory Attention'], 'pending_review');
-});
-
-test('a paraphrase below the configured minimum length fails the validity gate', () => {
-  const speech = form(TASK_IDS.SPEECH_NOISE);
-  const tooShort = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, {
-    mainIdea: speech.mainIdea,
-    keyDetail: speech.keyDetail,
-    paraphrase: 'Marsh slowed them.',
-  });
-  assert.equal(tooShort.metrics.paraphrase_length_valid, false);
-  assert.equal(tooShort.status, 'failed');
-  assert.equal(tooShort.ability_validation['Oral Comprehension'], 'failed');
+  assert.equal(correct.status, 'passed');
+  assert.equal(correct.metrics.key_detail_correct, true);
+  assert.equal(correct.metrics.snr_calibrated, true);
+  assert.equal(correct.ability_validation['Speech Recognition'], 'passed');
+  assert.equal(correct.ability_validation['Auditory Attention'], 'passed');
+  assert.equal(correct.ability_validation['Oral Comprehension'], 'passed');
 });
 
 test('a null summary word bound means unbounded, not unsatisfiable', () => {
   // `count <= null` coerces null to 0 and is always false, which would reject
   // every summary if a maximum were ever configured as null to mean "no
-  // limit" — the same way `paraphraseMinimumWords == null` already means "no
-  // minimum" for Task 11.
+  // limit".
   const profile = JSON.parse(JSON.stringify(ACTIVE_BATTERY_PROFILE));
   profile.thresholds[TASK_IDS.WRITTEN].summaryMaximumWords = null;
   const written = form(TASK_IDS.WRITTEN);
@@ -390,26 +378,21 @@ test('written expression resolves once a rubric assessment is supplied', () => {
   assert.equal(partial.ability_validation['Written Expression'], 'pending_review');
 });
 
-test('oral comprehension needs both a rubric assessment and calibrated audio', () => {
+test('oral comprehension needs calibrated audio, independent of correctness', () => {
   const speech = form(TASK_IDS.SPEECH_NOISE);
-  const rubricId = scoringRubricFor(TASK_IDS.SPEECH_NOISE).id;
   const response = {
     mainIdea: speech.mainIdea,
     keyDetail: speech.keyDetail,
-    paraphrase: 'The expedition lost time because the marshy ground slowed their crossing.',
-  };
-  const assessment = {
-    rubricAssessment: { rubricId, scores: { paraphrase_accuracy: 4, paraphrase_completeness: 4 } },
   };
 
-  // Graded, but on a profile whose audio is still browser TTS at an
+  // Correct answers, but on a profile whose audio is still browser TTS at an
   // uncalibrated SNR (the bundled default's prior state, kept here as an
   // explicit override so this behaviour stays covered).
   const uncalibratedProfile = JSON.parse(JSON.stringify(ACTIVE_BATTERY_PROFILE));
   uncalibratedProfile.audioProfiles.speech_in_noise.mode = 'browser_speech_synthesis_with_generated_noise';
   uncalibratedProfile.audioProfiles.speech_in_noise.acousticallyCalibrated = false;
 
-  const uncalibrated = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, response, assessment, uncalibratedProfile);
+  const uncalibrated = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, response, {}, uncalibratedProfile);
   assert.equal(uncalibrated.metrics.snr_calibrated, false);
   assert.equal(uncalibrated.ability_validation['Oral Comprehension'], 'pending_review');
   assert.equal(uncalibrated.ability_validation['Speech Recognition'], 'pending_review');
@@ -417,7 +400,7 @@ test('oral comprehension needs both a rubric assessment and calibrated audio', (
   // The bundled default is now a calibrated premixed asset (built by
   // tools/build_speech_in_noise_assets.py), so both abilities resolve without
   // any profile override.
-  const calibrated = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, response, assessment);
+  const calibrated = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, speech, response);
   assert.equal(calibrated.metrics.snr_calibrated, true);
   assert.equal(calibrated.status, 'passed');
   assert.equal(calibrated.ability_validation['Oral Comprehension'], 'passed');
@@ -443,7 +426,11 @@ test('an injected profile changes thresholds, rubric identity, audio and timing 
   }, {}, profile);
 
   assert.equal(result.status, 'passed');
-  assert.equal(result.scoring_method, 'validated_count_tolerance');
+  // scoring_method names the algorithm that actually ran (fixed by the
+  // taskId branch, not by the injected profile) — the injected rubric's
+  // identity is tracked separately via configuration.applied_rubric_id.
+  assert.equal(result.scoring_method, 'candidate_exact_count_threshold');
+  assert.equal(result.configuration.applied_rubric_id, 'validated_count_tolerance');
   assert.equal(result.configuration.profile_version, 'validated-test-profile');
   assert.equal(result.configuration.rubric_set_version, 'validated-rubrics-test');
   assert.equal(result.configuration.threshold_set_version, 'validated-thresholds-test');

@@ -153,16 +153,16 @@ filled with invented scores:
   defined. Its EEG export does include explicitly descriptive, non-event-locked
   Task-7 versus Task-2/Task-3 feature-mean contrasts; these are not interpreted
   as validated dual-task or switch costs.
-- Task 11 currently uses candidate browser TTS plus deterministic generated
-  noise, paced as 115 seconds of expected delivery plus 5 seconds of settling.
-  Its `8 dB` label is nominal, not acoustically calibrated, so all SNR-dependent
-  abilities remain pending. Oral Comprehension also awaits an approved
-  paraphrase rubric. The same audio profile already accepts a fixed premixed
-  asset URI and SHA-256 declaration globally, per form or per stimulus key; a
-  production profile can therefore select calibrated files without adding a
-  Task-11-specific execution path. Production validation remains gated on
-  supplying and verifying the approved asset, measured delivery duration and
-  calibrated SNR, and on setting the profile's acoustic-calibration status.
+- Task 11 uses a calibrated, premixed audio asset (built via
+  `tools/build_speech_in_noise_assets.py`), so SNR-dependent abilities are not
+  gated on calibration status by default; the uncalibrated browser-TTS path
+  remains available as a fallback profile and still leaves those abilities
+  pending. Its main-idea and key-detail answers are both selected from a fixed
+  option list and scored against the answer key, so Oral Comprehension
+  resolves objectively rather than waiting on a rubric — the task collects no
+  free text at all. Playback is slowed to 0.85x for comprehension, and the
+  recording block ends as soon as the passage finishes rather than running to
+  a fixed ceiling.
 - Task 12 can objectively validate its main-idea item. Written Expression,
   synthesis and information-ordering judgments await an approved summary
   rubric.

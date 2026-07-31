@@ -24,7 +24,6 @@ const okResponse = (assessment) => ({
 
 const RESPONSES = {
   [TASK_IDS.IDEATION]: { ideas: 'door stop\nplant marker' },
-  [TASK_IDS.SPEECH_NOISE]: { paraphrase: 'The town reduced flooding with layered measures.' },
   [TASK_IDS.WRITTEN]: { summary: 'A coordinated design approach reduces urban heat.' },
 };
 
@@ -32,12 +31,15 @@ const RESPONSES = {
 // Which tasks are graded
 // ---------------------------------------------------------------------------
 
-test('exactly the three free-text tasks are graded', () => {
+test('exactly the two free-text tasks are graded', () => {
   assert.deepEqual([...GRADED_TASK_IDS].sort(), [
-    TASK_IDS.IDEATION, TASK_IDS.SPEECH_NOISE, TASK_IDS.WRITTEN,
+    TASK_IDS.IDEATION, TASK_IDS.WRITTEN,
   ].sort());
   assert.equal(taskNeedsRubricGrading(TASK_IDS.NUMERICAL), false);
   assert.equal(taskNeedsRubricGrading(TASK_IDS.DUAL_TASK), false);
+  // Task 11's main idea and key detail are both selected from a fixed option
+  // list and scored objectively, so it needs no rubric grading either.
+  assert.equal(taskNeedsRubricGrading(TASK_IDS.SPEECH_NOISE), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -50,9 +52,6 @@ test('each graded task sends its free text with the matching source material', (
   assert.equal(ideation.rubric_id, rubricId(TASK_IDS.IDEATION));
   assert.match(ideation.response_text, /door stop/);
   assert.ok(ideation.reference.prompt, 'ideation is judged against its prompt');
-
-  const speech = gradingRequestFor(TASK_IDS.SPEECH_NOISE, form(TASK_IDS.SPEECH_NOISE), RESPONSES[TASK_IDS.SPEECH_NOISE]);
-  assert.ok(speech.reference.passage, 'the paraphrase is judged against the spoken passage');
 
   const written = gradingRequestFor(TASK_IDS.WRITTEN, form(TASK_IDS.WRITTEN), RESPONSES[TASK_IDS.WRITTEN]);
   assert.ok(written.reference.passage, 'the summary is judged against the read passage');
