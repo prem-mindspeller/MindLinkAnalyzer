@@ -1006,7 +1006,7 @@ export function taskIntroduction(taskId, form) {
       'Think of as many different uses for a single object as you can.',
       'You will hear the object’s name at the beginning of the task',
       'Generate as many ideas as possible with your eyes closed. Keep them in your head, do not say or write anything yet.',
-      'After the task ends, type one idea on each line. (Shift+Enter will start a new line.)',
+      'After the task ends, type one idea on each line.',
       'You may type your answer in your preferred language.',
     ],
     [TASK_IDS.DUAL_TASK]: () => [

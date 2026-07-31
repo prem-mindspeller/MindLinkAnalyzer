@@ -14,7 +14,7 @@ import { ResponseField } from './taskShared.jsx';
 
 function ResponseFields({ response, setResponse }) {
   return (
-    <ResponseField label="Enter one idea per line. Relevance, category diversity, and originality remain pending expert/validated scoring.">
+    <ResponseField label="Enter one idea per line (Shift+Enter will start a new line).">
       <textarea
         rows="8"
         required
