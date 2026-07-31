@@ -49,7 +49,15 @@ function FragmentedClosureTarget({ form, reveal, fragmentOrder }) {
 function Stimulus({
   form, presentation, elapsedSeconds, buttonRuntime, onDetect,
 }) {
-  const reveal = closureRevealState(form, elapsedSeconds);
+  // Once "Recognized" is pressed, freeze the reveal at that instant instead of
+  // continuing to track live elapsed time -- otherwise a participant could
+  // click as soon as the button enables and then keep watching the target
+  // clarify for free, decoupling the recorded reaction time from how much of
+  // the target they actually had to work with.
+  const revealElapsedSeconds = buttonRuntime?.detected
+    ? buttonRuntime.responseElapsedMs / 1000
+    : elapsedSeconds;
+  const reveal = closureRevealState(form, revealElapsedSeconds);
   if (!reveal) return null;
   return (
     <div className="optimized-closure-stimulus">
