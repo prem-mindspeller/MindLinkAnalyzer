@@ -298,6 +298,22 @@ test('stimulus schedules cover the corrected continuous windows', () => {
   }
 });
 
+test('paced reading chunks never split a sentence and cover the whole passage', () => {
+  for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.WRITTEN]) {
+    const passageWordCount = form.passage.trim().split(/\s+/).filter(Boolean).length;
+    let coveredWordCount = 0;
+    for (let elapsed = 0; elapsed < form.readingDurationSeconds; elapsed += 24) {
+      const chunk = pacedPassageChunk(form, elapsed);
+      assert.ok(chunk.length > 0, `${form.id} at ${elapsed}s should not be empty`);
+      // Every chunk must end at a sentence boundary, not mid-sentence.
+      assert.match(chunk.trim(), /[.!?]”?$/, `${form.id} at ${elapsed}s: "${chunk}"`);
+      coveredWordCount += chunk.trim().split(/\s+/).filter(Boolean).length;
+    }
+    // The chunks partition the passage: no words dropped or duplicated.
+    assert.equal(coveredWordCount, passageWordCount, form.id);
+  }
+});
+
 test('profile and stimulus-pack overrides are consumed without task-engine branches', () => {
   const profile = JSON.parse(JSON.stringify(ACTIVE_BATTERY_PROFILE));
   profile.taskTimings[TASK_IDS.NUMERICAL].durationSeconds = 123;

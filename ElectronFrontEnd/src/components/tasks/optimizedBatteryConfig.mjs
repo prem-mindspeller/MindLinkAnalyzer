@@ -802,21 +802,26 @@ const SPEECH_FORMS = SPEECH_BASE_FORMS.map(({ continuation, ...form }) => {
 const WRITTEN_BASE_FORMS = [
   {
     id: 'written_a',
-    passage: 'Cities often respond to summer heat by adding mechanical cooling, yet neighbourhood design can reduce the problem before electricity is used. Trees shade walls and pavement, while soil and vegetation release stored water slowly into the air. Light-coloured roofs absorb less solar energy than dark roofs. These measures work at different scales: a roof mainly changes one building, whereas a connected canopy can cool a walking route and nearby homes. Their benefits are not automatic. Young trees need years of care, reflective materials can create glare if placed badly, and scarce water may limit planting. Effective heat planning therefore combines local climate data, maintenance budgets, and input from residents who know where people wait, walk, and gather. The strongest strategy is rarely a single technology. It is a coordinated set of physical changes, operating plans, and social protections, evaluated over time. Cooling centres remain important during extreme events, especially for residents whose homes cannot be upgraded quickly. Long-term design and emergency support solve different parts of the same risk.',
-    mainIdea: 'Urban heat is best reduced through coordinated design, maintenance, and emergency support.',
-    mainIdeaOptions: ['Urban heat is best reduced through coordinated design, maintenance, and emergency support.', 'Mechanical cooling should be removed from every building.', 'Planting trees is immediate and has no maintenance cost.'],
+    // Simplified to short, plain sentences (see tools/README.md-style intent:
+    // easy enough for a low-literacy reader) while keeping the same topic and
+    // main idea as before.
+    passage: 'Cities get very hot in summer. Many people turn on air conditioners to stay cool. But a city can also cool itself in other ways. Trees give shade to walls and streets. Plants and soil hold water and slowly release it into the air, which cools things down. Light-colored roofs stay cooler than dark roofs, because they reflect more sunlight. One roof only cools one building. But many trees together can cool a whole street and the homes near it. These ideas do not work on their own. New trees take years to grow big enough to give real shade. Shiny roofs can create annoying glare if they are placed the wrong way. Water for new plants can also be hard to find. Because of this, a good city plan needs more than one idea. It needs local weather facts, money for care, and input from the people who live there. No single fix solves the whole problem by itself. Cities also need cooling centers for very hot days. These help people whose homes cannot be fixed quickly.',
+    mainIdea: 'Cities cool down best when several ideas work together, not just one.',
+    mainIdeaOptions: ['Cities cool down best when several ideas work together, not just one.', 'Air conditioners are the only way to cool a city.', 'Planting trees fixes city heat right away and needs no care.'],
   },
   {
     id: 'written_b',
-    passage: 'Teams often assume that more data will automatically produce better decisions. In practice, additional measures can obscure the question if nobody agrees what action each measure should inform. A useful dashboard begins with decisions, not charts. Designers identify who must decide, how often the decision occurs, and what threshold would change the response. They then select the smallest set of reliable indicators that can reveal that threshold. Context still matters: a sudden change may reflect a reporting delay rather than a real shift in performance. For that reason, strong dashboards pair numbers with definitions, update times, and clear ownership. They also preserve a route back to source data for investigation. Simplicity does not mean hiding uncertainty. It means presenting uncertainty where it affects action and removing decoration that competes with it. Reviews should retire indicators that are never used and test whether users interpret alerts consistently. A dashboard succeeds when it shortens the path from evidence to a justified decision, not when it contains the greatest possible number of metrics.',
-    mainIdea: 'Decision-focused dashboards use a small, reliable and well-explained set of indicators.',
-    mainIdeaOptions: ['Decision-focused dashboards use a small, reliable and well-explained set of indicators.', 'The best dashboard always contains the largest number of charts.', 'Uncertainty should always be hidden from users.'],
+    // Simplified (see written_a's comment).
+    passage: 'Some people think more numbers always lead to better choices. But too many numbers can make a decision harder, not easier. This happens when nobody agrees on what each number should tell you to do. A good chart should start with the choice you need to make, not with the data. First, decide who makes the choice and how often. Then decide what result should make them act. After that, pick only a few numbers that show that result clearly. The numbers still need context. A sudden change might just be a mistake in how the data was collected, not a real change. Because of this, good charts explain what each number means and who is in charge of it. They also let people check the original data if something looks wrong. Being simple does not mean hiding problems. It means showing the important facts clearly and removing anything that is not needed. Old numbers that nobody uses anymore should be removed. A good chart helps people go from information to a smart choice quickly. It is not about having the most numbers possible.',
+    mainIdea: 'Good charts use a few clear numbers that are picked to help people decide.',
+    mainIdeaOptions: ['Good charts use a few clear numbers that are picked to help people decide.', 'The best chart always shows as many numbers as possible.', 'Charts should hide problems so users do not get confused.'],
   },
   {
     id: 'written_c',
-    passage: 'Repairing products can conserve resources, but repairability depends on choices made long before an item breaks. Fasteners that can be opened, replaceable modules, available diagrams, and stable software support all influence whether a technician can restore a device. A product may be technically repairable yet practically discarded if parts arrive too slowly or cost almost as much as replacement. Policy can improve access to information and components, while manufacturers can design upgrades that extend useful life. Consumers also need trustworthy guidance, because an unsafe repair can create new risks. Repair is therefore an ecosystem rather than a single workshop activity. Designers, suppliers, service networks, regulators, and users each control part of the outcome. Measuring success only by the number of repairs misses prevention: durable construction and careful maintenance can delay failure altogether. A strong circular strategy combines durability, maintenance, repair, reuse, and responsible recycling. Each option should be chosen according to safety, environmental impact, cost, and the condition of the product.',
-    mainIdea: 'Repairability depends on a coordinated ecosystem across design, supply, service, policy, and users.',
-    mainIdeaOptions: ['Repairability depends on a coordinated ecosystem across design, supply, service, policy, and users.', 'Every broken product should be repaired regardless of safety or cost.', 'Repairability is controlled only by technicians in workshops.'],
+    // Simplified (see written_a's comment).
+    passage: 'Fixing broken things can save money and materials. But whether a thing can be fixed depends on choices made before it ever breaks. A product is easy to fix if its screws can be opened. It also helps if broken parts can be swapped out and repair guides are easy to find. Even a fixable product might still get thrown away, if new parts take too long to arrive or cost almost as much as a new item. New rules can help by making manuals and spare parts easier to find. Companies can also design products so parts can be swapped later, which makes the product last longer. People who fix their own things need good instructions too, because a bad repair can be unsafe. Fixing things is not just one shop’s job. Designers, sellers, repair shops, lawmakers, and users all play a part. Just counting repairs is not enough. Strong, well-made products need less repair in the first place, and simple care can stop many problems before they start. The best plan combines strong design, regular care, repair, reuse, and safe recycling. Each choice should depend on safety, cost, and how worn the item is.',
+    mainIdea: 'Whether something can be fixed depends on many people working together, not just repair shops.',
+    mainIdeaOptions: ['Whether something can be fixed depends on many people working together, not just repair shops.', 'Every broken item should always be repaired, no matter the cost or danger.', 'Only repair shops decide whether something can be fixed.'],
   },
 ];
 
@@ -898,9 +903,46 @@ export function visualComparisonFrame(form, elapsedSeconds) {
   };
 }
 
+function splitIntoSentences(text) {
+  const matches = String(text ?? '').match(/[^.!?]+[.!?]+(?:\s+|$)/g);
+  if (matches) return matches.map((sentence) => sentence.trim()).filter(Boolean);
+  const trimmed = String(text ?? '').trim();
+  return trimmed ? [trimmed] : [];
+}
+
+// Groups the passage's sentences into `chunkCount` reading-pane chunks, each a
+// whole number of complete sentences (never a mid-sentence split), while
+// keeping each chunk's word count close to its even share of the passage.
+function sentenceChunks(passage, chunkCount) {
+  const sentences = splitIntoSentences(passage);
+  const wordCounts = sentences.map((sentence) => countWords(sentence));
+  const totalWords = wordCounts.reduce((sum, count) => sum + count, 0);
+
+  const chunks = Array.from({ length: chunkCount }, () => []);
+  let chunkIndex = 0;
+  let cumulativeWords = 0;
+  for (let index = 0; index < sentences.length; index += 1) {
+    chunks[chunkIndex].push(sentences[index]);
+    cumulativeWords += wordCounts[index];
+
+    const remainingChunks = chunkCount - chunkIndex - 1;
+    const remainingSentences = sentences.length - index - 1;
+    // Compare against each chunk boundary's cumulative share of the whole
+    // passage, not a per-chunk total that resets every time — otherwise later
+    // targets keep growing while the running count restarts at zero and can
+    // never catch up, starving the final chunks.
+    const reachedShare = cumulativeWords >= (totalWords * (chunkIndex + 1)) / chunkCount;
+    // Never close a chunk if doing so would leave fewer sentences than chunks
+    // still needing at least one.
+    const canSpareASentence = remainingSentences >= remainingChunks;
+    if (remainingChunks > 0 && reachedShare && canSpareASentence) {
+      chunkIndex += 1;
+    }
+  }
+  return chunks.map((group) => group.join(' '));
+}
+
 export function pacedPassageChunk(form, elapsedSeconds, options = {}) {
-  const words = String(form?.passage || '').trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return '';
   const presentation = taskPresentationFor(TASK_IDS.WRITTEN);
   const readingDuration = Number(options.readingDurationSeconds)
     || Number(form?.readingDurationSeconds)
@@ -909,8 +951,7 @@ export function pacedPassageChunk(form, elapsedSeconds, options = {}) {
     || Number(form?.chunkCount)
     || presentation.chunkCount;
   const chunkIndex = Math.min(chunkCount - 1, Math.floor((elapsedSeconds / readingDuration) * chunkCount));
-  const chunkSize = Math.ceil(words.length / chunkCount);
-  return words.slice(chunkIndex * chunkSize, (chunkIndex + 1) * chunkSize).join(' ');
+  return sentenceChunks(form?.passage, chunkCount)[chunkIndex] || '';
 }
 
 export function taskIntroduction(taskId, form) {
