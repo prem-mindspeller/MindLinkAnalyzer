@@ -285,11 +285,13 @@ test('stimulus schedules cover the corrected continuous windows', () => {
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE]) {
     const wordCount = form.passage.trim().split(/\s+/).length;
-    assert.ok(wordCount >= 240 && wordCount <= 310, `${form.id}: ${wordCount} words`);
-    // 105 = the shortest of the three calibrated, trimmed Piper narrations
+    // Simplified, plain-language passages run shorter than the original
+    // denser wording at the same playbackRate/SNR-safety budget.
+    assert.ok(wordCount >= 190 && wordCount <= 240, `${form.id}: ${wordCount} words`);
+    // 89 = the shortest of the three calibrated narrations
     // (tools/build_speech_in_noise_assets.py) played at the profile's
     // playbackRate, kept conservative rather than overstated.
-    assert.equal(form.audioProfile.expectedDeliverySeconds, 105);
+    assert.equal(form.audioProfile.expectedDeliverySeconds, 89);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.WRITTEN]) {
     assert.equal(form.readingDurationSeconds, 120);

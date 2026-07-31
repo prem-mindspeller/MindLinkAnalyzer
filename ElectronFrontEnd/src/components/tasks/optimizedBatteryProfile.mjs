@@ -145,12 +145,14 @@ const audioProfiles = {
   },
   speech_in_noise: {
     mode: 'premixed_audio_asset',
-    // Built with tools/build_speech_in_noise_assets.py from Piper TTS
-    // (en_US-lessac-medium) narration of the passages in SPEECH_BASE_FORMS,
-    // mixed against the same seeded noise `noise` below describes (seed 11011,
-    // looped 2s buffer) and re-measured after mixing rather than assumed. The
-    // narration itself was trimmed (see SPEECH_BASE_FORMS comments and
-    // tools/README.md) so it still fits the 120s block at playbackRate below.
+    // Built with tools/build_speech_in_noise_assets.py from narration of the
+    // (simplified, plain-language) passages in SPEECH_BASE_FORMS, mixed
+    // against the same seeded noise `noise` below describes (seed 11011,
+    // looped 2s buffer) and re-measured after mixing rather than assumed.
+    // Narration source: Windows SAPI (Microsoft David Desktop voice) via
+    // tools/synthesize_speech_a.ps1 — Piper TTS is not available in every
+    // environment this repo is built in, but SAPI's WAV output (22050 Hz,
+    // mono, 16-bit PCM) matches the mixer's expected format directly.
     // Regenerate with: python3 tools/build_speech_in_noise_assets.py
     // --narration-dir tools/narration --target-snr-db 11.5
     assetUri: null,
@@ -158,15 +160,15 @@ const audioProfiles = {
     assetsByForm: {
       speech_a: {
         uri: 'audio/speech_a_snr11p5.wav',
-        sha256: '599e6c6af872336b2ac91a151600c5795a2d676d97fb7f49ce3fd8dcc4ecea2a',
+        sha256: '60146104135cd7b45cb4df3d7aaaeb983143f6deaa220b0b78c33e4a48fade9d',
       },
       speech_b: {
         uri: 'audio/speech_b_snr11p5.wav',
-        sha256: 'a8ac1c45a34b3f1ef4051e9da10bee278d1f3a2c759dc12ffca86e0228361175',
+        sha256: 'abfb41097798a92f0f3ff62d70a5e768d47e481f13e7cb7d338dedb83ec8e737',
       },
       speech_c: {
         uri: 'audio/speech_c_snr11p5.wav',
-        sha256: '468e9370fb36166ae27bfa66ab51bacab349d719b9ddc75ecb862bb23b8b3d8c',
+        sha256: 'fba64eeef31477abc88a677169e562d072969cf1971f2e72b71ca7b076bf2d9e',
       },
     },
     assetsByStimulusKey: {},
@@ -186,10 +188,10 @@ const audioProfiles = {
     // (noise 25% quieter than before, not 25% quieter than the speech itself).
     nominalSnrDb: 11.5,
     acousticallyCalibrated: true,
-    // Shortest of the three (now-trimmed) narrations (speech_b, 89.9s) played
-    // at playbackRate above; kept conservative so this is never overstated
+    // Shortest of the three narrations (speech_a, 75.7s) played at
+    // playbackRate above; kept conservative so this is never overstated
     // relative to what actually plays.
-    expectedDeliverySeconds: 105,
+    expectedDeliverySeconds: 89,
     settlingSeconds: 5,
     // Documents the noise this asset was calibrated against, for audit and
     // regeneration; not read by the runtime while mode is premixed_audio_asset.

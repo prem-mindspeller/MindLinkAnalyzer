@@ -7,7 +7,12 @@ premixed, SNR-calibrated audio that `optimizedBatteryProfile.mjs`'s
 `speech_in_noise` profile now points at. See `test_speech_in_noise_mixer.py`
 for the DSP tests.
 
-### One-time setup
+The three passages are pre-extracted as plain text in `narration/*_text.txt`
+(source of truth: `SPEECH_BASE_FORMS` in `../src/components/tasks/optimizedBatteryConfig.mjs`).
+The mixer only needs mono 16-bit PCM WAV narration — it doesn't care which TTS
+engine produced it. Two options:
+
+### Option A: Piper TTS (better voice quality, needs setup)
 
 ```bash
 cd ElectronFrontEnd/tools
@@ -20,13 +25,6 @@ python3 -m piper.download_voices --download-dir voices en_US-lessac-medium
 ```
 
 `.venv/` and `voices/` are gitignored (large, regenerable, environment-specific).
-
-### Generate narration with Piper
-
-The three passages are pre-extracted as plain text in `narration/*_text.txt`
-(source of truth: `SPEECH_BASE_FORMS` in `../src/components/tasks/optimizedBatteryConfig.mjs`).
-Piper's default output is already mono 16-bit PCM WAV — no format conversion
-needed.
 
 ```bash
 source .venv/bin/activate
@@ -42,6 +40,28 @@ lists/downloads alternatives (e.g. a different `en_US-*` speaker). Speaking
 rate can be adjusted with `--length-scale` (>1.0 slower, <1.0 faster) if a
 narration's duration should track the task's `expectedDeliverySeconds` more
 closely.
+
+### Option B: Windows SAPI (no install, Windows-only)
+
+The narration currently checked into `narration/*.wav` was generated this way
+(`Microsoft David Desktop` voice), since Piper isn't available in every
+environment this repo is built in. SAPI's WAV output at 22050 Hz mono 16-bit
+PCM matches the mixer's expected format exactly — no conversion needed.
+`synthesize_speech_a.ps1` regenerates all three from the current
+`SPEECH_BASE_FORMS` text (edit its `$texts` map if the passages change, or
+adapt it to read straight from `narration/*_text.txt`):
+
+```powershell
+& "./synthesize_speech_a.ps1"
+```
+
+List installed voices with:
+
+```powershell
+Add-Type -AssemblyName System.Speech
+(New-Object System.Speech.Synthesis.SpeechSynthesizer).GetInstalledVoices() |
+  ForEach-Object { $_.VoiceInfo.Name }
+```
 
 ### Mix to a calibrated SNR
 
@@ -73,7 +93,7 @@ for (const f of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE]) {
 "
 ```
 
-then repeat the Piper + mixing steps above with a new target SNR via
+then repeat the Piper/SAPI + mixing steps above with a new target SNR via
 `--target-snr-db`.
 
 ### Narration length vs. playbackRate
@@ -86,12 +106,7 @@ at a given playbackRate the raw narration must be short enough that
 margin (aim for >= 8s) before the block ends — otherwise the passage gets cut
 off mid-sentence and the attempt fails its audio-delivery check.
 
-The checked-in `narration/*.wav` are already trimmed to the sentence count
-that keeps a safe margin at the current playbackRate (0.85): `speech_a` ends
-after its 9th continuation sentence, `speech_b` after its 8th, `speech_c`
-after its 9th (trimmed at a real inter-sentence pause, verified against the
-waveform, not mid-word). `SPEECH_BASE_FORMS` in `optimizedBatteryConfig.mjs`
-carries a comment on each trimmed `continuation` recording the original
-sentence count. If `playbackRate` changes again, recompute the margin above
-first — a slower rate will likely need the passages trimmed further (or the
-rate raised back up) before re-running Piper and the mixer.
+The checked-in `narration/*.wav` (206–216 words each, ~76–85s at normal
+speed) leave a comfortable ~19–30s margin at the current playbackRate (0.85).
+If `playbackRate` drops further or the passages grow substantially longer,
+recompute the margin above first.
