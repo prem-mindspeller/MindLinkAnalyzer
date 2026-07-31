@@ -975,7 +975,7 @@ export function taskIntroduction(taskId, form) {
   ];
   const specificFactory = {
     [TASK_IDS.NUMERICAL]: () => [
-      `You will start at ${form.startValue}.`,
+      `You will start with the number ${form.startValue}.`,
       'Then you will hear steps like "add 7" or "subtract 6". Do the maths in your head after each one.',
       'Give only your final answer, after the task ends.',
     ],
@@ -1042,8 +1042,7 @@ export function taskIntroduction(taskId, form) {
       // Two of the three answers are picked from a list and one is typed, so
       // this must not promise that everything can be answered in any language:
       // only the paraphrase is free text.
-      'Afterward, you will pick two answers from a list, and write one short summary of the passage.',
-      'You may write that summary in your preferred language.',
+      'Afterward, you will pick two answers from a list, and write one short summary of the passage in your preferred language.',
     ],
     [TASK_IDS.WRITTEN]: () => [
       'Read the text as it appears on the screen, one part at a time.',
