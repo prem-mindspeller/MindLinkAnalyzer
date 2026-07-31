@@ -469,8 +469,12 @@ export function scoreOptimizedTask(
     const mainIdeaCorrect = normalizeText(response.mainIdea) === normalizeText(form.mainIdea);
     const summaryWordCount = countWords(response.summary);
     const summaryMaximumWords = maximumWordsFor(response.summary, thresholds.summaryMaximumWords);
-    const lengthValid = summaryWordCount >= thresholds.summaryMinimumWords
-      && summaryWordCount <= summaryMaximumWords;
+    // A null bound means "no limit", matching how paraphraseMinimumWords is
+    // treated above — spelled out explicitly rather than relying on `>= null`
+    // / `<= null` numeric coercion (only one direction of which comes out
+    // right, and neither documents the intent at the call site).
+    const lengthValid = (thresholds.summaryMinimumWords == null || summaryWordCount >= thresholds.summaryMinimumWords)
+      && (summaryMaximumWords == null || summaryWordCount <= summaryMaximumWords);
     const objectivePass = (!thresholds.requireMainIdea || mainIdeaCorrect) && lengthValid;
     const assessmentStatus = externalRubricStatus(runtime, rubric)
       || thresholdRubricStatus(runtime, thresholds.minimumRubricScores, rubric);

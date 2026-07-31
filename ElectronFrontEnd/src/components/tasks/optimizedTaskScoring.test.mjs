@@ -288,6 +288,25 @@ test('a paraphrase below the configured minimum length fails the validity gate',
   assert.equal(tooShort.ability_validation['Oral Comprehension'], 'failed');
 });
 
+test('a null summary word bound means unbounded, not unsatisfiable', () => {
+  // `count <= null` coerces null to 0 and is always false, which would reject
+  // every summary if a maximum were ever configured as null to mean "no
+  // limit" — the same way `paraphraseMinimumWords == null` already means "no
+  // minimum" for Task 11.
+  const profile = JSON.parse(JSON.stringify(ACTIVE_BATTERY_PROFILE));
+  profile.thresholds[TASK_IDS.WRITTEN].summaryMaximumWords = null;
+  const written = form(TASK_IDS.WRITTEN);
+  const longSummary = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ');
+  const result = scoreOptimizedTask(TASK_IDS.WRITTEN, written, {
+    mainIdea: written.mainIdea,
+    summary: longSummary,
+  }, {}, profile);
+  assert.equal(result.metrics.summary_length_valid, true);
+  assert.deepEqual(result.metrics.configured_summary_word_range, [
+    profile.thresholds[TASK_IDS.WRITTEN].summaryMinimumWords, null,
+  ]);
+});
+
 test('free-text constructs remain pending review', () => {
   const ideation = form(TASK_IDS.IDEATION);
   const ideas = scoreOptimizedTask(TASK_IDS.IDEATION, ideation, { ideas: 'door stop\nplant marker\npaper weight' });

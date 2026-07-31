@@ -382,12 +382,17 @@ test('text normalization preserves non-Latin answers instead of erasing them', (
   assert.equal(normalizeText('café'), 'café');
   // Punctuation and case are still normalized away.
   assert.equal(normalizeText('  The Marsh!  '), 'the marsh');
-  // Dropdown answers are compared to their own option strings, so both sides
-  // must keep normalizing identically.
+  // Selected answers are compared after normalization, so two distinct options
+  // must never normalize to the same string — that would let a wrong choice
+  // score as correct. Punctuation stripping makes this a real risk.
   for (const taskId of [TASK_IDS.WRITTEN, TASK_IDS.SPEECH_NOISE]) {
     for (const form of FORM_REGISTRY_FOR_TESTS[taskId]) {
-      assert.equal(normalizeText(form.mainIdea), normalizeText(form.mainIdea));
-      assert.ok(form.mainIdeaOptions.includes(form.mainIdea), form.id);
+      for (const options of [form.mainIdeaOptions, form.keyDetailOptions]) {
+        if (!options) continue;
+        const normalized = options.map(normalizeText);
+        assert.equal(new Set(normalized).size, options.length, `${form.id} options collide once normalized`);
+        assert.ok(normalized.every(Boolean), `${form.id} has an option that normalizes to nothing`);
+      }
     }
   }
 });

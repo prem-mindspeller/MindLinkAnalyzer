@@ -46,8 +46,12 @@ function Stimulus({ form, presentation, elapsedSeconds }) {
 // blocks submission until it is satisfied.
 function isResponseValid({ response, scoringThresholds }) {
   const wordCount = countWords(response.summary);
-  return wordCount >= scoringThresholds.summaryMinimumWords
-    && wordCount <= maximumWordsFor(response.summary, scoringThresholds.summaryMaximumWords);
+  const maximumWords = maximumWordsFor(response.summary, scoringThresholds.summaryMaximumWords);
+  // A null bound means "no limit" — spelled out explicitly rather than
+  // relying on `<= null` numeric coercion, which resolves to false and would
+  // reject every response if a maximum were ever configured as null.
+  return (scoringThresholds.summaryMinimumWords == null || wordCount >= scoringThresholds.summaryMinimumWords)
+    && (maximumWords == null || wordCount <= maximumWords);
 }
 
 function ResponseFields({ form, response, setResponse, scoringThresholds }) {

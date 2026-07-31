@@ -1039,8 +1039,11 @@ export function taskIntroduction(taskId, form) {
     [TASK_IDS.SPEECH_NOISE]: () => [
       'You will hear a short passage. There is background noise, so listen carefully.',
       'Just listen during the recording, until it ends.',
-      'Afterward, you will answer a few questions about what you heard.',
-      'You may type your answer in your preferred language.'
+      // Two of the three answers are picked from a list and one is typed, so
+      // this must not promise that everything can be answered in any language:
+      // only the paraphrase is free text.
+      'Afterward, you will pick two answers from a list, and write one short summary of the passage.',
+      'You may write that summary in your preferred language.',
     ],
     [TASK_IDS.WRITTEN]: () => [
       'Read the text as it appears on the screen, one part at a time.',

@@ -532,26 +532,29 @@ const TaskSelection = () => {
                                 const booked = enabledTaskIds.includes(item);
                                 const unlocked = taskIsUnlocked(item);
                                 return (
-                                    <>
+                                    // The key belongs on the outermost element returned from the
+                                    // map; a shorthand <> fragment cannot carry one, which left
+                                    // React reconciling this list by index and warning on every
+                                    // render.
+                                    <React.Fragment key={item}>
                                         {[1, 5, 10].includes(meta.number) && (
                                             <p className="ts-group-label">
                                                 {meta.number === 1 ? 'Session 1' : meta.number === 5 ? 'Session 2' : 'Session 3'}
                                             </p>
                                         )}
-                                    <button
-                                        key={item}
-                                        className={`ts-task-item${selectedId === item ? ' selected' : ''}${done ? ' done' : ''}${!unlocked ? ' locked' : ''}`}
-                                        onClick={() => unlocked && setSelectedId(item)}
-                                        disabled={!unlocked}
-                                    >
-                                        <span className="optimized-sequence-number">{index + 1}</span>
-                                        <span className="ts-task-item-icon">
-                                            {done ? <FontAwesomeIcon icon={faCircleCheck} /> : !unlocked ? <FontAwesomeIcon icon={faLock} /> : <FontAwesomeIcon icon={meta.eyeState === 'closed' ? faMoon : faEye} />}
-                                        </span>
-                                        <span className="ts-task-item-name">{meta.shortName}</span>
-                                        <span className="ts-task-item-dur">{booked ? `${meta.duration}s` : 'Booking required'}</span>
-                                    </button>
-                                    </>
+                                        <button
+                                            className={`ts-task-item${selectedId === item ? ' selected' : ''}${done ? ' done' : ''}${!unlocked ? ' locked' : ''}`}
+                                            onClick={() => unlocked && setSelectedId(item)}
+                                            disabled={!unlocked}
+                                        >
+                                            <span className="optimized-sequence-number">{index + 1}</span>
+                                            <span className="ts-task-item-icon">
+                                                {done ? <FontAwesomeIcon icon={faCircleCheck} /> : !unlocked ? <FontAwesomeIcon icon={faLock} /> : <FontAwesomeIcon icon={meta.eyeState === 'closed' ? faMoon : faEye} />}
+                                            </span>
+                                            <span className="ts-task-item-name">{meta.shortName}</span>
+                                            <span className="ts-task-item-dur">{booked ? `${meta.duration}s` : 'Booking required'}</span>
+                                        </button>
+                                    </React.Fragment>
                                 );
                             })}
                         </div>

@@ -285,7 +285,7 @@ const rubrics = {
 const thresholds = {
   [TASK.NUMERICAL]: { maximumAbsoluteFinalError: 0 },
   [TASK.WORKING_MEMORY]: { maximumItemErrors: 0 },
-  [TASK.AUDITORY_COUNT]: { maximumAbsoluteCountError: 0, validated: false },
+  [TASK.AUDITORY_COUNT]: { maximumAbsoluteCountError: 0 },
   [TASK.SEMANTIC]: { requireBothRules: true, requireSwitchDetection: true },
   [TASK.VISUOSPATIAL]: { maximumPositionError: 0, requireOrientationMatch: true },
   [TASK.IDEATION]: {
@@ -298,7 +298,6 @@ const thresholds = {
     minimumRelevantIdeas: 4,
     minimumCategoryDiversity: 2,
     minimumOriginality: 2.5,
-    validated: false,
   },
   [TASK.DUAL_TASK]: {
     maximumAbsoluteCountError: 0,
@@ -311,7 +310,6 @@ const thresholds = {
     // a single missed post-switch update.
     maximumDualTaskCost: 0.25,
     maximumSwitchCost: 0.34,
-    validated: false,
   },
   [TASK.ANOMALY]: { maximumAbsoluteCountError: 0, requireExactTypeSet: true },
   [TASK.VISUAL_COMPARISON]: {
@@ -329,7 +327,6 @@ const thresholds = {
     // half maximum. Above it the target is largely visible and only Speed of
     // Closure is evidenced.
     flexibilityMaximumRevealFraction: 0.5,
-    validated: false,
   },
   [TASK.SPEECH_NOISE]: {
     // The key detail is selected from `keyDetailOptions`, not typed, so it is
@@ -348,7 +345,6 @@ const thresholds = {
       paraphrase_accuracy: 3,
       paraphrase_completeness: 3,
     },
-    validated: false,
   },
   [TASK.WRITTEN]: {
     summaryMinimumWords: 35,
@@ -363,7 +359,6 @@ const thresholds = {
       completeness: 3,
       information_ordering: 3,
     },
-    validated: false,
   },
 };
 
@@ -399,8 +394,9 @@ export const CANDIDATE_PILOT_PROFILE = deepFreeze({
         // 1.1.0: candidate cut-offs supplied for the previously-null closure,
         // dual-task, ideation, paraphrase and written-synthesis thresholds so
         // those abilities can resolve instead of returning pending_review.
-        // Every added value is a documented candidate default (validated:false),
-        // not a normative cut-off.
+        // Every added value is a documented candidate default, not a
+        // normative cut-off — see validation_status below, which is what
+        // scoringConfiguration and the backend actually gate interpretation on.
         id: 'mindspeller_candidate_thresholds',
         version: '1.1.0-candidate.1',
         validation_status: 'candidate',
