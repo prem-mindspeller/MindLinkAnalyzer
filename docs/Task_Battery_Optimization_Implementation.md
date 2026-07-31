@@ -190,9 +190,13 @@ rebuilding the task engine. Every stored task result includes the protocol and
 component versions, form ID, eye state, phase plan, event audit trail,
 transport segmentation, quality requirements and behavioral evidence.
 
-Task 9 presents synchronously changing code pairs and introduces one gradual
-mismatch. Reaction time is measured from the first animation frame on which
-that mismatch was actually rendered, not from its nominal timer dispatch. Task
+Task 9 presents synchronously changing code pairs and introduces a mismatch at
+one position. Reaction time is measured from the first animation frame on
+which that mismatch was actually rendered, not from its nominal timer
+dispatch. If it goes undetected, further positions drift apart on a fixed
+schedule so the two rows keep diverging rather than staying at one
+easy-to-miss difference for the rest of the block; only the first rendered
+mismatch is used for scoring. Task
 10 presents separately clipped target fragments in dense visual noise. Correct
 identification can validate the candidate Speed of Closure outcome; Flexibility
 of Closure remains pending until a validated visibility/noise threshold is

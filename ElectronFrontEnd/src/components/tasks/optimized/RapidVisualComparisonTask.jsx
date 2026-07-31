@@ -6,32 +6,36 @@ import { TASK_IDS, visualComparisonFrame } from '../optimizedBatteryConfig.mjs';
  * Task 9 — Rapid Visual Comparison.
  *
  * Two synchronized code strings update together until one character in the
- * lower row drifts away from the upper one. Reaction time is measured from the
- * frame that actually rendered the mismatch, so the reveal is a CSS transition
- * the runner times rather than an instant swap.
+ * lower row drifts away from the upper one, with an instant swap rather than
+ * a fade -- an animated reveal is itself a motion cue that would give the
+ * mismatch away regardless of whether the participant is actually comparing
+ * the rows. Reaction time is measured from the first animation frame that
+ * actually rendered the mismatched character. After that, more positions
+ * drift apart on a fixed schedule (see MISMATCH_ESCALATION_STEP_SECONDS in
+ * optimizedBatteryConfig.mjs) so the rows become unmistakably different well
+ * before the block ends, rather than staying at one easy-to-miss character
+ * for the whole remainder.
  *
  * The button press is the whole response; there is no post-block form.
  */
 
-function ComparisonLine({ frame, revealMismatch, revealSeconds }) {
+function ComparisonLine({ frame }) {
+  const mismatched = new Set(frame.mismatchIndices);
   return (
     <div
       className="optimized-comparison-line"
-      aria-label={revealMismatch ? frame.changed : frame.base}
-      style={{ '--mismatch-reveal-duration': `${revealSeconds}s` }}
+      aria-label={mismatched.size > 0 ? frame.changed : frame.base}
     >
       {[...frame.base].map((character, index) => {
-        if (index !== frame.mismatchIndex) return <span key={index}>{character}</span>;
+        if (!mismatched.has(index)) return <span key={index}>{character}</span>;
         return (
           <span
             key={index}
-            className={`optimized-comparison-character${revealMismatch ? ' is-revealing' : ''}`}
+            className="optimized-comparison-character is-mismatched"
             aria-hidden="true"
           >
             <span className="optimized-comparison-original">{character}</span>
-            {revealMismatch && (
-              <span className="optimized-comparison-replacement">{frame.changed[index]}</span>
-            )}
+            <span className="optimized-comparison-replacement">{frame.changed[index]}</span>
           </span>
         );
       })}
@@ -44,18 +48,14 @@ function scheduleEvents({ form }) {
 }
 
 function Stimulus({
-  form, elapsedSeconds, mismatchDue, buttonRuntime, onDetect,
+  form, elapsedSeconds, buttonRuntime, onDetect,
 }) {
   const frame = visualComparisonFrame(form, elapsedSeconds);
   if (!frame) return null;
   return (
     <div className="optimized-comparison-stimulus">
       <div>{frame.base}</div>
-      <ComparisonLine
-        frame={frame}
-        revealMismatch={mismatchDue}
-        revealSeconds={form.mismatchRevealSeconds}
-      />
+      <ComparisonLine frame={frame} />
       <button
         type="button"
         className="optimized-detect-button"

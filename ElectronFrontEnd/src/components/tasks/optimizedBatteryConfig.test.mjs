@@ -225,11 +225,55 @@ test('rapid visual comparison continuously updates synchronized code pairs', () 
     const later = visualComparisonFrame(form, form.mismatchOnset + 1);
     assert.notEqual(early.base, later.base, form.id);
     assert.equal(early.base.length, early.changed.length, form.id);
+    assert.equal(early.mismatchIndices.length, 0, form.id);
     assert.equal(
       [...later.base].filter((character, index) => character !== later.changed[index]).length,
       1,
       form.id,
     );
+  }
+});
+
+test('comparison mismatches grow from one difference to many well before the block ends', () => {
+  const duration = TASK_DEFINITIONS[TASK_IDS.VISUAL_COMPARISON].duration;
+  for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.VISUAL_COMPARISON]) {
+    const justAfterOnset = visualComparisonFrame(form, form.mismatchOnset + 1);
+    assert.equal(justAfterOnset.mismatchIndices.length, 1, form.id);
+
+    const nearEnd = visualComparisonFrame(form, duration - 2);
+    assert.equal(nearEnd.mismatchIndices.length, form.mismatchIndices.length, form.id);
+    assert.ok(nearEnd.mismatchIndices.length > 1, form.id);
+
+    // The count never shrinks as time passes, and it never revisits a
+    // position it has already revealed.
+    let previousCount = 0;
+    for (let elapsed = form.mismatchOnset; elapsed <= duration; elapsed += 1) {
+      const frame = visualComparisonFrame(form, elapsed);
+      assert.ok(frame.mismatchIndices.length >= previousCount, `${form.id} at ${elapsed}s`);
+      assert.equal(new Set(frame.mismatchIndices).size, frame.mismatchIndices.length, `${form.id} at ${elapsed}s`);
+      previousCount = frame.mismatchIndices.length;
+    }
+  }
+});
+
+test('every mismatch, including the first, only appears exactly when the code refreshes', () => {
+  const duration = TASK_DEFINITIONS[TASK_IDS.VISUAL_COMPARISON].duration;
+  for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.VISUAL_COMPARISON]) {
+    const interval = form.updateIntervalSeconds;
+    // mismatchOnset is itself a multiple of updateIntervalSeconds, so even the
+    // very first mismatch -- the instant reaction time is scored from -- lands
+    // on a refresh instead of appearing mid-display on an already-shown pair.
+    assert.equal(form.mismatchOnset % interval, 0, form.id);
+    for (let frameStart = 0; frameStart + interval <= duration; frameStart += interval) {
+      const atRefresh = visualComparisonFrame(form, frameStart).mismatchIndices.length;
+      const justBeforeNextRefresh = visualComparisonFrame(
+        form, frameStart + interval - 0.01,
+      ).mismatchIndices.length;
+      assert.equal(
+        atRefresh, justBeforeNextRefresh,
+        `${form.id} mismatch count changed mid-display within [${frameStart}, ${frameStart + interval})`,
+      );
+    }
   }
 });
 

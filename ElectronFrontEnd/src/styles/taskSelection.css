@@ -854,22 +854,12 @@
     opacity: 0;
 }
 
-.optimized-comparison-character.is-revealing .optimized-comparison-original {
-    animation: optimized-original-character-fade var(--mismatch-reveal-duration, 2s) linear both;
+.optimized-comparison-character.is-mismatched .optimized-comparison-original {
+    opacity: 0;
 }
 
-.optimized-comparison-character.is-revealing .optimized-comparison-replacement {
-    animation: optimized-replacement-character-fade var(--mismatch-reveal-duration, 2s) linear both;
-}
-
-@keyframes optimized-original-character-fade {
-    from { opacity: 1; }
-    to { opacity: 0; }
-}
-
-@keyframes optimized-replacement-character-fade {
-    from { opacity: 0; }
-    to { opacity: 1; }
+.optimized-comparison-character.is-mismatched .optimized-comparison-replacement {
+    opacity: 1;
 }
 
 .optimized-detect-button {

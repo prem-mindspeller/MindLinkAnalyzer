@@ -233,7 +233,7 @@ const presentation = {
   [TASK.IDEATION]: {},
   [TASK.DUAL_TASK]: { finalQuietSeconds: 3 },
   [TASK.ANOMALY]: { entryIntervalSeconds: 2 },
-  [TASK.VISUAL_COMPARISON]: { updateIntervalSeconds: 3, mismatchRevealSeconds: 2 },
+  [TASK.VISUAL_COMPARISON]: { updateIntervalSeconds: 3 },
   [TASK.CLOSURE]: {
     revealStartSeconds: 20,
     fullyVisibleSeconds: 70,

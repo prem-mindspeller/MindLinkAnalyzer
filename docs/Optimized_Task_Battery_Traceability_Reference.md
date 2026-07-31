@@ -197,8 +197,10 @@ ability score. Tasks without one are reported descriptively.
 ### 9. Rapid Visual Comparison
 
 - **Protocol:** 60 seconds, eyes open, eyes-open baseline; compare changing
-  central code pairs and press once after a gradual mismatch is actually
-  rendered. Recording continues for the full block.
+  central code pairs and press once after a mismatch is actually rendered. If
+  missed, more positions drift apart on a fixed schedule so the rows keep
+  diverging; only the first rendered mismatch is scored. Recording continues
+  for the full block.
 - **Behavioural evidence:** planned and rendered mismatch onset, button time,
   detection accuracy, false-alarm flag, reaction time, and latency-range flag.
   The onset used for scoring is the rendered frame, not the nominal timer.

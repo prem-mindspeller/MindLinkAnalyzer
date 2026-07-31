@@ -712,7 +712,17 @@ function comparisonReplacement(character, offset) {
   return VISUAL_CODE_ALPHABET[(index + offset) % VISUAL_CODE_ALPHABET.length];
 }
 
-function visualComparisonForm(id, seed, mismatchOnset, mismatchIndex, replacementOffset) {
+// After the first mismatched position appears at mismatchOnset, one more
+// position joins it every MISMATCH_ESCALATION_STEP_FRAMES code refreshes, so
+// the two rows keep diverging further for anyone who missed the first, subtle
+// difference, instead of staying at a single changed character for the rest
+// of the block. Escalating on a frame count rather than a raw time interval
+// means each newly added mismatch is already present the instant the row
+// updates to its next code, rather than popping up mid-display on an
+// otherwise-unchanged pair.
+const MISMATCH_ESCALATION_STEP_FRAMES = 2;
+
+function visualComparisonForm(id, seed, mismatchOnset, mismatchIndices, replacementOffset) {
   const presentation = taskPresentationFor(TASK_IDS.VISUAL_COMPARISON);
   const updateIntervalSeconds = presentation.updateIntervalSeconds;
   const frameCount = Math.ceil(
@@ -720,24 +730,26 @@ function visualComparisonForm(id, seed, mismatchOnset, mismatchIndex, replacemen
   ) + 1;
   const random = seededUnit(seed);
   const frames = Array.from({ length: frameCount }, () => comparisonCode(random));
-  if (frames.some((code) => code[mismatchIndex] === '-')) {
-    throw new Error(`${id} mismatch position must contain a code character in every frame`);
+  if (frames.some((code) => mismatchIndices.some((index) => code[index] === '-'))) {
+    throw new Error(`${id} mismatch positions must contain a code character in every frame`);
   }
   return {
     id,
     frames,
     updateIntervalSeconds,
-    mismatchIndex,
+    mismatchIndices,
     replacementOffset,
     mismatchOnset,
-    mismatchRevealSeconds: presentation.mismatchRevealSeconds,
   };
 }
 
+// Every mismatchOnset below is a multiple of updateIntervalSeconds (3s) so the
+// very first mismatch, like every escalation step after it, is already
+// present the instant the row refreshes rather than appearing mid-display.
 const VISUAL_COMPARISON_FORMS = [
-  visualComparisonForm('compare_a', 9101, 27, 11, 5),
-  visualComparisonForm('compare_b', 9102, 26, 6, 7),
-  visualComparisonForm('compare_c', 9103, 24, 13, 9),
+  visualComparisonForm('compare_a', 9101, 27, [11, 2, 7, 0, 13], 5),
+  visualComparisonForm('compare_b', 9102, 27, [6, 1, 10, 3, 12], 7),
+  visualComparisonForm('compare_c', 9103, 24, [13, 0, 7, 10, 2], 9),
 ];
 
 const closureForm = (id, target, symbol, options) => ({
@@ -897,20 +909,28 @@ export function closureRevealState(form, elapsedSeconds) {
 
 export function visualComparisonFrame(form, elapsedSeconds) {
   const frames = Array.isArray(form?.frames) ? form.frames : [];
-  if (!frames.length) return { base: '', changed: '', mismatchIndex: -1 };
+  if (!frames.length) return { base: '', changed: '', mismatchIndices: [] };
   const elapsed = Number.isFinite(Number(elapsedSeconds)) ? Math.max(0, Number(elapsedSeconds)) : 0;
   const interval = Math.max(0.1, Number(form.updateIntervalSeconds) || 1);
   const frameIndex = Math.min(frames.length - 1, Math.floor(elapsed / interval));
   const base = frames[frameIndex];
+  const allIndices = Array.isArray(form.mismatchIndices) ? form.mismatchIndices : [];
+  const onsetFrameIndex = Math.floor(form.mismatchOnset / interval);
+  const activeCount = elapsed < form.mismatchOnset
+    ? 0
+    : Math.min(
+      allIndices.length,
+      1 + Math.floor((frameIndex - onsetFrameIndex) / MISMATCH_ESCALATION_STEP_FRAMES),
+    );
+  const mismatchIndices = allIndices.slice(0, activeCount);
   const characters = [...base];
-  characters[form.mismatchIndex] = comparisonReplacement(
-    characters[form.mismatchIndex],
-    form.replacementOffset,
-  );
+  for (const index of mismatchIndices) {
+    characters[index] = comparisonReplacement(characters[index], form.replacementOffset);
+  }
   return {
     base,
     changed: characters.join(''),
-    mismatchIndex: form.mismatchIndex,
+    mismatchIndices,
     frameIndex,
   };
 }
