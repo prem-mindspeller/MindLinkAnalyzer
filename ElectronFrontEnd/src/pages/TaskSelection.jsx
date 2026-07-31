@@ -288,13 +288,22 @@ const TaskSelection = () => {
     // SESSION_SEQUENCES (a scientific grouping that starts with Task 3 for every
     // session). Default/auto-selection should follow what the participant sees, so
     // find the first incomplete task in that same number order instead of reusing
-    // nextRequiredItem, which would otherwise always land on Task 3 on a fresh load.
-    const firstIncompleteByDisplayOrder = useMemo(() => (
+    // nextRequiredItem, which would otherwise always land on Task 3.
+    // A single shared helper (rather than one inline computation per call site)
+    // so this can't drift the way it did before: the mount-time default used
+    // display order, but the post-task-completion advance still used `sequence`
+    // and kept landing back on Task 3 after finishing anything else.
+    const firstIncompleteInDisplayOrder = useCallback((completedList) => (
         enabledTaskIds
             .slice()
             .sort((left, right) => TASK_DEFINITIONS[left].number - TASK_DEFINITIONS[right].number)
-            .find((id) => !completedIds.includes(id))
-    ), [completedIds, enabledTaskIds]);
+            .find((id) => !completedList.includes(id))
+    ), [enabledTaskIds]);
+
+    const firstIncompleteByDisplayOrder = useMemo(
+        () => firstIncompleteInDisplayOrder(completedIds),
+        [completedIds, firstIncompleteInDisplayOrder],
+    );
 
     const firstSelectable = nextRequiredItem === EYES_OPEN_BASELINE_CHECKPOINT
         ? EYES_OPEN_BASELINE_CHECKPOINT
@@ -358,13 +367,15 @@ const TaskSelection = () => {
         const filtered = updated.filter((id) => TASK_DEFINITIONS[id]);
         sessionStorage.setItem('completedTasks', JSON.stringify(filtered));
         setCompletedIds(filtered);
-        const next = sequence.find((item) => (
-            item === EYES_OPEN_BASELINE_CHECKPOINT
-                ? !eyesOpenBaselineDone
-                : !filtered.includes(item)
-        ));
+        // Computed from `filtered` (this task's own completion), not the
+        // `completedIds` state — that state update above hasn't committed yet
+        // within this same callback, so reading it here would still reflect
+        // last render's list and miss the task that was just accepted.
+        const next = !eyesOpenBaselineDone
+            ? EYES_OPEN_BASELINE_CHECKPOINT
+            : firstIncompleteInDisplayOrder(filtered);
         if (next) setSelectedId(next);
-    }, [eyesOpenBaselineDone, sequence]);
+    }, [eyesOpenBaselineDone, firstIncompleteInDisplayOrder]);
 
     const handleTaskComplete = useCallback(async (taskId, samples, signalStats, metadata) => {
         setActiveTaskId(null);
