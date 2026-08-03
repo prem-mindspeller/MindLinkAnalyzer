@@ -75,17 +75,29 @@ const taskTimings = {
     ],
   },
   [TASK.SEMANTIC]: {
-    durationSeconds: 90,
+    // Shortened from the page-47 example's 90s to 60s (see docs). Item count
+    // per phase was reduced (15 -> 10) rather than compressing the interval
+    // between items, so the per-item pace is unchanged (45/15 = 30/10 = 3s
+    // exactly) -- see itemsPerPhase below and SEMANTIC_FORMS in
+    // optimizedBatteryConfig.mjs.
+    durationSeconds: 60,
     phases: [
-      phase('rule_one', 'First organising principle', 0, 45),
-      phase('rule_two', 'Second organising principle', 45, 90),
+      phase('rule_one', 'First organising principle', 0, 30),
+      phase('rule_two', 'Second organising principle', 30, 60),
     ],
   },
   [TASK.VISUOSPATIAL]: {
-    durationSeconds: 90,
+    // Shortened from the page-47 example's 90s to 60s (see docs). Move
+    // counts were reduced (4 lower + 7 higher -> 3 + 5) rather than
+    // compressing the interval between moves. The lower-density pace still
+    // compresses somewhat (11s -> 9s apart) because only 18s of span is
+    // available for it once the phase itself is 30s; the higher-density
+    // pace stays close to the original (7s -> 6.75s) -- see ROUTE_FORMS in
+    // optimizedBatteryConfig.mjs.
+    durationSeconds: 60,
     phases: [
-      phase('lower_density', 'Lower transformation density', 0, 45),
-      phase('higher_density', 'Higher transformation density', 45, 90),
+      phase('lower_density', 'Lower transformation density', 0, 30),
+      phase('higher_density', 'Higher transformation density', 30, 60),
     ],
   },
   [TASK.IDEATION]: {
@@ -239,7 +251,9 @@ const presentation = {
   [TASK.NUMERICAL]: { finalQuietSeconds: 3, firstStimulusSeconds: 4 },
   [TASK.WORKING_MEMORY]: { finalQuietSeconds: 3, firstUpdateSeconds: 10 },
   [TASK.AUDITORY_COUNT]: { firstToneSeconds: 0.4, finalQuietSeconds: 1.4 },
-  [TASK.SEMANTIC]: { itemsPerPhase: 15 },
+  // Descriptive only -- the scheduler actually reads form.phaseOne.length /
+  // form.phaseTwo.length (see SEMANTIC_FORMS), so keep this in sync by hand.
+  [TASK.SEMANTIC]: { itemsPerPhase: 10 },
   [TASK.VISUOSPATIAL]: { finalQuietSeconds: 3 },
   // Divergent ideation is a silent generation block with no scheduled visual
   // stimuli (its only audio is the spoken prompt at task start), so it carries

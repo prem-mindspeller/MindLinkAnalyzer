@@ -98,8 +98,18 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # buffer. Tone/target counts were reduced (not the interval) to preserve
     # pacing and target density (see AUDITORY_FORMS in optimizedBatteryConfig.mjs).
     CANONICAL_TASKS[3]["id"]: 75,
-    CANONICAL_TASKS[4]["id"]: 90,
-    CANONICAL_TASKS[5]["id"]: 90,
+    # Task 4 shortened from the page-47 example's 90s to 60s; item count per
+    # phase was reduced (15 -> 10) rather than compressing the interval, so
+    # the pace is exactly unchanged (3s/item either way -- see itemsPerPhase
+    # and SEMANTIC_FORMS in optimizedBatteryConfig.mjs).
+    CANONICAL_TASKS[4]["id"]: 60,
+    # Task 5 shortened from the page-47 example's 90s to 60s; move counts were
+    # reduced (4 lower + 7 higher -> 3 + 5) to preserve pacing rather than
+    # compress it. The higher-density pace stays close to the original
+    # (7s -> 6.75s); the lower-density pace still compresses (11s -> 9s)
+    # since only 18s of span is available once the phase itself is 30s
+    # (see ROUTE_FORMS in optimizedBatteryConfig.mjs).
+    CANONICAL_TASKS[5]["id"]: 60,
     CANONICAL_TASKS[6]["id"]: 120,
     CANONICAL_TASKS[7]["id"]: 120,
     CANONICAL_TASKS[8]["id"]: 90,

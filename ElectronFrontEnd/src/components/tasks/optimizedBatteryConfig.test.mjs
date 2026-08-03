@@ -54,10 +54,10 @@ test('every canonical task resolves all runner configs (no missing-profile crash
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
-  // Tasks 1 and 2 deliberately shortened from the page-47 example's 90s to
-  // 60s; Task 3 shortened from 120s to 75s (25s/phase, not 60s -- see
+  // Tasks 1, 2, 4 and 5 deliberately shortened from the page-47 example's 90s
+  // to 60s; Task 3 shortened from 120s to 75s (25s/phase, not 60s -- see
   // optimizedBatteryProfile.mjs for why 3 equal 20s phases would be too tight).
-  const expectedDurations = [60, 60, 75, 90, 90, 120, 120, 90, 60, 75, 120, 180];
+  const expectedDurations = [60, 60, 75, 60, 60, 120, 120, 90, 60, 75, 120, 180];
   assert.deepEqual(
     Object.values(TASK_DEFINITIONS)
       .sort((left, right) => left.number - right.number)
@@ -169,7 +169,8 @@ test('declared load boundaries coincide with the first higher-load stimulus', ()
     assert.equal(form.commands[2].at, TASK_DEFINITIONS[TASK_IDS.WORKING_MEMORY].phases[1].start);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.VISUOSPATIAL]) {
-    assert.equal(form.moves[4].at, TASK_DEFINITIONS[TASK_IDS.VISUOSPATIAL].phases[1].start);
+    // 3 lower-density moves (indices 0-2) precede the first higher-density one.
+    assert.equal(form.moves[3].at, TASK_DEFINITIONS[TASK_IDS.VISUOSPATIAL].phases[1].start);
   }
 });
 
@@ -330,10 +331,12 @@ test('stimulus schedules cover the corrected continuous windows', () => {
     }
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SEMANTIC]) {
-    assert.ok(form.spokenEvents.at(-1).at >= 85, form.id);
+    // Task 4 is 60s (shortened from 90s); the last item lands at t=57.
+    assert.ok(form.spokenEvents.at(-1).at >= 55, form.id);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.VISUOSPATIAL]) {
-    assert.ok(form.moves.at(-1).at >= 85, form.id);
+    // Task 5 is 60s (shortened from 90s); the last move lands at t=57.
+    assert.ok(form.moves.at(-1).at >= 55, form.id);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.ANOMALY]) {
     assert.equal(form.entries.length * form.entryIntervalSeconds, 90, form.id);
@@ -485,8 +488,8 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
 
-// Page 47 durations (Tasks 1 and 2 deliberately shortened to 60s, Task 3 to
-// 75s -- see optimizedBatteryProfile.mjs), the eyes-open/closed slide, and
+// Page 47 durations (Tasks 1, 2, 4 and 5 deliberately shortened to 60s, Task 3
+// to 75s -- see optimizedBatteryProfile.mjs), the eyes-open/closed slide, and
 // each task's "can provide evidence for" / "does not support direct claims
 // regarding" lists. The backend repeats this table in
 // neuroprofile_traceability.py, so drift here silently desynchronizes
@@ -501,10 +504,10 @@ const PDF_TASK_CONTRACT = [
   [3, TASK_IDS.AUDITORY_COUNT, 75, 'closed', 'eyes_closed',
     ['Selective Attention', 'Auditory Attention'],
     ['Reaction Time', 'Speech Recognition', 'Oral Comprehension', 'Time Sharing', 'Problem Sensitivity']],
-  [4, TASK_IDS.SEMANTIC, 90, 'closed', 'eyes_closed',
+  [4, TASK_IDS.SEMANTIC, 60, 'closed', 'eyes_closed',
     ['Inductive Reasoning', 'Category Flexibility'],
     ['Deductive Reasoning', 'Memorization', 'Fluency of Ideas', 'Originality', 'Oral Comprehension']],
-  [5, TASK_IDS.VISUOSPATIAL, 90, 'open', 'eyes_open',
+  [5, TASK_IDS.VISUOSPATIAL, 60, 'open', 'eyes_open',
     ['Visualization', 'Spatial Orientation'],
     ['Perceptual Speed', 'Speed of Closure', 'Flexibility of Closure', 'Reaction Time', 'Visual sensory abilities']],
   [6, TASK_IDS.IDEATION, 120, 'closed', 'eyes_closed',

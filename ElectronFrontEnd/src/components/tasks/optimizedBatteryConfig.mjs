@@ -508,13 +508,15 @@ const AUDITORY_FORMS = [
   toneForm('tones_c', 3103, 45, 11),
 ];
 
+// Each phase list trimmed from 15 to 10 items (dropping the last 5) so the
+// per-item pace stays exactly 3s (45/15 = 30/10) instead of compressing to 2s.
 const SEMANTIC_FORMS = [
   {
     id: 'semantic_a',
     ruleOne: 'tools',
     ruleTwo: 'materials and their properties',
-    phaseOne: ['hammer', 'saw', 'drill', 'wrench', 'pliers', 'chisel', 'level', 'clamp', 'file', 'mallet', 'tape measure', 'plane', 'vice', 'crowbar', 'screwdriver'],
-    phaseTwo: ['steel, strong', 'rubber, elastic', 'glass, brittle', 'copper, conductive', 'wool, insulating', 'silk, smooth', 'granite, hard', 'foam, light', 'clay, mouldable', 'wax, soft', 'wood, rigid', 'paper, absorbent', 'plastic, flexible', 'ceramic, heat resistant', 'cotton, breathable'],
+    phaseOne: ['hammer', 'saw', 'drill', 'wrench', 'pliers', 'chisel', 'level', 'clamp', 'file', 'mallet'],
+    phaseTwo: ['steel, strong', 'rubber, elastic', 'glass, brittle', 'copper, conductive', 'wool, insulating', 'silk, smooth', 'granite, hard', 'foam, light', 'clay, mouldable', 'wax, soft'],
     ruleOptions: ['tools', 'animals and habitats', 'professions and workplaces', 'vehicles'],
     secondRuleOptions: ['materials and their properties', 'foods and flavours', 'vehicles and energy sources', 'countries and capitals'],
   },
@@ -522,8 +524,8 @@ const SEMANTIC_FORMS = [
     id: 'semantic_b',
     ruleOne: 'animals and habitats',
     ruleTwo: 'foods and flavours',
-    phaseOne: ['camel, desert', 'otter, river', 'eagle, mountain', 'frog, pond', 'seal, coast', 'mole, underground', 'monkey, forest', 'yak, plateau', 'penguin, ice', 'beaver, stream', 'owl, woodland', 'crab, shore', 'lizard, rock', 'heron, wetland', 'fox, meadow'],
-    phaseTwo: ['lemon, sour', 'honey, sweet', 'coffee, bitter', 'chilli, hot', 'olive, savoury', 'mint, fresh', 'cocoa, rich', 'lime, sharp', 'vanilla, mild', 'ginger, spicy', 'salt, salty', 'apple, crisp', 'cream, smooth', 'grapefruit, tart', 'caramel, sweet'],
+    phaseOne: ['camel, desert', 'otter, river', 'eagle, mountain', 'frog, pond', 'seal, coast', 'mole, underground', 'monkey, forest', 'yak, plateau', 'penguin, ice', 'beaver, stream'],
+    phaseTwo: ['lemon, sour', 'honey, sweet', 'coffee, bitter', 'chilli, hot', 'olive, savoury', 'mint, fresh', 'cocoa, rich', 'lime, sharp', 'vanilla, mild', 'ginger, spicy'],
     ruleOptions: ['animals and habitats', 'tools', 'professions and workplaces', 'shapes and colours'],
     secondRuleOptions: ['foods and flavours', 'materials and their properties', 'vehicles and energy sources', 'countries and capitals'],
   },
@@ -531,8 +533,8 @@ const SEMANTIC_FORMS = [
     id: 'semantic_c',
     ruleOne: 'professions and workplaces',
     ruleTwo: 'vehicles and energy sources',
-    phaseOne: ['chef, kitchen', 'teacher, classroom', 'nurse, clinic', 'pilot, cockpit', 'judge, courtroom', 'farmer, field', 'scientist, laboratory', 'actor, theatre', 'librarian, library', 'mechanic, garage', 'architect, studio', 'firefighter, station', 'baker, bakery', 'dentist, surgery', 'reporter, newsroom'],
-    phaseTwo: ['tram, electricity', 'bicycle, muscle', 'bus, diesel', 'sailboat, wind', 'car, petrol', 'train, electricity', 'glider, gravity', 'scooter, battery', 'ferry, diesel', 'rocket, fuel', 'canoe, muscle', 'trolleybus, electricity', 'hot-air balloon, heat', 'submarine, nuclear power', 'skateboard, muscle'],
+    phaseOne: ['chef, kitchen', 'teacher, classroom', 'nurse, clinic', 'pilot, cockpit', 'judge, courtroom', 'farmer, field', 'scientist, laboratory', 'actor, theatre', 'librarian, library', 'mechanic, garage'],
+    phaseTwo: ['tram, electricity', 'bicycle, muscle', 'bus, diesel', 'sailboat, wind', 'car, petrol', 'train, electricity', 'glider, gravity', 'scooter, battery', 'ferry, diesel', 'rocket, fuel'],
     ruleOptions: ['professions and workplaces', 'tools', 'animals and habitats', 'foods'],
     secondRuleOptions: ['vehicles and energy sources', 'foods and flavours', 'materials and their properties', 'countries and capitals'],
   },
@@ -576,8 +578,8 @@ function routeForm(id, start, moves) {
   const definition = TASK_DEFINITIONS[TASK_IDS.VISUOSPATIAL];
   const presentation = taskPresentationFor(TASK_IDS.VISUOSPATIAL);
   const phaseBoundary = definition.phases[1].start;
-  const lowerMoves = moves.slice(0, 4);
-  const higherMoves = moves.slice(4);
+  const lowerMoves = moves.slice(0, 3);
+  const higherMoves = moves.slice(3);
   const scheduledMoves = [
     ...lowerMoves.map((move, index) => ({
       ...move,
@@ -605,18 +607,26 @@ function routeForm(id, start, moves) {
   return { ...form, answer: routeStateAt(form, Number.POSITIVE_INFINITY) };
 }
 
+// Trimmed from 4 lower-density + 7 higher-density moves (the 90s original) to
+// 3 + 5 for the 60s task. lower_density's pace still compresses (11s -> 9s
+// apart) since only 18s of span is available once the phase itself is 30s;
+// higher_density's count was chosen so its pace stays close to the original
+// (7s -> 6.75s apart).
 const ROUTE_FORMS = [
   routeForm('route_a', { x: 2, y: 2, orientation: 'north' }, [
-    { at: 5, turn: 'right' }, { at: 11, turn: 'right' }, { at: 17, turn: 'right' }, { at: 23, turn: 'right' },
-    { at: 25, turn: 'left' }, { at: 30, turn: 'right' }, { at: 34, turn: 'right' }, { at: 38, turn: 'left' }, { at: 42, turn: 'left' }, { at: 46, turn: 'left' }, { at: 50, turn: 'right' },
+    { at: 5, turn: 'right' }, { at: 11, turn: 'right' }, { at: 17, turn: 'right' },
+    { at: 25, turn: 'left' }, { at: 30, turn: 'right' }, { at: 34, turn: 'right' }, { at: 38, turn: 'left' }, { at: 42, turn: 'left' },
   ]),
   routeForm('route_b', { x: 1, y: 3, orientation: 'east' }, [
-    { at: 5, turn: 'right' }, { at: 11, turn: 'left' }, { at: 17, turn: 'left' }, { at: 23, turn: 'right' },
-    { at: 25, turn: 'right' }, { at: 30, turn: 'left' }, { at: 34, turn: 'left' }, { at: 38, turn: 'left' }, { at: 42, turn: 'right' }, { at: 46, turn: 'left' }, { at: 50, turn: 'right' },
+    { at: 5, turn: 'right' }, { at: 11, turn: 'left' }, { at: 17, turn: 'left' },
+    { at: 25, turn: 'right' }, { at: 30, turn: 'left' }, { at: 34, turn: 'left' }, { at: 38, turn: 'left' }, { at: 42, turn: 'right' },
   ]),
+  // Drops the 1st lower-density move instead of the 4th (unlike route_a/b):
+  // dropping the 4th walks this specific sequence off the grid, since each
+  // move's validity depends on the cumulative path, not just its own turn.
   routeForm('route_c', { x: 3, y: 2, orientation: 'south' }, [
-    { at: 5, turn: 'left' }, { at: 11, turn: 'right' }, { at: 17, turn: 'right' }, { at: 23, turn: 'left' },
-    { at: 25, turn: 'left' }, { at: 30, turn: 'left' }, { at: 34, turn: 'left' }, { at: 38, turn: 'right' }, { at: 42, turn: 'right' }, { at: 46, turn: 'right' }, { at: 50, turn: 'right' },
+    { at: 5, turn: 'right' }, { at: 11, turn: 'right' }, { at: 17, turn: 'left' },
+    { at: 25, turn: 'left' }, { at: 30, turn: 'left' }, { at: 34, turn: 'left' }, { at: 38, turn: 'right' }, { at: 42, turn: 'right' },
   ]),
 ];
 

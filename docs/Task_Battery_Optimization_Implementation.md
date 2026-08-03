@@ -28,8 +28,8 @@ completion marker cannot unlock a new run.
 | 1 | `adaptive_numerical_reasoning` | closed | eyes closed | 60 |
 | 2 | `working_memory_manipulation` | closed | eyes closed | 60 |
 | 3 | `auditory_target_counting` | closed | eyes closed | 75 |
-| 4 | `semantic_induction_category_switching` | closed | eyes closed | 90 |
-| 5 | `visuospatial_transformation_orientation` | open | eyes open | 90 |
+| 4 | `semantic_induction_category_switching` | closed | eyes closed | 60 |
+| 5 | `visuospatial_transformation_orientation` | open | eyes open | 60 |
 | 6 | `divergent_ideation` | closed | eyes closed | 120 |
 | 7 | `dual_task_rule_switching` | closed | eyes closed | 120 |
 | 8 | `rule_based_anomaly_detection` | open | eyes open | 90 |
@@ -48,9 +48,9 @@ window, the active candidate/pilot profile extends the stimulus pacing and
 phase plan without changing the canonical task identity. Those extensions are
 pilot defaults and must not be described as validated timing norms.
 
-Tasks 1, 2 and 3 are deliberate exceptions in the other direction: their
-active blocks are shorter than the page-47 example. This is still a pilot
-default, not a validated timing norm.
+Tasks 1, 2, 3, 4 and 5 are deliberate exceptions in the other direction:
+their active blocks are shorter than the page-47 example. This is still a
+pilot default, not a validated timing norm.
 
 - Task 1: operation count was reduced (6 lower-load + 10 higher-load -> 4 + 7)
   rather than compressing the interval between operations, so the
@@ -76,6 +76,14 @@ default, not a validated timing norm.
   count were both reduced (70/16, 68/15, 72/17 -> 43/10, 42/9, 45/11) to
   preserve the original average inter-tone interval (~1.64s-1.74s) and target
   density (~22-24%) rather than compressing either.
+- Task 4: item count per phase was reduced (15 -> 10) rather than compressing
+  the interval between items, so the pace is exactly unchanged (45s/15 =
+  30s/10 = 3s/item either way).
+- Task 5: move counts were reduced (4 lower-density + 7 higher-density -> 3 +
+  5) rather than compressing the interval between moves. Higher-density
+  pace stays close to the original (7s -> 6.75s); lower-density pace still
+  compresses (11s -> 9s) since only 18s of span is available for it once the
+  phase itself is 30s.
 
 ### Versioned configuration contract
 

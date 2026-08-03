@@ -128,8 +128,10 @@ ability score. Tasks without one are reported descriptively.
 
 ### 4. Semantic Induction and Category Switching
 
-- **Protocol:** 90 seconds, eyes closed, eyes-closed baseline; infer a first
-  organising rule for 45 seconds, then recognise the second rule for 45
+- **Protocol:** 60 seconds (shortened from the page-47 example's 90s; item
+  count per phase was reduced from 15 to 10 rather than compressing the pace,
+  which stays exactly 3s/item), eyes closed, eyes-closed baseline; infer a
+  first organising rule for 30 seconds, then recognise the second rule for 30
   seconds.
 - **Behavioural evidence:** correctness of rule one, correctness of rule two,
   and whether the switch was detected. Both rules and the switch are required.
@@ -142,8 +144,12 @@ ability score. Tasks without one are reported descriptively.
 
 ### 5. Visuospatial Transformation and Orientation
 
-- **Protocol:** 90 seconds, eyes open, eyes-open baseline; lower-density then
-  higher-density spatial transformations, 45 seconds each.
+- **Protocol:** 60 seconds (shortened from the page-47 example's 90s), eyes
+  open, eyes-open baseline; lower-density then higher-density spatial
+  transformations, 30 seconds each. Move counts were reduced (not the
+  interval) to preserve pacing; higher-density stays close to the original
+  (~7s -> ~6.75s apart), while lower-density still compresses somewhat
+  (~11s -> ~9s apart) since only 18s of span remains available for it.
 - **Behavioural evidence:** reported and expected grid position, Manhattan
   position error, reported and expected orientation, and correctness flags.
   Position and orientation must both match exactly.

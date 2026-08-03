@@ -1663,9 +1663,9 @@ _PDF_TASK_CONTRACT = {
         "Memorization", "Information Ordering", "Deductive Reasoning"]),
     3: ("auditory_target_counting", 75, "eyes_closed", [
         "Selective Attention", "Auditory Attention"]),
-    4: ("semantic_induction_category_switching", 90, "eyes_closed", [
+    4: ("semantic_induction_category_switching", 60, "eyes_closed", [
         "Inductive Reasoning", "Category Flexibility"]),
-    5: ("visuospatial_transformation_orientation", 90, "eyes_open", [
+    5: ("visuospatial_transformation_orientation", 60, "eyes_open", [
         "Visualization", "Spatial Orientation"]),
     6: ("divergent_ideation", 120, "eyes_closed", [
         "Category Flexibility", "Fluency of Ideas", "Originality"]),
