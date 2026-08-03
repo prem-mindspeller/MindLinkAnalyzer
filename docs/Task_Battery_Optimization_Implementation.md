@@ -57,9 +57,9 @@ versioned components are all explicitly marked `candidate`:
 | Component | Active ID | Active version |
 |---|---|---|
 | Stimuli | `mindspeller_parallel_forms_en` | `2.0.0-candidate.1` |
-| Audio | `mindspeller_browser_generated_audio` | `1.0.0-candidate.1` |
-| Rubrics | `mindspeller_candidate_rubrics` | `1.0.0-candidate.1` |
-| Thresholds | `mindspeller_candidate_thresholds` | `1.0.0-candidate.1` |
+| Audio | `mindspeller_browser_generated_audio` | `1.1.0-candidate.1` |
+| Rubrics | `mindspeller_candidate_rubrics` | `1.1.0-candidate.1` |
+| Thresholds | `mindspeller_candidate_thresholds` | `1.1.0-candidate.1` |
 
 Timings and phase plans, stimulus forms, audio source descriptors, rubric
 definitions and scoring thresholds are data in the versioned profile rather
