@@ -69,10 +69,12 @@ ability score. Tasks without one are reported descriptively.
 
 ### 1. Adaptive Numerical Reasoning and Sequencing
 
-- **Protocol:** 60 seconds (shortened from the page-47 example's 90s; operation
-  count was reduced rather than pace), eyes closed, eyes-closed baseline; 30
-  seconds of slower single operations followed by 30 seconds of faster mixed
-  operations.
+- **Protocol:** 60 seconds (shortened from the page-47 example's 90s), eyes
+  closed, eyes-closed baseline; 30 seconds of slower single operations (4
+  operations) followed by 30 seconds of faster mixed operations (5
+  operations). Lower-load pace matches the original protocol (~7.67s
+  apart); higher-load is slower than the original (~6.75s vs. ~4.5s apart),
+  per follow-up user feedback that the initial 60s conversion was too hard.
 - **Behavioural evidence:** submitted final value, expected final value, signed
   answer error, and exact-answer flag. The bundled threshold is zero error.
 - **Candidate abilities:** Mathematical Reasoning, Number Facility,

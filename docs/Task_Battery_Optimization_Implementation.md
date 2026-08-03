@@ -52,10 +52,11 @@ Tasks 1, 2, 3, 4 and 5 are deliberate exceptions in the other direction:
 their active blocks are shorter than the page-47 example. This is still a
 pilot default, not a validated timing norm.
 
-- Task 1: operation count was reduced (6 lower-load + 10 higher-load -> 4 + 7)
-  rather than compressing the interval between operations, so the
-  per-operation pace is effectively unchanged (~7.6s -> ~7.7s lower-load,
-  ~4.7s -> ~4.5s higher-load).
+- Task 1: operation count was first reduced (6 lower-load + 10 higher-load ->
+  4 + 7, the 90s->60s conversion) to keep the per-operation pace effectively
+  unchanged. After iterating on difficulty per user feedback (briefly 3 + 5,
+  then 4 + 6), it settled at 4 + 5: lower-load matches the original pace
+  (~7.67s), higher-load is slower than the original (~6.75s vs. ~4.5s).
 - Task 2: the manipulation-phase command count was reduced (6 -> 4) the same
   way, keeping its pace close to the original (~8.4s -> ~9s). The
   maintenance-phase command count could not be reduced the same way -- it was
