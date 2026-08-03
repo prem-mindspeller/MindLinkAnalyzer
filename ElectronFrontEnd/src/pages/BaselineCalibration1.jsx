@@ -511,7 +511,11 @@ const BaselineCalibration1 = () => {
                 {!entryContext.isEyesOpenCheckpoint && (
                     <button
                         className="btn-next-eeg"
-                        disabled={!bothDone}
+                        // A requested eyes-closed-only checkpoint (e.g. redoing it after a
+                        // poor-signal retry) never reaches DONE_BOTH -- there is no eyes-open
+                        // phase to progress through in this context -- so it must be able to
+                        // proceed on ecDone alone, or Next stays disabled forever.
+                        disabled={!(bothDone || (entryContext.isRequestedCheckpoint && ecDone))}
                         onClick={handleNext}
                     >
                         {t('nav.next')} <FontAwesomeIcon icon={faArrowRight} style={{ marginLeft: 6 }} />
