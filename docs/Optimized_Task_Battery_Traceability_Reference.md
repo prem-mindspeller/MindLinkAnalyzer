@@ -69,8 +69,10 @@ ability score. Tasks without one are reported descriptively.
 
 ### 1. Adaptive Numerical Reasoning and Sequencing
 
-- **Protocol:** 90 seconds, eyes closed, eyes-closed baseline; 45 seconds of
-  slower single operations followed by 45 seconds of faster mixed operations.
+- **Protocol:** 60 seconds (shortened from the page-47 example's 90s; operation
+  count was reduced rather than pace), eyes closed, eyes-closed baseline; 30
+  seconds of slower single operations followed by 30 seconds of faster mixed
+  operations.
 - **Behavioural evidence:** submitted final value, expected final value, signed
   answer error, and exact-answer flag. The bundled threshold is zero error.
 - **Candidate abilities:** Mathematical Reasoning, Number Facility,

@@ -356,16 +356,20 @@ function numericalForm(id, startValue, lower, higher) {
   };
 }
 
+// Trimmed from 6 lower-load + 10 higher-load operations (the 90s original) to
+// 4 + 7 for the 60s task. Counts were chosen, not just halved, so the interval
+// between operations stays close to the original pace (~7.6s -> ~7.7s lower,
+// ~4.7s -> ~4.5s higher) instead of everything getting rushed.
 const NUMERICAL_FORMS = [
   numericalForm('num_a', 18,
-    [{ op: 'add', value: 7 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 6 }, { op: 'add', value: 5 }, { op: 'subtract', value: 4 }, { op: 'add', value: 8 }],
-    [{ op: 'add', value: 7 }, { op: 'divide', value: 2 }, { op: 'add', value: 13 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 11 }, { op: 'add', value: 5 }, { op: 'divide', value: 4 }, { op: 'multiply', value: 3 }, { op: 'subtract', value: 17 }, { op: 'add', value: 9 }]),
+    [{ op: 'add', value: 7 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 6 }, { op: 'add', value: 5 }],
+    [{ op: 'add', value: 7 }, { op: 'divide', value: 2 }, { op: 'add', value: 13 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 11 }, { op: 'add', value: 5 }, { op: 'divide', value: 4 }]),
   numericalForm('num_b', 24,
-    [{ op: 'subtract', value: 5 }, { op: 'add', value: 8 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 9 }, { op: 'add', value: 7 }, { op: 'subtract', value: 4 }],
-    [{ op: 'divide', value: 2 }, { op: 'add', value: 15 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 18 }, { op: 'divide', value: 3 }, { op: 'add', value: 11 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 7 }, { op: 'add', value: 5 }, { op: 'divide', value: 2 }]),
+    [{ op: 'subtract', value: 5 }, { op: 'add', value: 8 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 9 }],
+    [{ op: 'divide', value: 2 }, { op: 'add', value: 15 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 18 }, { op: 'divide', value: 3 }, { op: 'add', value: 11 }, { op: 'multiply', value: 2 }]),
   numericalForm('num_c', 15,
-    [{ op: 'add', value: 9 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 8 }, { op: 'add', value: 6 }, { op: 'subtract', value: 11 }, { op: 'add', value: 5 }],
-    [{ op: 'multiply', value: 2 }, { op: 'subtract', value: 14 }, { op: 'divide', value: 3 }, { op: 'add', value: 16 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 20 }, { op: 'divide', value: 2 }, { op: 'add', value: 17 }, { op: 'subtract', value: 9 }, { op: 'multiply', value: 2 }]),
+    [{ op: 'add', value: 9 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 8 }, { op: 'add', value: 6 }],
+    [{ op: 'multiply', value: 2 }, { op: 'subtract', value: 14 }, { op: 'divide', value: 3 }, { op: 'add', value: 16 }, { op: 'multiply', value: 2 }, { op: 'subtract', value: 20 }, { op: 'divide', value: 2 }]),
 ];
 
 function applyMemoryCommand(sequence, command) {

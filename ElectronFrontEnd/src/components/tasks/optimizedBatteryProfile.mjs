@@ -38,10 +38,13 @@ const phase = (id, label, startSeconds, endSeconds) => ({
 
 const taskTimings = {
   [TASK.NUMERICAL]: {
-    durationSeconds: 90,
+    // Shortened from the page-47 example's 90s to 60s (see docs). Stimulus
+    // pacing is preserved by removing operations rather than compressing the
+    // interval between them -- see NUMERICAL_FORMS in optimizedBatteryConfig.mjs.
+    durationSeconds: 60,
     phases: [
-      phase('lower_load', 'Slower single operations', 0, 45),
-      phase('higher_load', 'Faster mixed operations', 45, 90),
+      phase('lower_load', 'Slower single operations', 0, 30),
+      phase('higher_load', 'Faster mixed operations', 30, 60),
     ],
   },
   [TASK.WORKING_MEMORY]: {

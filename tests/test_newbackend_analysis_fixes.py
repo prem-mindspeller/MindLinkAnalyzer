@@ -1519,7 +1519,7 @@ def test_task_resource_versions_and_p47_planned_duration_match_profile():
     component_versions = reference["component_versions"]
     metadata = {
         "eye_state": "eyes_closed",
-        "planned_recording_duration_ms": 90_000,
+        "planned_recording_duration_ms": 60_000,
         "protocol_validation_status": "pilot",
         "stimulus_pack_version": component_versions["stimuli"],
         "audio_pack_version": component_versions["audio"],
@@ -1557,7 +1557,7 @@ def test_task_resource_versions_and_p47_planned_duration_match_profile():
     exported_task = exported["tasks"][0]
     assert exported_task["protocol_profile"][
         "expected_recording_duration_seconds"
-    ] == 90
+    ] == 60
     assert exported_task["protocol_profile"]["validation_status"] == "pilot"
 
     wrong_duration = json.loads(json.dumps(payload))
@@ -1651,10 +1651,12 @@ def test_full_component_profile_refs_are_supported_and_checked_fail_closed():
 # Task_Battery_Optimization.pdf conformance
 # ---------------------------------------------------------------------------
 
-# Page 47 durations, the eyes-open/closed slide, and each task's
-# "After validation, the task can provide evidence for" list.
+# Page 47 durations (Task 1 deliberately shortened to 60s -- see
+# neuroprofile_traceability.py TASK_RECORDING_DURATIONS_SECONDS), the
+# eyes-open/closed slide, and each task's "After validation, the task can
+# provide evidence for" list.
 _PDF_TASK_CONTRACT = {
-    1: ("adaptive_numerical_reasoning", 90, "eyes_closed", [
+    1: ("adaptive_numerical_reasoning", 60, "eyes_closed", [
         "Mathematical Reasoning", "Number Facility", "Information Ordering",
         "Deductive Reasoning"]),
     2: ("working_memory_manipulation", 90, "eyes_closed", [

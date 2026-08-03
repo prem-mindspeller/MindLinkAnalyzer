@@ -25,7 +25,7 @@ completion marker cannot unlock a new run.
 
 | # | Canonical task ID | Eyes | Matched baseline | Block seconds |
 |---:|---|---|---|---:|
-| 1 | `adaptive_numerical_reasoning` | closed | eyes closed | 90 |
+| 1 | `adaptive_numerical_reasoning` | closed | eyes closed | 60 |
 | 2 | `working_memory_manipulation` | closed | eyes closed | 90 |
 | 3 | `auditory_target_counting` | closed | eyes closed | 120 |
 | 4 | `semantic_induction_category_switching` | closed | eyes closed | 90 |
@@ -47,6 +47,14 @@ their earlier shorter examples. Where those examples do not fill the page-47
 window, the active candidate/pilot profile extends the stimulus pacing and
 phase plan without changing the canonical task identity. Those extensions are
 pilot defaults and must not be described as validated timing norms.
+
+Task 1 is a deliberate exception in the other direction: its active block is
+60s, shorter than the page-47 example. Operation count was reduced (6 lower-load
++ 10 higher-load -> 4 + 7) rather than compressing the interval between
+operations, so the per-operation pace is effectively unchanged (~7.6s ->
+~7.7s lower-load, ~4.7s -> ~4.5s higher-load). This is still a pilot default,
+not a validated timing norm, and both phases remain comfortably above the
+20-contiguous-clean-second analysis floor (30s each).
 
 ### Versioned configuration contract
 

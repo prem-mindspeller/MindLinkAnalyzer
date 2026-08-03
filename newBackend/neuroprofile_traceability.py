@@ -82,7 +82,10 @@ CANONICAL_TASKS: Dict[int, Dict[str, str]] = {
 # Protocol-specified scored EEG durations from Task_Battery_Optimization.pdf p. 47.
 # These are protocol durations, not appointment/slot estimates.
 TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
-    CANONICAL_TASKS[1]["id"]: 90,
+    # Task 1 shortened from the page-47 example's 90s to 60s; stimulus pacing
+    # was preserved by removing operations rather than compressing the
+    # interval between them (see optimizedBatteryConfig.mjs NUMERICAL_FORMS).
+    CANONICAL_TASKS[1]["id"]: 60,
     CANONICAL_TASKS[2]["id"]: 90,
     CANONICAL_TASKS[3]["id"]: 120,
     CANONICAL_TASKS[4]["id"]: 90,
