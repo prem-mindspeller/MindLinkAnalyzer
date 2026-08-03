@@ -426,24 +426,31 @@ function memoryForm(id, initial, commands) {
   };
 }
 
+// Trimmed from 2 maintenance + 6 manipulation commands (the 90s original) to
+// 2 + 4 for the 60s task. lowerCount is structurally fixed at 2 in
+// memoryForm, so only the manipulation-phase count could be reduced; it was
+// chosen so that phase's pace stays close to the original (~8.4s -> ~9s)
+// rather than everything getting rushed.
+//
+// The maintenance phase is maintain-only (no shift/reverse/replace): the
+// phase comparison is only informative if maintenance-phase EEG reflects
+// pure holding, uncontaminated by an actual manipulation. All transformation
+// commands live in the manipulation phase instead.
 const MEMORY_FORMS = [
   memoryForm('wm_a', [4, 7, 2, 5], [
-    { at: 8, op: 'maintain' }, { at: 18, op: 'shift_left' },
+    { at: 8, op: 'maintain' }, { at: 18, op: 'maintain' },
     { at: 25, op: 'reverse' }, { at: 32, op: 'replace', index: 1, value: 9 },
     { at: 37, op: 'shift_right' }, { at: 42, op: 'reverse' },
-    { at: 47, op: 'replace', index: 3, value: 6 }, { at: 52, op: 'shift_left' },
   ]),
   memoryForm('wm_b', [6, 1, 8, 3], [
-    { at: 8, op: 'maintain' }, { at: 18, op: 'shift_right' },
+    { at: 8, op: 'maintain' }, { at: 18, op: 'maintain' },
     { at: 25, op: 'replace', index: 2, value: 4 }, { at: 32, op: 'reverse' },
     { at: 37, op: 'shift_left' }, { at: 42, op: 'replace', index: 0, value: 7 },
-    { at: 47, op: 'reverse' }, { at: 52, op: 'shift_right' },
   ]),
   memoryForm('wm_c', [9, 2, 5, 7], [
-    { at: 8, op: 'maintain' }, { at: 18, op: 'replace', index: 1, value: 6 },
+    { at: 8, op: 'maintain' }, { at: 18, op: 'maintain' },
     { at: 25, op: 'shift_left' }, { at: 32, op: 'reverse' },
     { at: 37, op: 'replace', index: 3, value: 1 }, { at: 42, op: 'shift_right' },
-    { at: 47, op: 'reverse' }, { at: 52, op: 'shift_left' },
   ]),
 ];
 

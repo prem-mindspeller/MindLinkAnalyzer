@@ -48,10 +48,17 @@ const taskTimings = {
     ],
   },
   [TASK.WORKING_MEMORY]: {
-    durationSeconds: 90,
+    // Shortened from the page-47 example's 90s to 60s (see docs). The 2
+    // maintenance-phase commands are already at the structural minimum for
+    // this task (memoryForm hardcodes lowerCount = 2), so their spacing
+    // necessarily compresses (25s -> 10s apart) -- there is nothing left to
+    // remove there. The manipulation-phase count was reduced instead
+    // (6 -> 4 commands) specifically to keep ITS pace close to the original
+    // (8.4s -> 9s apart). See MEMORY_FORMS in optimizedBatteryConfig.mjs.
+    durationSeconds: 60,
     phases: [
-      phase('maintenance', 'Maintenance-dominant', 0, 45),
-      phase('manipulation', 'Manipulation-dominant', 45, 90),
+      phase('maintenance', 'Maintenance-dominant', 0, 30),
+      phase('manipulation', 'Manipulation-dominant', 30, 60),
     ],
   },
   [TASK.AUDITORY_COUNT]: {

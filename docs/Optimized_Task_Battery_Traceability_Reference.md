@@ -86,9 +86,15 @@ ability score. Tasks without one are reported descriptively.
 
 ### 2. Working-Memory Manipulation
 
-- **Protocol:** 90 seconds, eyes closed, eyes-closed baseline; 45 seconds of
-  maintenance-dominant work followed by 45 seconds of manipulation-dominant
-  work.
+- **Protocol:** 60 seconds (shortened from the page-47 example's 90s), eyes
+  closed, eyes-closed baseline; 30 seconds of maintenance-dominant work
+  followed by 30 seconds of manipulation-dominant work. The manipulation
+  phase's command count was reduced to keep its pace close to the original;
+  the 2 maintenance-phase commands were already at their structural minimum,
+  so that phase's spacing compresses instead (~25s -> ~10s apart). Both
+  maintenance-phase commands are `maintain`-only (pure holding, no
+  transformation), so the maintenance-vs-manipulation phase comparison isn't
+  contaminated by a manipulation event landing in the maintenance window.
 - **Behavioural evidence:** normalized submitted sequence, expected sequence,
   item-error count, and exact-sequence flag. The bundled threshold is zero
   item errors.

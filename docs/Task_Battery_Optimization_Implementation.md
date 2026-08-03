@@ -26,7 +26,7 @@ completion marker cannot unlock a new run.
 | # | Canonical task ID | Eyes | Matched baseline | Block seconds |
 |---:|---|---|---|---:|
 | 1 | `adaptive_numerical_reasoning` | closed | eyes closed | 60 |
-| 2 | `working_memory_manipulation` | closed | eyes closed | 90 |
+| 2 | `working_memory_manipulation` | closed | eyes closed | 60 |
 | 3 | `auditory_target_counting` | closed | eyes closed | 120 |
 | 4 | `semantic_induction_category_switching` | closed | eyes closed | 90 |
 | 5 | `visuospatial_transformation_orientation` | open | eyes open | 90 |
@@ -48,13 +48,25 @@ window, the active candidate/pilot profile extends the stimulus pacing and
 phase plan without changing the canonical task identity. Those extensions are
 pilot defaults and must not be described as validated timing norms.
 
-Task 1 is a deliberate exception in the other direction: its active block is
-60s, shorter than the page-47 example. Operation count was reduced (6 lower-load
-+ 10 higher-load -> 4 + 7) rather than compressing the interval between
-operations, so the per-operation pace is effectively unchanged (~7.6s ->
-~7.7s lower-load, ~4.7s -> ~4.5s higher-load). This is still a pilot default,
-not a validated timing norm, and both phases remain comfortably above the
-20-contiguous-clean-second analysis floor (30s each).
+Tasks 1 and 2 are deliberate exceptions in the other direction: their active
+blocks are 60s, shorter than the page-47 example. Both phases in each task
+remain comfortably above the 20-contiguous-clean-second analysis floor (30s
+each). This is still a pilot default, not a validated timing norm.
+
+- Task 1: operation count was reduced (6 lower-load + 10 higher-load -> 4 + 7)
+  rather than compressing the interval between operations, so the
+  per-operation pace is effectively unchanged (~7.6s -> ~7.7s lower-load,
+  ~4.7s -> ~4.5s higher-load).
+- Task 2: the manipulation-phase command count was reduced (6 -> 4) the same
+  way, keeping its pace close to the original (~8.4s -> ~9s). The
+  maintenance-phase command count could not be reduced the same way -- it was
+  already at its structural minimum of 2 -- so that phase's spacing
+  necessarily compresses (~25s -> ~10s apart) as a direct consequence of the
+  shorter block. Both maintenance-phase commands are now `maintain`-only
+  (previously one of the two was itself a transformation); all shift/reverse/
+  replace commands live in the manipulation phase. This keeps the phase
+  comparison uncontaminated -- maintenance-phase EEG reflects pure holding,
+  which is also what the Memorization ability claim is evidenced against.
 
 ### Versioned configuration contract
 

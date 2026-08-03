@@ -149,7 +149,7 @@ def test_candidate_protocol_profile_uses_normative_p47_recording_durations():
     assert normalized["interpretation_scope"] == "candidate_or_pilot_only"
     assert normalized["task_durations_seconds"] == {
         "adaptive_numerical_reasoning": 60,
-        "working_memory_manipulation": 90,
+        "working_memory_manipulation": 60,
         "auditory_target_counting": 120,
         "semantic_induction_category_switching": 90,
         "visuospatial_transformation_orientation": 90,

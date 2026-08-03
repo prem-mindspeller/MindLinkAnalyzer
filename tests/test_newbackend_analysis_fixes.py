@@ -1659,7 +1659,7 @@ _PDF_TASK_CONTRACT = {
     1: ("adaptive_numerical_reasoning", 60, "eyes_closed", [
         "Mathematical Reasoning", "Number Facility", "Information Ordering",
         "Deductive Reasoning"]),
-    2: ("working_memory_manipulation", 90, "eyes_closed", [
+    2: ("working_memory_manipulation", 60, "eyes_closed", [
         "Memorization", "Information Ordering", "Deductive Reasoning"]),
     3: ("auditory_target_counting", 120, "eyes_closed", [
         "Selective Attention", "Auditory Attention"]),

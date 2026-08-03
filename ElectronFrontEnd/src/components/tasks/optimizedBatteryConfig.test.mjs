@@ -54,8 +54,8 @@ test('every canonical task resolves all runner configs (no missing-profile crash
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
-  // Task 1 deliberately shortened from the page-47 example's 90s to 60s.
-  const expectedDurations = [60, 90, 120, 90, 90, 120, 120, 90, 60, 75, 120, 180];
+  // Tasks 1 and 2 deliberately shortened from the page-47 example's 90s to 60s.
+  const expectedDurations = [60, 60, 120, 90, 90, 120, 120, 90, 60, 75, 120, 180];
   assert.deepEqual(
     Object.values(TASK_DEFINITIONS)
       .sort((left, right) => left.number - right.number)
@@ -316,7 +316,9 @@ test('stimulus schedules cover the corrected continuous windows', () => {
     assert.ok(form.spokenEvents.at(-1).at >= 55);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.WORKING_MEMORY]) {
-    assert.ok(form.spokenEvents.at(-1).at >= 85);
+    // Task 2 is 60s (shortened from 90s); the last command lands at
+    // duration - finalQuietSeconds = 57.
+    assert.ok(form.spokenEvents.at(-1).at >= 55);
   }
   for (const taskId of [TASK_IDS.AUDITORY_COUNT, TASK_IDS.DUAL_TASK]) {
     const duration = TASK_DEFINITIONS[taskId].duration;
@@ -481,7 +483,7 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
 
-// Page 47 durations (Task 1 deliberately shortened to 60s -- see
+// Page 47 durations (Tasks 1 and 2 deliberately shortened to 60s -- see
 // optimizedBatteryProfile.mjs), the eyes-open/closed slide, and each task's
 // "can provide evidence for" / "does not support direct claims regarding" lists.
 // The backend repeats this table in neuroprofile_traceability.py, so drift here
@@ -490,7 +492,7 @@ const PDF_TASK_CONTRACT = [
   [1, TASK_IDS.NUMERICAL, 60, 'closed', 'eyes_closed',
     ['Mathematical Reasoning', 'Number Facility', 'Information Ordering', 'Deductive Reasoning'],
     ['Inductive Reasoning', 'Memorization', 'Reaction Time', 'Oral Comprehension', 'Oral Expression']],
-  [2, TASK_IDS.WORKING_MEMORY, 90, 'closed', 'eyes_closed',
+  [2, TASK_IDS.WORKING_MEMORY, 60, 'closed', 'eyes_closed',
     ['Memorization', 'Information Ordering', 'Deductive Reasoning'],
     ['Inductive Reasoning', 'Category Flexibility', 'Time Sharing', 'Number Facility', 'Mathematical Reasoning', 'Oral Comprehension']],
   [3, TASK_IDS.AUDITORY_COUNT, 120, 'closed', 'eyes_closed',

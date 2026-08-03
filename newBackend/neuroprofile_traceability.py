@@ -86,7 +86,12 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # was preserved by removing operations rather than compressing the
     # interval between them (see optimizedBatteryConfig.mjs NUMERICAL_FORMS).
     CANONICAL_TASKS[1]["id"]: 60,
-    CANONICAL_TASKS[2]["id"]: 90,
+    # Task 2 shortened from the page-47 example's 90s to 60s; the
+    # manipulation-phase command count was reduced (6 -> 4) to keep its pace
+    # close to the original (see MEMORY_FORMS in optimizedBatteryConfig.mjs).
+    # The 2 maintenance-phase commands are already at their structural
+    # minimum, so that phase's spacing necessarily compresses (25s -> 10s).
+    CANONICAL_TASKS[2]["id"]: 60,
     CANONICAL_TASKS[3]["id"]: 120,
     CANONICAL_TASKS[4]["id"]: 90,
     CANONICAL_TASKS[5]["id"]: 90,
