@@ -54,8 +54,10 @@ test('every canonical task resolves all runner configs (no missing-profile crash
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
-  // Tasks 1 and 2 deliberately shortened from the page-47 example's 90s to 60s.
-  const expectedDurations = [60, 60, 120, 90, 90, 120, 120, 90, 60, 75, 120, 180];
+  // Tasks 1 and 2 deliberately shortened from the page-47 example's 90s to
+  // 60s; Task 3 shortened from 120s to 75s (25s/phase, not 60s -- see
+  // optimizedBatteryProfile.mjs for why 3 equal 20s phases would be too tight).
+  const expectedDurations = [60, 60, 75, 90, 90, 120, 120, 90, 60, 75, 120, 180];
   assert.deepEqual(
     Object.values(TASK_DEFINITIONS)
       .sort((left, right) => left.number - right.number)
@@ -483,11 +485,12 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
 
-// Page 47 durations (Tasks 1 and 2 deliberately shortened to 60s -- see
-// optimizedBatteryProfile.mjs), the eyes-open/closed slide, and each task's
-// "can provide evidence for" / "does not support direct claims regarding" lists.
-// The backend repeats this table in neuroprofile_traceability.py, so drift here
-// silently desynchronizes acquisition from ability gating.
+// Page 47 durations (Tasks 1 and 2 deliberately shortened to 60s, Task 3 to
+// 75s -- see optimizedBatteryProfile.mjs), the eyes-open/closed slide, and
+// each task's "can provide evidence for" / "does not support direct claims
+// regarding" lists. The backend repeats this table in
+// neuroprofile_traceability.py, so drift here silently desynchronizes
+// acquisition from ability gating.
 const PDF_TASK_CONTRACT = [
   [1, TASK_IDS.NUMERICAL, 60, 'closed', 'eyes_closed',
     ['Mathematical Reasoning', 'Number Facility', 'Information Ordering', 'Deductive Reasoning'],
@@ -495,7 +498,7 @@ const PDF_TASK_CONTRACT = [
   [2, TASK_IDS.WORKING_MEMORY, 60, 'closed', 'eyes_closed',
     ['Memorization', 'Information Ordering', 'Deductive Reasoning'],
     ['Inductive Reasoning', 'Category Flexibility', 'Time Sharing', 'Number Facility', 'Mathematical Reasoning', 'Oral Comprehension']],
-  [3, TASK_IDS.AUDITORY_COUNT, 120, 'closed', 'eyes_closed',
+  [3, TASK_IDS.AUDITORY_COUNT, 75, 'closed', 'eyes_closed',
     ['Selective Attention', 'Auditory Attention'],
     ['Reaction Time', 'Speech Recognition', 'Oral Comprehension', 'Time Sharing', 'Problem Sensitivity']],
   [4, TASK_IDS.SEMANTIC, 90, 'closed', 'eyes_closed',

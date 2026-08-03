@@ -1661,7 +1661,7 @@ _PDF_TASK_CONTRACT = {
         "Deductive Reasoning"]),
     2: ("working_memory_manipulation", 60, "eyes_closed", [
         "Memorization", "Information Ordering", "Deductive Reasoning"]),
-    3: ("auditory_target_counting", 120, "eyes_closed", [
+    3: ("auditory_target_counting", 75, "eyes_closed", [
         "Selective Attention", "Auditory Attention"]),
     4: ("semantic_induction_category_switching", 90, "eyes_closed", [
         "Inductive Reasoning", "Category Flexibility"]),

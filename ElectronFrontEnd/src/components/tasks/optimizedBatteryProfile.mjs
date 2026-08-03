@@ -62,11 +62,16 @@ const taskTimings = {
     ],
   },
   [TASK.AUDITORY_COUNT]: {
-    durationSeconds: 120,
+    // Shortened from the page-47 example's 120s to 75s (see docs), not to 60s:
+    // 3 equal phases at exactly 20s each would clear the analysis floor with
+    // zero margin, so 25s/phase keeps a real buffer. Tone count was reduced
+    // (not the interval) to preserve pacing -- see AUDITORY_FORMS in
+    // optimizedBatteryConfig.mjs.
+    durationSeconds: 75,
     phases: [
-      phase('early', 'Early monitoring', 0, 40),
-      phase('middle', 'Middle monitoring', 40, 80),
-      phase('late', 'Late monitoring', 80, 120),
+      phase('early', 'Early monitoring', 0, 25),
+      phase('middle', 'Middle monitoring', 25, 50),
+      phase('late', 'Late monitoring', 50, 75),
     ],
   },
   [TASK.SEMANTIC]: {

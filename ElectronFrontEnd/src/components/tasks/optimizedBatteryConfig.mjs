@@ -496,10 +496,16 @@ function toneForm(
   return { id, toneEvents, targetCount };
 }
 
+// Tone/target counts reduced from the 120s original (70/16, 68/15, 72/17) to
+// preserve the actual average inter-tone interval (~1.64-1.74s, not the raw
+// 0.68-1.02s jitter range -- toneForm scales that range to exactly fill the
+// available window, so the real pace is availableIntervalSeconds/toneCount)
+// and the original target-tone density (~22-24%), rather than cramming the
+// same tone count into a shorter window.
 const AUDITORY_FORMS = [
-  toneForm('tones_a', 3101, 70, 16),
-  toneForm('tones_b', 3102, 68, 15),
-  toneForm('tones_c', 3103, 72, 17),
+  toneForm('tones_a', 3101, 43, 10),
+  toneForm('tones_b', 3102, 42, 9),
+  toneForm('tones_c', 3103, 45, 11),
 ];
 
 const SEMANTIC_FORMS = [

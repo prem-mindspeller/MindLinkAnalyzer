@@ -108,9 +108,13 @@ ability score. Tasks without one are reported descriptively.
 
 ### 3. Auditory Target Counting
 
-- **Protocol:** 120 seconds, eyes closed, eyes-closed baseline; an irregular
-  stream of high target tones and low distractor tones, split into early,
-  middle, and late monitoring phases.
+- **Protocol:** 75 seconds (shortened from the page-47 example's 120s; not
+  60s, since 3 equal 20s phases would leave zero margin above the
+  20-contiguous-clean-second analysis floor), eyes closed, eyes-closed
+  baseline; an irregular stream of high target tones and low distractor
+  tones, split into early, middle, and late monitoring phases of 25 seconds
+  each. Tone and target counts were reduced to preserve the original average
+  inter-tone interval and target density rather than compressing either.
 - **Behavioural evidence:** target count, count error, exact-count flag, and
   threshold-pass flag. Exact count is a transparent candidate default because
   the source protocol has no final validated tolerance.

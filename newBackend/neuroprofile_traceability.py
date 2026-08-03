@@ -92,7 +92,12 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # The 2 maintenance-phase commands are already at their structural
     # minimum, so that phase's spacing necessarily compresses (25s -> 10s).
     CANONICAL_TASKS[2]["id"]: 60,
-    CANONICAL_TASKS[3]["id"]: 120,
+    # Task 3 shortened from the page-47 example's 120s to 75s, not 60s: its 3
+    # equal analysis phases would sit at exactly the 20-contiguous-clean-second
+    # floor with zero margin at 60s, so 25s/phase (75s total) keeps a real
+    # buffer. Tone/target counts were reduced (not the interval) to preserve
+    # pacing and target density (see AUDITORY_FORMS in optimizedBatteryConfig.mjs).
+    CANONICAL_TASKS[3]["id"]: 75,
     CANONICAL_TASKS[4]["id"]: 90,
     CANONICAL_TASKS[5]["id"]: 90,
     CANONICAL_TASKS[6]["id"]: 120,
