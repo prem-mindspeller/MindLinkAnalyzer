@@ -195,8 +195,21 @@ test('closure scoring uses the configured reveal fraction instead of total task 
     responseElapsedMs: halfwaySeconds * 1000,
   });
   assert.equal(result.metrics.visibility_threshold_fraction, 0.5);
-  assert.equal(result.metrics.response_enabled_at_ms, closure.revealSchedule.responseEnabledSeconds * 1000);
   assert.equal(result.ability_validation['Speed of Closure'], 'passed');
+});
+
+test('closure has no minimum-exposure delay -- an immediate correct response is credited', () => {
+  const closure = form(TASK_IDS.CLOSURE);
+  const immediate = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
+    detected: true,
+    responseElapsedMs: 0,
+  });
+  assert.equal(immediate.metrics.recognition_accuracy, true);
+  assert.equal(immediate.metrics.visibility_threshold_fraction, 0);
+  assert.equal(immediate.ability_validation['Speed of Closure'], 'passed');
+  // Recognised at revealFraction 0 is the densest possible noise, so
+  // Flexibility of Closure is credited too.
+  assert.equal(immediate.ability_validation['Flexibility of Closure'], 'passed');
 });
 
 test('flexibility of closure resolves against the configured reveal-fraction threshold', () => {

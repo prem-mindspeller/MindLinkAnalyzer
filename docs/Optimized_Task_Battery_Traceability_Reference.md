@@ -246,19 +246,25 @@ ability score. Tasks without one are reported descriptively.
 
 ### 10. Pattern Closure under Visual Noise
 
-- **Protocol:** 75 seconds, eyes open, eyes-open baseline; a target gradually
-  emerges from noise. Response is enabled after the minimum exposure point;
-  recording continues after the button press.
+- **Protocol:** 60 seconds (shortened from 75s; the 50s reveal ramp itself is
+  untouched, only the 20s pre-reveal buffer shrank to 5s), eyes open,
+  eyes-open baseline; a target gradually emerges from noise. The response
+  button is clickable from the start of the block -- there is no
+  minimum-exposure delay -- and recording continues after the button press.
+  CLOSURE_FORMS offers 6 plausible options instead of 4 to offset the
+  guessing risk from the immediately-clickable button.
 - **Behavioural evidence:** target correctness, response time, visibility
-  fraction, symbol opacity, blur, noise opacity, and minimum-exposure flag.
+  fraction, symbol opacity, and noise opacity.
 - **Candidate abilities:** Speed of Closure and Flexibility of Closure.
 - **Expected signature:** occipital alpha-relative decrease and theta-relative
   increase. Traceability context is pattern extraction under noise, distractor
   resistance, progressive closure, and recognition threshold.
 - **Report effect:** correct recognition supplies candidate Speed of Closure
   evidence. Flexibility of Closure stays pending until a validated
-  visibility/noise threshold is configured; it is never inferred from an early
-  click alone.
+  visibility/noise threshold is configured; when one is, it is credited from
+  the reveal fraction at the moment of response (including an immediate,
+  correct one -- there is no separate minimum-exposure gate protecting it,
+  only the 6-option answer list's 1-in-6 guessing odds).
 
 ### 11. Speech-in-Noise Comprehension
 

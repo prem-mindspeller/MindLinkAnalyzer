@@ -385,10 +385,13 @@ export function scoreOptimizedTask(
   if (taskId === TASK_IDS.CLOSURE) {
     const responseMs = numeric(runtime.responseElapsedMs);
     const revealState = closureRevealState(form, responseMs == null ? 0 : responseMs / 1000);
-    const responseEnabledAtMs = form.revealSchedule.responseEnabledSeconds * 1000;
-    const clickedAfterMinimum = runtime.detected === true && responseMs != null && responseMs >= responseEnabledAtMs;
+    // No minimum-exposure gate: the button is clickable immediately (see
+    // optimizedBatteryProfile.mjs), so a genuine response is any detected
+    // click with a recorded time -- guessing risk is offset by
+    // CLOSURE_FORMS' 6 options instead of a response-timing floor.
+    const responded = runtime.detected === true && responseMs != null;
     const targetCorrect = normalizeText(response.target) === normalizeText(form.target);
-    const correct = clickedAfterMinimum && (!thresholds.requireCorrectTarget || targetCorrect);
+    const correct = responded && (!thresholds.requireCorrectTarget || targetCorrect);
     const flexibilityThresholdAvailable = thresholds.flexibilityMaximumRevealFraction != null;
     const flexibilityPassed = correct
       && flexibilityThresholdAvailable
@@ -405,12 +408,10 @@ export function scoreOptimizedTask(
     return scoredResult(taskId, status, response, {
       recognition_accuracy: targetCorrect,
       recognition_time_ms: responseMs,
-      response_enabled_at_ms: responseEnabledAtMs,
       visibility_threshold_fraction: responseMs == null ? null : revealState.revealFraction,
       symbol_opacity_at_response: responseMs == null ? null : revealState.symbolOpacity,
       blur_px_at_response: responseMs == null ? null : revealState.blurPx,
       noise_opacity_at_response: responseMs == null ? null : revealState.noiseOpacity,
-      minimum_exposure_met: clickedAfterMinimum,
       flexibility_threshold_available: flexibilityThresholdAvailable,
     }, abilityValidation, 'recognition_key_and_visibility_schedule', [
       'Recognition latency yields candidate Speed of Closure evidence.',

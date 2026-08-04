@@ -134,7 +134,15 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # optimizedBatteryConfig.mjs).
     CANONICAL_TASKS[8]["id"]: 60,
     CANONICAL_TASKS[9]["id"]: 60,
-    CANONICAL_TASKS[10]["id"]: 75,
+    # Task 10 shortened from 75s to 60s. Only one phase spans the whole
+    # block, so the phase floor was never a risk; the 50s reveal ramp
+    # (revealStartSeconds -> fullyVisibleSeconds) IS the Speed/Flexibility of
+    # Closure manipulation and was left untouched -- only the 20s pre-reveal
+    # buffer was trimmed, to 5s. responseEnabledSeconds (a minimum-exposure
+    # delay before a response could be scored) was removed entirely per
+    # explicit user request; CLOSURE_FORMS now offers 6 options instead of 4
+    # to offset the guessing risk from an immediately-clickable button.
+    CANONICAL_TASKS[10]["id"]: 60,
     CANONICAL_TASKS[11]["id"]: 120,
     CANONICAL_TASKS[12]["id"]: 180,
 }

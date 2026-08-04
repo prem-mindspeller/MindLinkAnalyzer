@@ -154,8 +154,15 @@ const taskTimings = {
     phases: [phase('pre_response', 'Continuous comparison', 0, 60)],
   },
   [TASK.CLOSURE]: {
-    durationSeconds: 75,
-    phases: [phase('pre_response', 'Progressive visual closure', 0, 75)],
+    // Shortened from the page-47 example's 90s (already trimmed to 75s) to
+    // 60s per explicit user request. Only one phase spans the whole block,
+    // so the 20-contiguous-clean-second floor was never a risk here; the
+    // real constraint was the 50s reveal ramp (revealStartSeconds ->
+    // fullyVisibleSeconds below) itself, which IS the Speed/Flexibility of
+    // Closure manipulation and was left untouched. The buffers around it
+    // were trimmed instead (20s pre-reveal -> 5s, 5s post-reveal unchanged).
+    durationSeconds: 60,
+    phases: [phase('pre_response', 'Progressive visual closure', 0, 60)],
   },
   [TASK.SPEECH_NOISE]: {
     durationSeconds: 120,
@@ -291,9 +298,15 @@ const presentation = {
   [TASK.ANOMALY]: { entryIntervalSeconds: 2 },
   [TASK.VISUAL_COMPARISON]: { updateIntervalSeconds: 3 },
   [TASK.CLOSURE]: {
-    revealStartSeconds: 20,
-    fullyVisibleSeconds: 70,
-    responseEnabledSeconds: 25,
+    // revealStartSeconds -> fullyVisibleSeconds is still a 50s reveal ramp,
+    // unchanged from the 75s version -- only the pre-reveal buffer shrank
+    // (20s -> 5s) to fit the shorter block. responseEnabledSeconds was
+    // removed entirely (was 25): the button is now clickable immediately.
+    // With no minimum-exposure gate, guessing risk is offset by
+    // CLOSURE_FORMS now offering 6 options instead of 4 (see
+    // optimizedBatteryConfig.mjs).
+    revealStartSeconds: 5,
+    fullyVisibleSeconds: 55,
     maximumBlurPx: 18,
     initialNoiseOpacity: 1,
     minimumNoiseOpacity: 0.08,

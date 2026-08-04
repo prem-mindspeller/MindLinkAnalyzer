@@ -1677,7 +1677,7 @@ _PDF_TASK_CONTRACT = {
         "Information Ordering"]),
     9: ("rapid_visual_comparison", 60, "eyes_open", [
         "Perceptual Speed", "Reaction Time"]),
-    10: ("pattern_closure_visual_noise", 75, "eyes_open", [
+    10: ("pattern_closure_visual_noise", 60, "eyes_open", [
         "Speed of Closure", "Flexibility of Closure"]),
     11: ("speech_in_noise_comprehension", 120, "eyes_closed", [
         "Oral Comprehension", "Speech Recognition", "Auditory Attention"]),

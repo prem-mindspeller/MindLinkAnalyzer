@@ -817,10 +817,15 @@ const closureForm = (id, target, symbol, options) => ({
   revealSchedule: CLOSURE_REVEAL_SCHEDULE,
 });
 
+// 2 more distractors per form (4 -> 6 options) to offset removing
+// responseEnabledSeconds: with no minimum-exposure delay before a response
+// is accepted, a blind guess at t=0 now has 1/6 odds instead of 1/4. Each
+// added distractor keeps the same rounded/silhouette-plausible shape as the
+// target and the existing distractors, not just an unrelated word.
 const CLOSURE_FORMS = [
-  closureForm('closure_a', 'umbrella', '☂', ['umbrella', 'mushroom', 'lamp', 'tree']),
-  closureForm('closure_b', 'sailboat', '⛵', ['sailboat', 'mountain', 'chair', 'bird']),
-  closureForm('closure_c', 'key', '⚿', ['key', 'spoon', 'pencil', 'fish']),
+  closureForm('closure_a', 'umbrella', '☂', ['umbrella', 'mushroom', 'lamp', 'tree', 'balloon', 'bell']),
+  closureForm('closure_b', 'sailboat', '⛵', ['sailboat', 'mountain', 'chair', 'bird', 'kite', 'flag']),
+  closureForm('closure_c', 'key', '⚿', ['key', 'spoon', 'pencil', 'fish', 'wrench', 'whistle']),
 ];
 
 const SPEECH_BASE_FORMS = [
@@ -960,7 +965,6 @@ export function closureRevealState(form, elapsedSeconds) {
     blurPx: schedule.maximumBlurPx * (1 - revealFraction),
     noiseOpacity: schedule.minimumNoiseOpacity
       + (1 - revealFraction) * (schedule.initialNoiseOpacity - schedule.minimumNoiseOpacity),
-    responseEnabled: elapsed >= schedule.responseEnabledSeconds,
   };
 }
 
@@ -1109,7 +1113,7 @@ export function taskIntroduction(taskId, form) {
       'After you press it, stay still until the task ends.',
     ],
     [TASK_IDS.CLOSURE]: () => [
-      'A picture is hidden in visual noise. After some time, it will slowly become clearer.',
+      'A picture is hidden in visual noise. It will slowly become clearer.',
       'As soon as you can tell what it is, press the RECOGNIZED button. Press it only once you are sure.',
       'After you press it, stay still until the task ends.',
     ],

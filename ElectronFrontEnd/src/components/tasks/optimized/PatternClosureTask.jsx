@@ -7,10 +7,12 @@ import { ResponseField } from './taskShared.jsx';
  * Task 10 — Pattern Closure under Visual Noise.
  *
  * The target is drawn as 16 clipped fragments that fade in on a configured
- * schedule while an overlaid noise layer thins out. Recognition is only
- * accepted once enough of the target is visible, which the reveal state
- * decides — that keeps Speed of Closure scored against the visibility
- * schedule rather than raw elapsed time.
+ * schedule while an overlaid noise layer thins out. The "Recognized" button
+ * is clickable from the start of the block (no minimum-exposure delay);
+ * Speed of Closure is scored from how far the reveal schedule has actually
+ * progressed at the moment of response, not from whether some elapsed-time
+ * floor was cleared first. Guessing risk from the immediate button is offset
+ * by CLOSURE_FORMS offering 6 plausible options instead of a response delay.
  */
 
 function FragmentedClosureTarget({ form, reveal, fragmentOrder }) {
@@ -71,12 +73,8 @@ function Stimulus({
         type="button"
         className="optimized-detect-button"
         onClick={onDetect}
-        disabled={!reveal.responseEnabled || buttonRuntime?.detected === true}
-      >{
-        buttonRuntime?.detected
-          ? 'RESPONSE REGISTERED · REMAIN STILL'
-          : reveal.responseEnabled ? 'RECOGNIZED' : 'SEARCH…'
-      }</button>
+        disabled={buttonRuntime?.detected === true}
+      >{buttonRuntime?.detected ? 'RESPONSE REGISTERED · REMAIN STILL' : 'RECOGNIZED'}</button>
     </div>
   );
 }

@@ -54,11 +54,11 @@ test('every canonical task resolves all runner configs (no missing-profile crash
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
-  // Tasks 1, 2, 4, 5, 7 and 8 deliberately shortened from the page-47
+  // Tasks 1, 2, 4, 5, 7, 8 and 10 deliberately shortened from the page-47
   // example's 90s/120s to 60s; Tasks 3 and 6 (both 3-equal-phase tasks)
   // shortened to 75s rather than a flat 60s, for the same
   // 20s-phase-floor-margin reason.
-  const expectedDurations = [60, 60, 75, 60, 60, 75, 60, 60, 60, 75, 120, 180];
+  const expectedDurations = [60, 60, 75, 60, 60, 75, 60, 60, 60, 60, 120, 180];
   assert.deepEqual(
     Object.values(TASK_DEFINITIONS)
       .sort((left, right) => left.number - right.number)
@@ -305,7 +305,6 @@ test('closure visibility is derived from the same reveal schedule used by the fo
   const complete = closureRevealState(form, form.revealSchedule.fullyVisibleSeconds);
 
   assert.equal(before.revealFraction, 0);
-  assert.equal(before.responseEnabled, false);
   assert.equal(halfway.revealFraction, 0.5);
   assert.equal(complete.revealFraction, 1);
   assert.equal(complete.blurPx, 0);
@@ -503,8 +502,8 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
 
-// Page 47 durations (Tasks 1, 2, 4, 5, 7 and 8 deliberately shortened to 60s,
-// Tasks 3 and 6 to 75s -- see optimizedBatteryProfile.mjs), the
+// Page 47 durations (Tasks 1, 2, 4, 5, 7, 8 and 10 deliberately shortened to
+// 60s, Tasks 3 and 6 to 75s -- see optimizedBatteryProfile.mjs), the
 // eyes-open/closed slide, and each task's "can provide evidence for" / "does
 // not support direct claims regarding" lists. The backend repeats this table in
 // neuroprofile_traceability.py, so drift here silently desynchronizes
@@ -537,7 +536,7 @@ const PDF_TASK_CONTRACT = [
   [9, TASK_IDS.VISUAL_COMPARISON, 60, 'open', 'eyes_open',
     ['Perceptual Speed', 'Reaction Time'],
     ['Speed of Closure', 'Flexibility of Closure', 'Visualization', 'Spatial Orientation', 'Problem Sensitivity']],
-  [10, TASK_IDS.CLOSURE, 75, 'open', 'eyes_open',
+  [10, TASK_IDS.CLOSURE, 60, 'open', 'eyes_open',
     ['Speed of Closure', 'Flexibility of Closure'],
     ['Perceptual Speed', 'Spatial Orientation', 'Problem Sensitivity', 'Reaction Time', 'Selective Attention']],
   [11, TASK_IDS.SPEECH_NOISE, 120, 'closed', 'eyes_closed',

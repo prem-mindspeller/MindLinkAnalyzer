@@ -34,7 +34,7 @@ completion marker cannot unlock a new run.
 | 7 | `dual_task_rule_switching` | closed | eyes closed | 60 |
 | 8 | `rule_based_anomaly_detection` | open | eyes open | 60 |
 | 9 | `rapid_visual_comparison` | open | eyes open | 60 |
-| 10 | `pattern_closure_visual_noise` | open | eyes open | 75 |
+| 10 | `pattern_closure_visual_noise` | open | eyes open | 60 |
 | 11 | `speech_in_noise_comprehension` | closed | eyes closed | 120 |
 | 12 | `written_comprehension_synthesis` | open | eyes open | 180 |
 
@@ -48,7 +48,7 @@ window, the active candidate/pilot profile extends the stimulus pacing and
 phase plan without changing the canonical task identity. Those extensions are
 pilot defaults and must not be described as validated timing norms.
 
-Tasks 1, 2, 3, 4, 5, 6, 7 and 8 are deliberate exceptions in the other
+Tasks 1, 2, 3, 4, 5, 6, 7, 8 and 10 are deliberate exceptions in the other
 direction: their active blocks are shorter than the page-47 example. This is
 still a pilot default, not a validated timing norm.
 
@@ -115,6 +115,19 @@ still a pilot default, not a validated timing norm.
   reduced proportionally (3 lower-density + 6 higher-density -> 2 + 4) to
   keep the density *ratio* between phases -- the actual point of this task --
   close to the original (~13% -> ~27%, roughly double either way).
+- Task 10: shortened from 75s to 60s. Its single phase spans the whole
+  block, so the phase floor was never a risk; the constraint was the 50s
+  reveal ramp itself (`revealStartSeconds` -> `fullyVisibleSeconds`), which
+  IS the Speed/Flexibility of Closure manipulation and was left untouched --
+  only the 20s pre-reveal buffer was trimmed, to 5s. Per explicit user
+  request, `responseEnabledSeconds` (a minimum-exposure delay of 25s before
+  a response could even be scored) was removed entirely: the "Recognized"
+  button is now clickable from the start of the block, and the scoring gate
+  that mirrored it (`clickedAfterMinimum` in optimizedTaskScoring.mjs) was
+  removed the same way, so the frontend and the scorer agree on what counts
+  as a valid response. To offset the resulting guessing risk, CLOSURE_FORMS
+  now offers 6 plausible same-silhouette options instead of 4 (1-in-6 odds
+  instead of 1-in-4 for a blind guess).
 
 ### Versioned configuration contract
 
