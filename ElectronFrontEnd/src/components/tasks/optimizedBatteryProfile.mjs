@@ -62,17 +62,20 @@ const taskTimings = {
     ],
   },
   [TASK.AUDITORY_COUNT]: {
-    // Shortened from the page-47 example's 120s to 75s (see docs), not to 60s:
-    // 3 equal phases at exactly 20s each would clear the analysis floor with
-    // zero margin, so 25s/phase keeps a real buffer. Tone count was reduced
-    // (not the interval) to preserve pacing -- see AUDITORY_FORMS in
+    // Shortened from the page-47 example's 120s to 60s in a single phase, not
+    // the earlier 75s/3-phase design: both of this task's abilities (Selective
+    // Attention, Auditory Attention) are gated by one whole-block exact-count
+    // threshold (see optimizedTaskScoring.mjs's AUDITORY_COUNT branch), so the
+    // early/middle/late split never affected ability pass/fail -- its only
+    // role was a descriptive EEG attention-drift narrative, which random
+    // per-phase target placement was already confounding (per-phase target
+    // density swung up to ~3x with only 9-11 targets to distribute across 3
+    // phases). A single 60s phase clears the analysis floor with 40s of
+    // margin, the largest in the battery. Tone count was reduced (not the
+    // interval) to preserve pacing -- see AUDITORY_FORMS in
     // optimizedBatteryConfig.mjs.
-    durationSeconds: 75,
-    phases: [
-      phase('early', 'Early monitoring', 0, 25),
-      phase('middle', 'Middle monitoring', 25, 50),
-      phase('late', 'Late monitoring', 50, 75),
-    ],
+    durationSeconds: 60,
+    phases: [phase('monitoring', 'Continuous monitoring', 0, 60)],
   },
   [TASK.SEMANTIC]: {
     // Shortened from the page-47 example's 90s to 60s (see docs). Item count

@@ -110,20 +110,27 @@ ability score. Tasks without one are reported descriptively.
 
 ### 3. Auditory Target Counting
 
-- **Protocol:** 75 seconds (shortened from the page-47 example's 120s; not
-  60s, since 3 equal 20s phases would leave zero margin above the
-  20-contiguous-clean-second analysis floor), eyes closed, eyes-closed
-  baseline; an irregular stream of high target tones and low distractor
-  tones, split into early, middle, and late monitoring phases of 25 seconds
-  each. Tone and target counts were reduced to preserve the original average
-  inter-tone interval and target density rather than compressing either.
+- **Protocol:** 60 seconds (shortened from the page-47 example's 120s) in a
+  single continuous phase, eyes closed, eyes-closed baseline; an irregular
+  stream of high target tones and low distractor tones. Previously split into
+  early/middle/late 25-second phases at 75s total; collapsed to one phase
+  because both candidate abilities are gated by a single whole-block
+  exact-count threshold (see Behavioural evidence below), so the phase split
+  never affected ability pass/fail -- it only supported a descriptive EEG
+  attention-drift narrative, which random per-phase target placement was
+  already confounding (per-phase target density could swing by roughly 3x
+  with only 9-11 targets spread across 3 phases). A single 60s phase clears
+  the 20-contiguous-clean-second analysis floor with 40 seconds of margin,
+  the largest in the battery. Tone and target counts were reduced again to
+  preserve the same average inter-tone interval and target density rather
+  than compressing either.
 - **Behavioural evidence:** target count, count error, exact-count flag, and
-  threshold-pass flag. Exact count is a transparent candidate default because
-  the source protocol has no final validated tolerance.
+  threshold-pass flag, scored against the whole block. Exact count is a
+  transparent candidate default because the source protocol has no final
+  validated tolerance.
 - **Candidate abilities:** Selective Attention and Auditory Attention.
 - **Expected signature:** none fixed; the report describes modulation. Its
-  task context is sustained target monitoring, distractor resistance,
-  attention stability, and attention drift.
+  task context is sustained target monitoring and distractor resistance.
 - **Report effect:** a passed count can validate the two candidate abilities;
   the export keeps the candidate-threshold note so it is not mistaken for a
   normed assessment.
@@ -166,9 +173,11 @@ ability score. Tasks without one are reported descriptively.
 
 - **Protocol:** 75 seconds (shortened from the page-47 example's 120s),
   eyes closed, eyes-closed baseline; silent idea generation in early, middle,
-  and late phases of 25 seconds each, matching Task 3's identical 3-phase
-  margin fix (25s/phase keeps a real buffer above the
-  20-contiguous-clean-second floor, rather than sitting exactly on it). The
+  and late phases of 25 seconds each (25s/phase keeps a real buffer above the
+  20-contiguous-clean-second floor, rather than sitting exactly on it at a
+  flat 60s -- unlike Task 3, this task's serial-order effect on ideation
+  originality is exactly what the early/middle/late split exists to capture,
+  so it keeps the 3-phase design). The
   object prompt is still spoken at the very start of the block. Ideas are
   entered after EEG scoring finishes.
 - **Behavioural evidence:** captured idea count and text; optionally, an

@@ -57,11 +57,13 @@ test('every canonical task resolves all runner configs (no missing-profile crash
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
-  // Tasks 1, 2, 4, 5, 7, 8, 10 and 11 deliberately shortened from the page-47
-  // example's 90s/120s to 60s; Tasks 3 and 6 (both 3-equal-phase tasks)
-  // shortened to 75s rather than a flat 60s, for the same
-  // 20s-phase-floor-margin reason. Task 12 shortened from 180s to 90s.
-  const expectedDurations = [60, 60, 75, 60, 60, 75, 60, 60, 60, 60, 60, 90];
+  // Tasks 1, 2, 3, 4, 5, 7, 8, 10 and 11 deliberately shortened from the
+  // page-47 example's 90s/120s to 60s; Task 6 (still 3 equal analysis phases)
+  // shortened to 75s rather than a flat 60s for the 20s-phase-floor-margin
+  // reason -- Task 3 moved to a single 60s phase instead, since its abilities
+  // are gated by one whole-block threshold, not per-phase. Task 12 shortened
+  // from 180s to 90s.
+  const expectedDurations = [60, 60, 60, 60, 60, 75, 60, 60, 60, 60, 60, 90];
   assert.deepEqual(
     Object.values(TASK_DEFINITIONS)
       .sort((left, right) => left.number - right.number)
@@ -565,8 +567,8 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
 
-// Page 47 durations (Tasks 1, 2, 4, 5, 7, 8, 10 and 11 deliberately shortened
-// to 60s, Tasks 3 and 6 to 75s, Task 12 to 90s -- see
+// Page 47 durations (Tasks 1, 2, 3, 4, 5, 7, 8, 10 and 11 deliberately
+// shortened to 60s, Task 6 to 75s, Task 12 to 90s -- see
 // optimizedBatteryProfile.mjs), the
 // eyes-open/closed slide, and each task's "can provide evidence for" / "does
 // not support direct claims regarding" lists. The backend repeats this table in
@@ -579,7 +581,7 @@ const PDF_TASK_CONTRACT = [
   [2, TASK_IDS.WORKING_MEMORY, 60, 'closed', 'eyes_closed',
     ['Memorization', 'Information Ordering', 'Deductive Reasoning'],
     ['Inductive Reasoning', 'Category Flexibility', 'Time Sharing', 'Number Facility', 'Mathematical Reasoning', 'Oral Comprehension']],
-  [3, TASK_IDS.AUDITORY_COUNT, 75, 'closed', 'eyes_closed',
+  [3, TASK_IDS.AUDITORY_COUNT, 60, 'closed', 'eyes_closed',
     ['Selective Attention', 'Auditory Attention'],
     ['Reaction Time', 'Speech Recognition', 'Oral Comprehension', 'Time Sharing', 'Problem Sensitivity']],
   [4, TASK_IDS.SEMANTIC, 60, 'closed', 'eyes_closed',

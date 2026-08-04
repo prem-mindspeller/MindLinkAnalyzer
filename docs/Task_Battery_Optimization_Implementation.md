@@ -27,7 +27,7 @@ completion marker cannot unlock a new run.
 |---:|---|---|---|---:|
 | 1 | `adaptive_numerical_reasoning` | closed | eyes closed | 60 |
 | 2 | `working_memory_manipulation` | closed | eyes closed | 60 |
-| 3 | `auditory_target_counting` | closed | eyes closed | 75 |
+| 3 | `auditory_target_counting` | closed | eyes closed | 60 |
 | 4 | `semantic_induction_category_switching` | closed | eyes closed | 60 |
 | 5 | `visuospatial_transformation_orientation` | open | eyes open | 60 |
 | 6 | `divergent_ideation` | closed | eyes closed | 75 |
@@ -69,14 +69,24 @@ This is still a pilot default, not a validated timing norm.
   which is also what the Memorization ability claim is evidenced against.
   Both phases remain comfortably above the 20-contiguous-clean-second
   analysis floor (30s each).
-- Task 3: shortened to 75s rather than 60s, specifically because it has 3
-  equal phases (early/middle/late monitoring) rather than 2. At a flat 60s,
-  3x20s phases would sit exactly on the 20-contiguous-clean-second floor with
-  zero margin -- any brief signal artifact in any phase would zero out that
-  phase's comparison. 25s/phase keeps a real buffer. Tone count and target
-  count were both reduced (70/16, 68/15, 72/17 -> 43/10, 42/9, 45/11) to
-  preserve the original average inter-tone interval (~1.64s-1.74s) and target
-  density (~22-24%) rather than compressing either.
+- Task 3: first shortened to 75s (25s/phase across early/middle/late
+  monitoring, rather than 60s, since 3x20s phases would sit exactly on the
+  20-contiguous-clean-second floor with zero margin), then reconsidered:
+  both of its abilities (Selective Attention, Auditory Attention) are gated
+  by a single whole-block exact-count threshold, never per-phase, so the
+  early/middle/late split never affected ability pass/fail -- it only
+  supported a descriptive EEG attention-drift narrative, and that narrative
+  was already confounded by uneven per-phase target density (random
+  placement of only 9-11 targets across 3 phases could swing density by
+  ~3x). Collapsed to a single 60s phase instead: this clears the analysis
+  floor with 40s of margin (the largest in the battery), fully removes the
+  density-imbalance confound (nothing left to compare across phases), and
+  recovers 15s versus the 75s version. Tone and target counts were reduced
+  again for the shorter block (43/10, 42/9, 45/11 -> 34/8, 33/7, 35/9) to
+  preserve the same average inter-tone interval (~1.64s-1.76s) and target
+  density (~21-26%) rather than compressing either. (The original 120s ->
+  75s reduction, still visible in git history, went 70/16, 68/15, 72/17 ->
+  43/10, 42/9, 45/11 for the same pacing-preservation reason.)
 - Task 4: item count per phase was reduced (15 -> 10) rather than compressing
   the interval between items, so the pace is exactly unchanged (45s/15 =
   30s/10 = 3s/item either way).
@@ -86,11 +96,16 @@ This is still a pilot default, not a validated timing norm.
   compresses (11s -> 9s) since only 18s of span is available for it once the
   phase itself is 30s.
 - Task 6: initially shortened to a flat 60s (3x20s phases), then bumped to
-  75s (25s/phase) to match Task 3's same 3-equal-phase margin fix, once it
-  became clear the zero-slack floor risk applied here too. The object prompt
-  is still spoken at t=0 as required; nothing else is scheduled across the
-  block, so there was no pacing to preserve -- the phase floor was the only
-  real trade-off, and it affects the EEG early/middle/late comparison only
+  75s (25s/phase) once it became clear a flat 60s would sit its 3 equal
+  early/middle/late phases exactly on the 20-contiguous-clean-second floor
+  with zero margin -- the same shape of risk Task 3 originally had at 75s
+  (see above), before Task 3 was later restructured to a single phase. Task 6
+  keeps its 3-phase design: unlike Task 3, its early/middle/late split
+  captures a real, in-scope phenomenon (the serial-order effect on ideation
+  originality), not just a descriptive extra. The object prompt is still
+  spoken at t=0 as required; nothing else is scheduled across the block, so
+  there was no pacing to preserve -- the phase floor was the only real
+  trade-off, and it affects the EEG early/middle/late comparison only
   (behavioral scoring is against the whole response, not per-phase).
 - Task 7: unlike Tasks 1-6, the 3+3 update structure (per phase, before and
   after the rule switch) was deliberately kept rather than reduced, per

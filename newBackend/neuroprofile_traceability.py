@@ -92,12 +92,18 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # The 2 maintenance-phase commands are already at their structural
     # minimum, so that phase's spacing necessarily compresses (25s -> 10s).
     CANONICAL_TASKS[2]["id"]: 60,
-    # Task 3 shortened from the page-47 example's 120s to 75s, not 60s: its 3
-    # equal analysis phases would sit at exactly the 20-contiguous-clean-second
-    # floor with zero margin at 60s, so 25s/phase (75s total) keeps a real
-    # buffer. Tone/target counts were reduced (not the interval) to preserve
-    # pacing and target density (see AUDITORY_FORMS in optimizedBatteryConfig.mjs).
-    CANONICAL_TASKS[3]["id"]: 75,
+    # Task 3 shortened from the page-47 example's 120s to 60s in a single
+    # phase (was briefly 75s/3-phase). Both of its abilities (Selective
+    # Attention, Auditory Attention) are gated by one whole-block exact-count
+    # threshold, never per-phase, so the earlier early/middle/late split never
+    # affected ability pass/fail -- its only role was a descriptive EEG
+    # attention-drift narrative, which random per-phase target placement was
+    # already confounding (per-phase target density swung up to ~3x with only
+    # 9-11 targets spread across 3 phases). A single 60s phase clears the
+    # analysis floor with 40s of margin, the largest in the battery. Tone/
+    # target counts were reduced again (not the interval) to preserve pacing
+    # and target density (see AUDITORY_FORMS in optimizedBatteryConfig.mjs).
+    CANONICAL_TASKS[3]["id"]: 60,
     # Task 4 shortened from the page-47 example's 90s to 60s; item count per
     # phase was reduced (15 -> 10) rather than compressing the interval, so
     # the pace is exactly unchanged (3s/item either way -- see itemsPerPhase

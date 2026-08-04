@@ -513,16 +513,19 @@ function toneForm(
   return { id, toneEvents, targetCount };
 }
 
-// Tone/target counts reduced from the 120s original (70/16, 68/15, 72/17) to
-// preserve the actual average inter-tone interval (~1.64-1.74s, not the raw
-// 0.68-1.02s jitter range -- toneForm scales that range to exactly fill the
-// available window, so the real pace is availableIntervalSeconds/toneCount)
-// and the original target-tone density (~22-24%), rather than cramming the
-// same tone count into a shorter window.
+// Tone/target counts reduced again for the 75s -> 60s single-phase conversion
+// (43/10, 42/9, 45/11 -> 34/8, 33/7, 35/9) to preserve the same ~1.64-1.74s
+// average inter-tone interval (not the raw 0.68-1.02s jitter range --
+// toneForm scales that range to exactly fill the available window, so the
+// real pace is availableIntervalSeconds/toneCount) and ~22-24% target
+// density, rather than cramming the same tone count into a shorter window.
+// No phase boundary to reason about any more (see optimizedBatteryProfile.mjs):
+// with only one phase, target placement no longer needs to divide evenly
+// across an early/middle/late split.
 const AUDITORY_FORMS = [
-  toneForm('tones_a', 3101, 43, 10),
-  toneForm('tones_b', 3102, 42, 9),
-  toneForm('tones_c', 3103, 45, 11),
+  toneForm('tones_a', 3101, 34, 8),
+  toneForm('tones_b', 3102, 33, 7),
+  toneForm('tones_c', 3103, 35, 9),
 ];
 
 // Each phase list trimmed from 15 to 10 items (dropping the last 5) so the
