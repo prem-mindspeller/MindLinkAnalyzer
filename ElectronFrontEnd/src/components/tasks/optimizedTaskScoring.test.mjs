@@ -316,7 +316,7 @@ test('free-text constructs remain pending review', () => {
   assert.equal(ideas.ability_validation.Originality, 'pending_review');
 
   const written = form(TASK_IDS.WRITTEN);
-  const summary = Array.from({ length: 40 }, (_, index) => `word${index}`).join(' ');
+  const summary = Array.from({ length: 25 }, (_, index) => `word${index}`).join(' ');
   const writtenResult = scoreOptimizedTask(TASK_IDS.WRITTEN, written, {
     mainIdea: written.mainIdea,
     summary,
@@ -363,7 +363,7 @@ test('ideation abilities resolve once a rubric assessment is supplied', () => {
 test('written expression resolves once a rubric assessment is supplied', () => {
   const written = form(TASK_IDS.WRITTEN);
   const rubricId = scoringRubricFor(TASK_IDS.WRITTEN).id;
-  const summary = Array.from({ length: 40 }, (_, index) => `word${index}`).join(' ');
+  const summary = Array.from({ length: 25 }, (_, index) => `word${index}`).join(' ');
   const response = { mainIdea: written.mainIdea, summary };
 
   const adequate = scoreOptimizedTask(TASK_IDS.WRITTEN, written, response, {
@@ -462,7 +462,7 @@ test('a rubric config missing its own id can never accidentally match an assessm
   delete profile.rubrics[TASK_IDS.WRITTEN].id;
 
   const written = form(TASK_IDS.WRITTEN);
-  const summary = Array.from({ length: 40 }, (_, index) => `word${index}`).join(' ');
+  const summary = Array.from({ length: 25 }, (_, index) => `word${index}`).join(' ');
   const result = scoreOptimizedTask(TASK_IDS.WRITTEN, written, { mainIdea: written.mainIdea, summary }, {
     // Also has no rubricId -- would "match" an unguarded undefined !== undefined.
     rubricAssessment: { scores: { clarity: 5, coherence: 5, completeness: 5, information_ordering: 5 } },

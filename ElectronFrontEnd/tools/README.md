@@ -100,13 +100,14 @@ then repeat the Piper/SAPI + mixing steps above with a new target SNR via
 
 `speech_in_noise.playbackRate` in `optimizedBatteryProfile.mjs` slows down
 in-browser delivery (Chromium/Electron time-stretches premixed_audio_asset
-playback while preserving pitch). Task 11's block is a fixed 120 seconds, so
+playback while preserving pitch). Task 11's block is a fixed 60 seconds, so
 at a given playbackRate the raw narration must be short enough that
 `onset (0.5s) + narration_duration / playbackRate` finishes with a safe
 margin (aim for >= 8s) before the block ends — otherwise the passage gets cut
 off mid-sentence and the attempt fails its audio-delivery check.
 
-The checked-in `narration/*.wav` (206–216 words each, ~76–85s at normal
-speed) leave a comfortable ~19–30s margin at the current playbackRate (0.85).
-If `playbackRate` drops further or the passages grow substantially longer,
-recompute the margin above first.
+The checked-in `narration/*.wav` (102–108 words each, ~38–42s at normal
+speed, condensed from the original ~206–216 words / ~76–85s to fit the
+shortened 60s block) leave a ~10–15s margin at the current playbackRate
+(0.85). If `playbackRate` drops further or the passages grow substantially
+longer, recompute the margin above first.

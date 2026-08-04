@@ -236,7 +236,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   const finishingRef = useRef(false);
   const mismatchRenderedElapsedMsRef = useRef(null);
   const renderFrameRef = useRef(null);
-  // Task 11's passage is shorter than the 120s block ceiling once slowed down
+  // Task 11's passage is shorter than the 60s block ceiling once slowed down
   // and trimmed for timing safety, which otherwise left a long silent tail
   // still being scored as EEG. Set by speak()'s onended for the
   // spoken_passage_onset event only (nothing else schedules that type), then

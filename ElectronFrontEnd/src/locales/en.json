@@ -288,7 +288,7 @@
         },
         "3": {
             "title": "Cognitive Tasks",
-            "content": "Each task has a 60 to 180 second continuous EEG block. Follow the fixed session order and the eye-open or eye-closed instruction. Remain as still as possible to minimise movement artefacts."
+            "content": "Each task has a 60 to 90 second continuous EEG block. Follow the fixed session order and the eye-open or eye-closed instruction. Remain as still as possible to minimise movement artefacts."
         },
         "4": {
             "title": "Uploading Results",

@@ -284,7 +284,7 @@
         },
         "3": {
             "title": "Tâches cognitives",
-            "content": "Chaque tâche comprend un bloc EEG continu de 60 à 180 secondes. Respectez l’ordre fixe de la session et la consigne yeux ouverts ou fermés. Restez aussi immobile que possible afin de limiter les artefacts de mouvement."
+            "content": "Chaque tâche comprend un bloc EEG continu de 60 à 90 secondes. Respectez l’ordre fixe de la session et la consigne yeux ouverts ou fermés. Restez aussi immobile que possible afin de limiter les artefacts de mouvement."
         },
         "4": {
             "title": "Téléchargement des résultats",

@@ -35,8 +35,8 @@ completion marker cannot unlock a new run.
 | 8 | `rule_based_anomaly_detection` | open | eyes open | 60 |
 | 9 | `rapid_visual_comparison` | open | eyes open | 60 |
 | 10 | `pattern_closure_visual_noise` | open | eyes open | 60 |
-| 11 | `speech_in_noise_comprehension` | closed | eyes closed | 120 |
-| 12 | `written_comprehension_synthesis` | open | eyes open | 180 |
+| 11 | `speech_in_noise_comprehension` | closed | eyes closed | 60 |
+| 12 | `written_comprehension_synthesis` | open | eyes open | 90 |
 
 ### Authoritative timing source and pilot pacing
 
@@ -48,9 +48,9 @@ window, the active candidate/pilot profile extends the stimulus pacing and
 phase plan without changing the canonical task identity. Those extensions are
 pilot defaults and must not be described as validated timing norms.
 
-Tasks 1, 2, 3, 4, 5, 6, 7, 8 and 10 are deliberate exceptions in the other
-direction: their active blocks are shorter than the page-47 example. This is
-still a pilot default, not a validated timing norm.
+Tasks 1, 2, 3, 4, 5, 6, 7, 8, 10, 11 and 12 are deliberate exceptions in the
+other direction: their active blocks are shorter than the page-47 example.
+This is still a pilot default, not a validated timing norm.
 
 - Task 1: operation count was first reduced (6 lower-load + 10 higher-load ->
   4 + 7, the 90s->60s conversion) to keep the per-operation pace effectively
@@ -128,6 +128,38 @@ still a pilot default, not a validated timing norm.
   as a valid response. To offset the resulting guessing risk, CLOSURE_FORMS
   now offers 6 plausible same-silhouette options instead of 4 (1-in-6 odds
   instead of 1-in-4 for a blind guess).
+- Task 11: shortened from 120s to 60s. Unlike Tasks 1-8's repetition-count
+  tasks, Task 11's core manipulation is a single narrated passage played
+  against calibrated noise, so there was no repetition count to trim -- the
+  passages in `SPEECH_BASE_FORMS` were condensed instead (~206-216 words ->
+  ~102-108 words) so the same `playbackRate` (0.85) and noise calibration
+  (11.5 dB SNR) still deliver the whole passage comfortably inside the
+  shorter block. The narration was re-synthesized (Windows SAPI) and
+  re-mixed against the same seeded noise at the same 11.5 dB target; the
+  longest resulting narration (`speech_b`, 42.35s raw) finishes at
+  0.5s onset + 42.35s / 0.85 = 50.3s, ~10s inside the new 60s ceiling. Its
+  single phase spans the whole block, so the 20-contiguous-clean-second
+  phase floor was never a risk at either duration. `mainIdea`/`keyDetail`
+  answer keys and their distractor option lists were re-grounded in the
+  condensed wording; each distractor is still an element the passage
+  actually names.
+- Task 12: shortened from 180s to 90s. As with Task 11, the passage in
+  `WRITTEN_BASE_FORMS` was condensed (~178-196 words -> ~91-97 words) rather
+  than the reading window compressed around it, so the same paced-reading
+  pace (~1.5-1.6 words/sec) is preserved. The original 120s/60s reading/
+  synthesis ratio (2:1) was kept, just scaled down to 60s/30s; both phases
+  stay well clear of the 20-contiguous-clean-second floor. Unlike Task 11,
+  the summary word-count gate (`thresholds[TASK.WRITTEN].summaryMinimumWords`/
+  `summaryMaximumWords`) was deliberately scaled down too, from 35-50 to
+  20-30 words, so the required synthesis stays proportional to the shorter
+  passage (roughly the same ~20-30% summary-to-passage ratio as before)
+  rather than asking for a summary nearly as long as the passage itself.
+  `written_c` needed one extra sentence break (5 -> 7 sentences) beyond the
+  literal word trim: with exactly `chunkCount` (5) sentences, the paced-chunk
+  algorithm's greedy word-share heuristic could land a chunk boundary with no
+  sentences left to give it, producing an empty on-screen chunk -- the same
+  class of edge case as Task 5's `route_c` grid-boundary issue, fixed the
+  same way, by giving the algorithm slack rather than special-casing it.
 
 ### Versioned configuration contract
 

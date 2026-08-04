@@ -268,11 +268,15 @@ ability score. Tasks without one are reported descriptively.
 
 ### 11. Speech-in-Noise Comprehension
 
-- **Protocol:** up to 120 seconds, eyes closed, eyes-closed baseline; a
-  continuous passage is delivered with background noise. Recording ends as
-  soon as the passage finishes rather than continuing to a fixed ceiling, so
-  the scored window tracks each form's own (shorter) length instead of
-  including a long silent tail.
+- **Protocol:** up to 60 seconds (shortened from the page-47 example's 120s),
+  eyes closed, eyes-closed baseline; a continuous passage is delivered with
+  background noise. The passages were condensed (~206-216 words to
+  ~102-108 words) rather than the block compressed around them, so the same
+  playbackRate (0.85) and noise calibration (11.5 dB SNR) still apply -- the
+  longest re-recorded narration finishes with roughly 10 seconds to spare
+  before the new ceiling. Recording ends as soon as the passage finishes
+  rather than continuing to a fixed ceiling, so the scored window tracks each
+  form's own (shorter) length instead of including a long silent tail.
 - **Behavioural evidence:** main idea and key detail are each chosen from a
   fixed option list and scored against the answer key; the task collects no
   free text.
@@ -288,12 +292,17 @@ ability score. Tasks without one are reported descriptively.
 
 ### 12. Written Comprehension and Concise Synthesis
 
-- **Protocol:** 180 seconds, eyes open, eyes-open baseline; 120 seconds of
-  paced reading followed by 60 seconds of silent synthesis planning. The
-  written response is captured after EEG scoring.
+- **Protocol:** 90 seconds (shortened from the page-47 example's 180s), eyes
+  open, eyes-open baseline; 60 seconds of paced reading followed by 30
+  seconds of silent synthesis planning (the original 120s/60s reading/
+  synthesis ratio, scaled down). The passage was condensed (~178-196 words
+  to ~91-97 words) rather than the reading window compressed around it, so
+  the same paced-reading pace (~1.5-1.6 words/sec) is preserved. The written
+  response is captured after EEG scoring.
 - **Behavioural evidence:** main-idea correctness, summary word count, a
-  35–50 word candidate range, and optional rubric scores for quality,
-  coherence, and information ordering.
+  20–30 word candidate range (scaled down from 35-50 to match the shorter
+  passage), and optional rubric scores for quality, coherence, and
+  information ordering.
 - **Candidate abilities:** Written Comprehension, Written Expression,
   Inductive Reasoning, and Information Ordering.
 - **Expected signature:** occipital alpha-relative decrease and theta-relative

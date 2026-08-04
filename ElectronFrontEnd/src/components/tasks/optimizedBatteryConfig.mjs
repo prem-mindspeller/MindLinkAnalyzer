@@ -833,9 +833,12 @@ const SPEECH_BASE_FORMS = [
     id: 'speech_a',
     // Simplified to short, plain sentences (same intent as Task 12's
     // passages) so a listener with weak reading/language skills can still
-    // follow it by ear.
-    passage: 'A town by the coast used to flood every winter. The town did not build one huge wall to stop the water. Instead, workers rebuilt the sand dunes, made a marsh bigger, and raised the lowest paths. The next big storm still brought high water. But the marsh slowed the wave, and the dunes kept the water away from homes. Engineers said no single fix could remove all danger. So the town also built clear escape routes and ran regular warning tests. The plan worked because nature, planning, and ready people all helped each other. It also gave new homes to animals and made the coast nicer to visit on calm days.',
-    continuation: 'Before the work started, workers checked where water came into the streets. They also found which older people would need help leaving their homes. People practiced the escape routes on a dry day. This is how they found out that one bridge was too narrow for trucks. So the plan was fixed before the next storm season. Local shops agreed to keep flood barriers ready. Schools taught children what to do if a flood came. After each storm, workers checked the marsh and the dunes and fixed the parts that wore away the most.',
+    // follow it by ear. Condensed to ~105 words (from ~206) so the narration,
+    // played at the same 0.85 playbackRate, fits inside the shortened 60s
+    // block with margin to spare -- see the durationSeconds comment in
+    // optimizedBatteryProfile.mjs for the timing budget this targets.
+    passage: 'A coastal town used to flood every winter. Instead of one giant wall, workers rebuilt the sand dunes and made the marsh bigger. The next storm still brought high water, but the marsh slowed the wave and the dunes kept it away from homes. Because no single fix could stop all danger, the town also built escape routes and ran warning tests. Before the plan started, workers checked where water entered the streets. People practiced the escape routes on a dry day and found one bridge was too narrow for trucks. The plan worked because nature, planning, and ready people all helped each other.',
+    continuation: '',
     mainIdea: 'Many different steps together lowered the flood risk.',
     mainIdeaOptions: ['One giant wall stopped every future flood.', 'Many different steps together lowered the flood risk.', 'The town stopped caring for the coast once the project ended.'],
     keyDetailQuestion: 'What slowed the wave?',
@@ -843,27 +846,27 @@ const SPEECH_BASE_FORMS = [
     // Every distractor is a flood defence the passage actually describes, so
     // the item cannot be solved by picking the most sensible-sounding answer —
     // only by recalling which one the passage credited with slowing the wave.
-    keyDetailOptions: ['the sand dunes', 'the marsh', 'the raised paths', 'the flood barriers'],
+    keyDetailOptions: ['the sand dunes', 'the marsh', 'the escape routes', 'the warning tests'],
   },
   {
     id: 'speech_b',
-    // Simplified (see speech_a's comment).
-    passage: 'A hospital saw that medicine often arrived late. This happened even though every team worked fast. A review found that each team used different names for the same things. So staff kept stopping to check different labels. The hospital gave everyone one shared code instead. It also moved common supplies closer to the patient rooms. Short handover checks were added too. Delivery got faster, and nobody had to rush. The real problem was not effort. It was how things were organized and laid out. Leaders still kept a paper backup plan, in case the computer system failed. After three months, mistakes dropped and nurses had more time with patients.',
-    continuation: 'The review team followed medicine orders from the pharmacy all the way to the patient bed. They found many small mix-ups added up over time. One storage room used a short name for a ward. A cart was restocked at random times. Urgent orders waited in the same line as normal orders. Workers from many teams designed the fix together. They tested the new shared code on one floor first. They checked if the labels were easy to read in different light. If a code looked too much like another one, they changed it. The hospital also made it clear who should fix each kind of problem.',
+    // Simplified and condensed (see speech_a's comment) to ~108 words.
+    passage: 'A hospital saw that medicine often arrived late, even though every team worked fast. A review found that each team used different names for the same supplies, so staff kept stopping to check labels. The hospital gave everyone one shared code instead, and moved common supplies closer to patient rooms. Short handover checks were added too. Delivery got faster, and nobody had to rush, because the real problem was how things were organized, not effort. One storage room used a short name for a ward, and a cart was restocked at random times. Workers from many teams designed the fix together and tested it on one floor first.',
+    continuation: '',
     mainIdea: 'Shared systems and better layout made medicine delivery faster.',
-    mainIdeaOptions: ['Nurses were told to walk and work faster.', 'The hospital got rid of every backup plan.', 'Shared systems and better layout made medicine delivery faster.'],
+    mainIdeaOptions: ['Nurses were told to walk and work faster.', 'Shared systems and better layout made medicine delivery faster.', 'The hospital slowed down deliveries on purpose.'],
     keyDetailQuestion: 'Why did staff keep stopping?',
-    keyDetail: 'to check different labels',
-    // Each distractor is a delay the passage genuinely names (the randomly
-    // restocked cart, supplies that were far from the wards, urgent orders
-    // queued with routine ones), so all four read as credible causes.
-    keyDetailOptions: ['to wait for the restocking cart', 'to walk to distant storage rooms', 'to check different labels', 'to let urgent orders pass first'],
+    keyDetail: 'to check labels',
+    // Each distractor is a real friction point the passage names (the
+    // randomly restocked cart, the handover checks, the storage room's own
+    // short ward name), so all four read as plausible causes for a delay.
+    keyDetailOptions: ['to wait for the restocking cart', 'to do the handover checks', 'to check labels', 'to find the right ward name'],
   },
   {
     id: 'speech_c',
-    // Simplified (see speech_a's comment).
-    passage: 'A school library wanted more students to use its science books. Buying more books had not helped much. So the librarian tried something new. Small displays connected science topics to class projects. Teachers got short guides showing where to find good material. Students could also leave questions on a board for the next class to answer. More books got borrowed. But the biggest change was that students started talking about their sources and comparing ideas. The library kept changing the displays so they matched what each class was learning. Things improved because information was easy to see, came at the right time, and had a clear purpose.',
-    continuation: 'At first, the displays covered a space project and a water quality project. Each display had books at different reading levels, a picture, a short article, and a question with more than one possible source. Teachers brought their class to the display before starting research. This helped students see how the books connected to a question they already understood. The librarian tracked which books were borrowed. She also tracked which questions appeared on the board and which sources students used to answer them. If a display got little attention, its position or label was changed. Students helped pick new topics for later displays too.',
+    // Simplified and condensed (see speech_a's comment) to ~102 words.
+    passage: 'A school library wanted more students to use its science books, but buying more books had not helped much. The librarian tried something new: small displays connected science topics to class projects, and teachers got short guides showing where to find good material. Students could also leave questions on a board for the next class to answer. More books got borrowed, but the biggest change was that students started talking about their sources and comparing ideas. The library kept changing the displays so they matched what each class was learning. At first, the displays covered a space project and a water project.',
+    continuation: '',
     mainIdea: 'Connecting visible materials to class projects made the library more useful.',
     mainIdeaOptions: ['The library only succeeded by buying many new books.', 'Connecting visible materials to class projects made the library more useful.', 'The displays never changed once they were set up.'],
     keyDetailQuestion: 'Where could students leave questions?',
@@ -890,22 +893,25 @@ const WRITTEN_BASE_FORMS = [
     id: 'written_a',
     // Simplified to short, plain sentences (see tools/README.md-style intent:
     // easy enough for a low-literacy reader) while keeping the same topic and
-    // main idea as before.
-    passage: 'Cities get very hot in summer. Many people turn on air conditioners to stay cool. But a city can also cool itself in other ways. Trees give shade to walls and streets. Plants and soil hold water and slowly release it into the air, which cools things down. Light-colored roofs stay cooler than dark roofs, because they reflect more sunlight. One roof only cools one building. But many trees together can cool a whole street and the homes near it. These ideas do not work on their own. New trees take years to grow big enough to give real shade. Shiny roofs can create annoying glare if they are placed the wrong way. Water for new plants can also be hard to find. Because of this, a good city plan needs more than one idea. It needs local weather facts, money for care, and input from the people who live there. No single fix solves the whole problem by itself. Cities also need cooling centers for very hot days. These help people whose homes cannot be fixed quickly.',
+    // main idea as before. Condensed to ~91 words (from ~178) so the same
+    // paced-reading pace (~1.5 words/sec) fits inside the shortened 60s
+    // reading window -- see the durationSeconds comment in
+    // optimizedBatteryProfile.mjs for the timing budget this targets.
+    passage: 'Cities get very hot in summer. Many people turn on air conditioners, but a city can also cool itself in other ways. Trees give shade to streets, and plants release water into the air, which cools things down. Light-colored roofs stay cooler than dark roofs. But one roof only cools one building, while many trees together can cool a whole street. These ideas do not work alone: new trees take years to grow, and shiny roofs can create glare. Because of this, a good city plan needs more than one idea.',
     mainIdea: 'Cities cool down best when several ideas work together, not just one.',
     mainIdeaOptions: ['Air conditioners are the only way to cool a city.', 'Planting trees fixes city heat right away and needs no care.', 'Cities cool down best when several ideas work together, not just one.'],
   },
   {
     id: 'written_b',
-    // Simplified (see written_a's comment).
-    passage: 'Some people think more numbers always lead to better choices. But too many numbers can make a decision harder, not easier. This happens when nobody agrees on what each number should tell you to do. A good chart should start with the choice you need to make, not with the data. First, decide who makes the choice and how often. Then decide what result should make them act. After that, pick only a few numbers that show that result clearly. The numbers still need context. A sudden change might just be a mistake in how the data was collected, not a real change. Because of this, good charts explain what each number means and who is in charge of it. They also let people check the original data if something looks wrong. Being simple does not mean hiding problems. It means showing the important facts clearly and removing anything that is not needed. Old numbers that nobody uses anymore should be removed. A good chart helps people go from information to a smart choice quickly. It is not about having the most numbers possible.',
+    // Condensed to ~97 words (see written_a's comment).
+    passage: 'Some people think more numbers always lead to better choices, but too many numbers can make a decision harder, not easier. A good chart should start with the choice you need to make, then pick only a few numbers that show the result clearly. Numbers still need context, since a sudden change might just be a mistake in how data was collected. Because of this, good charts explain what each number means and let people check the original data if something looks wrong. Being simple does not mean hiding problems; it means showing the important facts clearly.',
     mainIdea: 'Good charts use a few clear numbers that are picked to help people decide.',
     mainIdeaOptions: ['The best chart always shows as many numbers as possible.', 'Good charts use a few clear numbers that are picked to help people decide.', 'Charts should hide problems so users do not get confused.'],
   },
   {
     id: 'written_c',
-    // Simplified (see written_a's comment).
-    passage: 'Fixing broken things can save money and materials. But whether a thing can be fixed depends on choices made before it ever breaks. A product is easy to fix if its screws can be opened. It also helps if broken parts can be swapped out and repair guides are easy to find. Even a fixable product might still get thrown away, if new parts take too long to arrive or cost almost as much as a new item. New rules can help by making manuals and spare parts easier to find. Companies can also design products so parts can be swapped later, which makes the product last longer. People who fix their own things need good instructions too, because a bad repair can be unsafe. Fixing things is not just one shop’s job. Designers, sellers, repair shops, lawmakers, and users all play a part. Just counting repairs is not enough. Strong, well-made products need less repair in the first place, and simple care can stop many problems before they start. The best plan combines strong design, regular care, repair, reuse, and safe recycling. Each choice should depend on safety, cost, and how worn the item is.',
+    // Condensed to ~94 words (see written_a's comment).
+    passage: 'Fixing broken things can save money and materials. But whether a thing can be fixed depends on choices made before it ever breaks. A product is easy to fix if its screws can be opened and broken parts can be swapped out. Even a fixable product might still get thrown away if new parts cost almost as much as a new item. New rules can help by making manuals and spare parts easier to find. Fixing things is not just one shop’s job. Designers, sellers, repair shops, lawmakers, and users all play a part.',
     mainIdea: 'Whether something can be fixed depends on many people working together, not just repair shops.',
     mainIdeaOptions: ['Every broken item should always be repaired, no matter the cost or danger.', 'Only repair shops decide whether something can be fixed.', 'Whether something can be fixed depends on many people working together, not just repair shops.'],
   },

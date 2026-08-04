@@ -165,14 +165,26 @@ const taskTimings = {
     phases: [phase('pre_response', 'Progressive visual closure', 0, 60)],
   },
   [TASK.SPEECH_NOISE]: {
-    durationSeconds: 120,
-    phases: [phase('listening', 'Continuous listening', 0, 120)],
+    // Shortened from 120s to 60s: the passages in SPEECH_BASE_FORMS were
+    // condensed (~206-216 words -> ~102-108 words) rather than the block
+    // compressed around them, so the narration still plays at the same
+    // playbackRate/SNR calibration below. The longest narration
+    // (speech_b, 42.35s raw) finishes at 0.5s onset + 42.35/0.85 = 50.3s,
+    // ~10s inside the 60s ceiling -- see audioProfiles.speech_in_noise.
+    durationSeconds: 60,
+    phases: [phase('listening', 'Continuous listening', 0, 60)],
   },
   [TASK.WRITTEN]: {
-    durationSeconds: 180,
+    // Shortened from the page-47 example's 180s to 90s: the passage in
+    // WRITTEN_BASE_FORMS was condensed (~178-196 words -> ~91-97 words)
+    // rather than the reading window compressed around it, so the same
+    // paced-reading pace (~1.5-1.6 words/sec) is preserved. The 120s/60s
+    // reading/synthesis ratio (2:1) is kept, just scaled down to 60s/30s --
+    // both phases stay well clear of the 20-contiguous-clean-second floor.
+    durationSeconds: 90,
     phases: [
-      phase('paced_reading', 'Paced central reading', 0, 120),
-      phase('silent_synthesis', 'Silent synthesis', 120, 180),
+      phase('paced_reading', 'Paced central reading', 0, 60),
+      phase('silent_synthesis', 'Silent synthesis', 60, 90),
     ],
   },
 };
@@ -221,15 +233,15 @@ const audioProfiles = {
     assetsByForm: {
       speech_a: {
         uri: 'audio/speech_a_snr11p5.wav',
-        sha256: '60146104135cd7b45cb4df3d7aaaeb983143f6deaa220b0b78c33e4a48fade9d',
+        sha256: 'fd183b137aa30fd77824c2f75ff6775e6d6c4480a15d05412e31a47f641ce288',
       },
       speech_b: {
         uri: 'audio/speech_b_snr11p5.wav',
-        sha256: 'abfb41097798a92f0f3ff62d70a5e768d47e481f13e7cb7d338dedb83ec8e737',
+        sha256: 'fff5080bfefc757d3165661b8259cf31cd3166918c54946a18da5ba1adaa9d56',
       },
       speech_c: {
         uri: 'audio/speech_c_snr11p5.wav',
-        sha256: 'fba64eeef31477abc88a677169e562d072969cf1971f2e72b71ca7b076bf2d9e',
+        sha256: 'c43b110555102a8055983e1a5a0f7053c44e8daa39d271e2cb52e23581299190',
       },
     },
     assetsByStimulusKey: {},
@@ -249,10 +261,11 @@ const audioProfiles = {
     // (noise 25% quieter than before, not 25% quieter than the speech itself).
     nominalSnrDb: 11.5,
     acousticallyCalibrated: true,
-    // Shortest of the three narrations (speech_a, 75.7s) played at
-    // playbackRate above; kept conservative so this is never overstated
-    // relative to what actually plays.
-    expectedDeliverySeconds: 89,
+    // Shortest of the three narrations (speech_a, 38.1s, condensed from the
+    // original 75.7s to fit the 60s block) played at playbackRate above;
+    // kept conservative so this is never overstated relative to what
+    // actually plays.
+    expectedDeliverySeconds: 44,
     settlingSeconds: 5,
     // Documents the noise this asset was calibrated against, for audit and
     // regeneration; not read by the runtime while mode is premixed_audio_asset.
@@ -314,8 +327,8 @@ const presentation = {
   },
   [TASK.SPEECH_NOISE]: { passageOnsetSeconds: 0.5 },
   [TASK.WRITTEN]: {
-    readingDurationSeconds: 120,
-    synthesisDurationSeconds: 60,
+    readingDurationSeconds: 60,
+    synthesisDurationSeconds: 30,
     chunkCount: 5,
   },
 };
@@ -405,8 +418,13 @@ const thresholds = {
     calibratedSnrRequiredForAbilityPass: true,
   },
   [TASK.WRITTEN]: {
-    summaryMinimumWords: 35,
-    summaryMaximumWords: 50,
+    // Scaled down from 35-50 words to match the condensed ~91-97 word
+    // passage (WRITTEN_BASE_FORMS): the original range was ~19-27% of the
+    // ~178-196 word passage, and 20-30 preserves a comparable ~21-32% share
+    // of the shorter one rather than asking for a summary nearly as long as
+    // the passage itself.
+    summaryMinimumWords: 20,
+    summaryMaximumWords: 30,
     requireMainIdea: true,
     // Rubric dimensions are rated 1-5; 3 is "adequate". main_idea is excluded
     // because it is already scored objectively against the answer key, and

@@ -284,7 +284,7 @@
         },
         "3": {
             "title": "Tareas cognitivas",
-            "content": "Cada tarea incluye un bloque EEG continuo de 60 a 180 segundos. Siga el orden fijo de la sesión y la indicación de ojos abiertos o cerrados. Permanezca lo más quieto posible para reducir los artefactos de movimiento."
+            "content": "Cada tarea incluye un bloque EEG continuo de 60 a 90 segundos. Siga el orden fijo de la sesión y la indicación de ojos abiertos o cerrados. Permanezca lo más quieto posible para reducir los artefactos de movimiento."
         },
         "4": {
             "title": "Subiendo resultados",

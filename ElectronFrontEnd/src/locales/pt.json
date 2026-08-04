@@ -284,7 +284,7 @@
         },
         "3": {
             "title": "Tarefas Cognitivas",
-            "content": "Cada tarefa inclui um bloco EEG contínuo de 60 a 180 segundos. Siga a ordem fixa da sessão e a instrução de olhos abertos ou fechados. Permaneça o mais imóvel possível para reduzir artefatos de movimento."
+            "content": "Cada tarefa inclui um bloco EEG contínuo de 60 a 90 segundos. Siga a ordem fixa da sessão e a instrução de olhos abertos ou fechados. Permaneça o mais imóvel possível para reduzir artefatos de movimento."
         },
         "4": {
             "title": "Enviando resultados",

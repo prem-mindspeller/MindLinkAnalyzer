@@ -158,8 +158,8 @@ def test_candidate_protocol_profile_uses_normative_p47_recording_durations():
         "rule_based_anomaly_detection": 60,
         "rapid_visual_comparison": 60,
         "pattern_closure_visual_noise": 60,
-        "speech_in_noise_comprehension": 120,
-        "written_comprehension_synthesis": 180,
+        "speech_in_noise_comprehension": 60,
+        "written_comprehension_synthesis": 90,
     }
     assert normalized["task_durations_seconds"] == TASK_RECORDING_DURATIONS_SECONDS
     assert set(normalized["components"]) == set(PROTOCOL_PROFILE_COMPONENTS)
@@ -270,7 +270,7 @@ def test_protocol_profile_reference_is_compact_and_task_specific():
         name: profile["components"][name]["version"]
         for name in PROTOCOL_PROFILE_COMPONENTS
     }
-    assert reference["expected_recording_duration_seconds"] == 120
+    assert reference["expected_recording_duration_seconds"] == 60
     assert reference["normative_interpretation_allowed"] is False
 
 

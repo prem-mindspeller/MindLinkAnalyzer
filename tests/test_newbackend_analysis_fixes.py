@@ -1627,7 +1627,7 @@ def test_full_component_profile_refs_are_supported_and_checked_fail_closed():
         "validation_status": profile["validation_status"],
         "components": json.loads(json.dumps(profile["components"])),
         "task_id": task_id,
-        "duration_seconds": 180,
+        "duration_seconds": 90,
     }
 
     assert backend._protocol_profile_ref_invalid_reasons(
@@ -1679,9 +1679,9 @@ _PDF_TASK_CONTRACT = {
         "Perceptual Speed", "Reaction Time"]),
     10: ("pattern_closure_visual_noise", 60, "eyes_open", [
         "Speed of Closure", "Flexibility of Closure"]),
-    11: ("speech_in_noise_comprehension", 120, "eyes_closed", [
+    11: ("speech_in_noise_comprehension", 60, "eyes_closed", [
         "Oral Comprehension", "Speech Recognition", "Auditory Attention"]),
-    12: ("written_comprehension_synthesis", 180, "eyes_open", [
+    12: ("written_comprehension_synthesis", 90, "eyes_open", [
         "Written Comprehension", "Written Expression", "Inductive Reasoning",
         "Information Ordering"]),
 }

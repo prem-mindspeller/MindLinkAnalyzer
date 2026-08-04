@@ -143,8 +143,23 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # explicit user request; CLOSURE_FORMS now offers 6 options instead of 4
     # to offset the guessing risk from an immediately-clickable button.
     CANONICAL_TASKS[10]["id"]: 60,
-    CANONICAL_TASKS[11]["id"]: 120,
-    CANONICAL_TASKS[12]["id"]: 180,
+    # Task 11 shortened from the page-47 example's 120s to 60s. The narrated
+    # passages in SPEECH_BASE_FORMS were condensed (~206-216 words ->
+    # ~102-108 words) rather than the block compressed around them, so the
+    # same playbackRate (0.85) and noise calibration (11.5 dB SNR) still
+    # apply -- the longest re-recorded narration (speech_b, 42.35s raw)
+    # finishes at 0.5s onset + 42.35/0.85 = 50.3s, ~10s inside the new
+    # ceiling (see optimizedBatteryProfile.mjs's speech_in_noise profile).
+    CANONICAL_TASKS[11]["id"]: 60,
+    # Task 12 shortened from the page-47 example's 180s to 90s. The passage in
+    # WRITTEN_BASE_FORMS was condensed (~178-196 words -> ~91-97 words)
+    # rather than the reading window compressed around it, so the same
+    # paced-reading pace (~1.5-1.6 words/sec) is preserved. The 120s/60s
+    # reading/synthesis ratio (2:1) is kept, scaled to 60s/30s; both phases
+    # stay well clear of the 20-contiguous-clean-second floor. The summary
+    # word-count gate (thresholds[TASK.WRITTEN]) was scaled down from 35-50
+    # to 20-30 words to match the shorter passage.
+    CANONICAL_TASKS[12]["id"]: 90,
 }
 
 _DEFAULT_CANDIDATE_COMPONENTS: Dict[str, Dict[str, str]] = {

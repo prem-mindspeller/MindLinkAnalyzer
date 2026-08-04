@@ -54,11 +54,11 @@ test('every canonical task resolves all runner configs (no missing-profile crash
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
-  // Tasks 1, 2, 4, 5, 7, 8 and 10 deliberately shortened from the page-47
+  // Tasks 1, 2, 4, 5, 7, 8, 10 and 11 deliberately shortened from the page-47
   // example's 90s/120s to 60s; Tasks 3 and 6 (both 3-equal-phase tasks)
   // shortened to 75s rather than a flat 60s, for the same
-  // 20s-phase-floor-margin reason.
-  const expectedDurations = [60, 60, 75, 60, 60, 75, 60, 60, 60, 60, 120, 180];
+  // 20s-phase-floor-margin reason. Task 12 shortened from 180s to 90s.
+  const expectedDurations = [60, 60, 75, 60, 60, 75, 60, 60, 60, 60, 60, 90];
   assert.deepEqual(
     Object.values(TASK_DEFINITIONS)
       .sort((left, right) => left.number - right.number)
@@ -148,9 +148,9 @@ test('derived answer keys and paced stimuli are internally consistent', () => {
     assert.deepEqual(visualRouteState(route, Number.POSITIVE_INFINITY), route.answer);
 
     const written = taskFormForSession(TASK_IDS.WRITTEN, depth);
-    assert.ok(written.passage.trim().split(/\s+/).length >= 150);
+    assert.ok(written.passage.trim().split(/\s+/).length >= 80);
     assert.ok(pacedPassageChunk(written, 0).length > 0);
-    assert.ok(pacedPassageChunk(written, 119).length > 0);
+    assert.ok(pacedPassageChunk(written, 59).length > 0);
   }
 });
 
@@ -357,18 +357,18 @@ test('stimulus schedules cover the corrected continuous windows', () => {
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE]) {
     const wordCount = form.passage.trim().split(/\s+/).length;
-    // Simplified, plain-language passages run shorter than the original
-    // denser wording at the same playbackRate/SNR-safety budget.
-    assert.ok(wordCount >= 190 && wordCount <= 240, `${form.id}: ${wordCount} words`);
-    // 89 = the shortest of the three calibrated narrations
+    // Condensed to ~102-108 words (from ~206-216) so the same playbackRate/
+    // SNR-safety budget fits inside the shortened 60s block.
+    assert.ok(wordCount >= 90 && wordCount <= 120, `${form.id}: ${wordCount} words`);
+    // 44 = the shortest of the three calibrated narrations
     // (tools/build_speech_in_noise_assets.py) played at the profile's
     // playbackRate, kept conservative rather than overstated.
-    assert.equal(form.audioProfile.expectedDeliverySeconds, 89);
+    assert.equal(form.audioProfile.expectedDeliverySeconds, 44);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.WRITTEN]) {
-    assert.equal(form.readingDurationSeconds, 120);
-    assert.equal(form.synthesisDurationSeconds, 60);
-    assert.notEqual(pacedPassageChunk(form, 95), pacedPassageChunk(form, 119));
+    assert.equal(form.readingDurationSeconds, 60);
+    assert.equal(form.synthesisDurationSeconds, 30);
+    assert.notEqual(pacedPassageChunk(form, 12), pacedPassageChunk(form, 48));
   }
 });
 
@@ -430,9 +430,11 @@ test('every multiple-choice answer is selectable and not guessable by position',
 });
 
 test('the summary word ceiling widens only for scripts that segment more finely', () => {
-  // The 35-50 range is calibrated against English. Japanese expresses the same
-  // content in ~1.55x as many segmented words, so the English ceiling rejected
-  // an otherwise valid answer.
+  // Task 12's configured 20-30 word range (see thresholds[TASK.WRITTEN] in
+  // optimizedBatteryProfile.mjs) is calibrated against English; 50 below is
+  // just an arbitrary ceiling exercising the pure function. Japanese
+  // expresses the same content in ~1.55x as many segmented words, so a fixed
+  // English ceiling rejected an otherwise valid answer.
   assert.equal(maximumWordsFor('a plain english summary', 50), 50);
   assert.equal(maximumWordsFor('', 50), 50);
   assert.equal(maximumWordsFor('le marais a ralenti la vague', 50), 50);
@@ -470,7 +472,7 @@ test('paced reading chunks never split a sentence and cover the whole passage', 
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.WRITTEN]) {
     const passageWordCount = form.passage.trim().split(/\s+/).filter(Boolean).length;
     let coveredWordCount = 0;
-    for (let elapsed = 0; elapsed < form.readingDurationSeconds; elapsed += 24) {
+    for (let elapsed = 0; elapsed < form.readingDurationSeconds; elapsed += 12) {
       const chunk = pacedPassageChunk(form, elapsed);
       assert.ok(chunk.length > 0, `${form.id} at ${elapsed}s should not be empty`);
       // Every chunk must end at a sentence boundary, not mid-sentence.
@@ -502,8 +504,9 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
 
-// Page 47 durations (Tasks 1, 2, 4, 5, 7, 8 and 10 deliberately shortened to
-// 60s, Tasks 3 and 6 to 75s -- see optimizedBatteryProfile.mjs), the
+// Page 47 durations (Tasks 1, 2, 4, 5, 7, 8, 10 and 11 deliberately shortened
+// to 60s, Tasks 3 and 6 to 75s, Task 12 to 90s -- see
+// optimizedBatteryProfile.mjs), the
 // eyes-open/closed slide, and each task's "can provide evidence for" / "does
 // not support direct claims regarding" lists. The backend repeats this table in
 // neuroprofile_traceability.py, so drift here silently desynchronizes
@@ -539,10 +542,10 @@ const PDF_TASK_CONTRACT = [
   [10, TASK_IDS.CLOSURE, 60, 'open', 'eyes_open',
     ['Speed of Closure', 'Flexibility of Closure'],
     ['Perceptual Speed', 'Spatial Orientation', 'Problem Sensitivity', 'Reaction Time', 'Selective Attention']],
-  [11, TASK_IDS.SPEECH_NOISE, 120, 'closed', 'eyes_closed',
+  [11, TASK_IDS.SPEECH_NOISE, 60, 'closed', 'eyes_closed',
     ['Oral Comprehension', 'Speech Recognition', 'Auditory Attention'],
     ['Oral Expression', 'Speech Clarity', 'Reaction Time', 'Written Comprehension', 'Written Expression']],
-  [12, TASK_IDS.WRITTEN, 180, 'open', 'eyes_open',
+  [12, TASK_IDS.WRITTEN, 90, 'open', 'eyes_open',
     ['Written Comprehension', 'Written Expression', 'Inductive Reasoning', 'Information Ordering'],
     ['Oral Comprehension', 'Oral Expression', 'Speech Recognition', 'Speech Clarity', 'Fluency of Ideas', 'Originality']],
 ];
