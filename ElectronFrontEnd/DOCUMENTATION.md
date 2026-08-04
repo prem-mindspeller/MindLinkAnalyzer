@@ -429,9 +429,9 @@ Orchestrates the final analysis and report submission.
 
 | Export | Description |
 |---|---|
-| `runAnalysis()` | Reads `calibrationData_eyes_closed`, `calibrationData_eyes_open`, and all `taskData_*` keys from `sessionStorage`; POSTs to `POST http://localhost:8000/analyze`; returns enriched per-task results |
-| `seedReport(email, protocolType, analysisResults)` | Builds a legacy-format plain-text report, Base64-encodes it, and POSTs to `POST /api/cas/eeg-reports/seed`; retries once on 401 after token refresh |
-| `buildReportText(analysisResults)` | Pure function — formats analysis results into the canonical plain-text report string |
+| `runAnalysis()` | Loads baseline and task recordings from the durable IndexedDB store (`recordingStore.mjs`, which migrates legacy `calibrationData_*` / `taskData_*` Web Storage arrays); validates baseline presence, battery version and task completeness; POSTs baseline + tasks + `protocol_profile` + per-task metadata to `POST http://localhost:8000/analyze`; returns enriched per-task results |
+| `runSingleTaskQualityCheck(taskId, samples, opts)` | Re-uses `POST /analyze` for one just-completed task to drive the post-task quality popup. Does not write report data and does not affect the upload envelope |
+| `seedReport(email, protocolType, analysisResults)` | Serializes the backend's `neuroprofile_feature_export` (`reportDocument.mjs`), compresses it into the envelope described in `docs/report_compression_contract.md` (`reportEnvelope.mjs`), and POSTs it to `POST /api/cas/eeg-reports/seed` with the sha256 and size metadata; retries once on 401 after token refresh |
 
 ---
 
@@ -635,53 +635,40 @@ Base URLs:
 
 ## 8. Cognitive Tasks
 
-Tasks are grouped into a **general set** (always available) and three **pathway-specific sets** (unlocked by partner booking).
+The app runs the 12-task **optimized battery** (`task_battery_optimization_2.0.0-candidate.1`).
+The pathway-specific task sets described in earlier revisions of this document
+no longer exist — tasks are now gated by *session depth*, not partner pathway.
 
-### General Tasks (always shown)
+Task identity, durations, phase plans, stimulus forms, rubrics and thresholds
+are data in the versioned protocol profile rather than constants in the runner:
 
-| Task ID | Component | Duration | Eyes | Description |
-|---|---|---|---|---|
-| `visual_imagery` | `VisualImageryTask` | 60 s | Closed | Visualise a peaceful scene |
-| `attention_focus` | `AttentionFocusTask` | 60 s | Closed | Sustained focused attention |
-| `mental_math` | `MentalMathTask` | 60 s | Closed | Serial arithmetic |
-| `emotion_face` | `EmotionFaceTask` | 114 s | Open | Emotional face recognition |
+| Concern | Source of truth |
+|---|---|
+| Task ids, phases, durations, thresholds | [optimizedBatteryProfile.mjs](src/components/tasks/optimizedBatteryProfile.mjs) |
+| Stimulus forms and scheduling | [optimizedBatteryConfig.mjs](src/components/tasks/optimizedBatteryConfig.mjs) |
+| Per-task UI | [src/components/tasks/optimized/](src/components/tasks/optimized/) |
+| Rationale for every duration deviation | [docs/Task_Battery_Optimization_Implementation.md](../docs/Task_Battery_Optimization_Implementation.md) |
+| Per-task evidence and ability claims | [docs/Optimized_Task_Battery_Traceability_Reference.md](../docs/Optimized_Task_Battery_Traceability_Reference.md) |
 
-### Pathway: Personal
+Durations are deliberately **not** duplicated here: the frontend profile and the
+backend's `TASK_RECORDING_DURATIONS_SECONDS` must already agree exactly (a
+mismatch makes the backend reject the whole `protocol_profile`), and a third
+copy in prose is the one that silently goes stale.
 
-| Task ID | Component | Duration | Eyes |
-|---|---|---|---|
-| `working_memory` | `WorkingMemoryTask` | 60 s | Closed |
-| `language_processing` | `LanguageProcessingTask` | 60 s | Closed |
-| `diverse_thinking` | `DiverseThinkingTask` | 96 s | Open |
-| `motor_imagery` | `MotorImageryTask` | 60 s | Closed |
-| `cognitive_load` | `CognitiveLoadTask` | 60 s | Closed |
-
-### Pathway: Connection
-
-| Task ID | Component | Duration | Eyes |
-|---|---|---|---|
-| `motor_imagery` | `MotorImageryTask` | 60 s | Closed |
-| `cognitive_load` | `CognitiveLoadTask` | 60 s | Closed |
-| `reappraisal` | `ReappraisalTask` | 96 s | Open |
-| `curiosity` | `CuriosityTask` | 45 s | Open |
-
-### Pathway: Lifestyle
-
-| Task ID | Component | Duration | Eyes |
-|---|---|---|---|
-| `motor_imagery` | `MotorImageryTask` | 60 s | Closed |
-| `cognitive_load` | `CognitiveLoadTask` | 60 s | Closed |
-| `order_surprise` | `OrderSurpriseTask` | 60 s | Open |
-| `num_form` | `NumFormTask` | 60 s | Open |
+Sessions are cumulative — session 1 runs tasks 3, 2, 1, 4; session 2 adds 6, 7
+and the eyes-open block (9, 5, 8); session 3 adds 11, 10 and 12. The eyes-open
+fixation baseline is required before any eyes-open task.
 
 ---
 
 ## 9. Internationalisation
 
-The app supports **English (`en`)** and **Dutch (`nl`)** via `i18next`.
+The app supports **ten languages** via `i18next`: English (`en`), Dutch (`nl`),
+German (`de`), French (`fr`), Spanish (`es`), Italian (`it`), Portuguese (`pt`),
+Hindi (`hi`), Arabic (`ar`) and Japanese (`ja`).
 
 - Configuration: [src/i18n.js](src/i18n.js)
-- Translations: [src/locales/en.json](src/locales/en.json) and [src/locales/nl.json](src/locales/nl.json)
+- Translations: one file per language in [src/locales/](src/locales/)
 - Language is stored in `sessionStorage.language` and applied on app startup.
 - The header language toggle switches the active language at runtime via `i18n.changeLanguage()`.
 

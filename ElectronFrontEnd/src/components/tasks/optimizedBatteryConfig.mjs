@@ -455,8 +455,24 @@ const MEMORY_FORMS = [
   ]),
 ];
 
+// A bare LCG's first outputs are almost identical for nearby seeds: with
+// state = a*seed + c, two seeds one apart differ by only a/2^32 (~0.0004) on
+// the first draw, and by a fixed step on the second. Every parallel-form
+// family below is authored with consecutive seeds (3101/3102/3103,
+// 7101/7102/7103, ...), so unscrambled this handed all three "parallel" forms
+// the SAME first target index and an arithmetically spaced second one -- the
+// forms were correlated by construction rather than independent, which is the
+// whole point of parallel forms for the three test-retest sessions. Mixing the
+// seed through a splitmix32 finalizer first decorrelates them.
+function scrambleSeed(seed) {
+  let mixed = seed >>> 0;
+  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x21f0aaad) >>> 0;
+  mixed = Math.imul(mixed ^ (mixed >>> 15), 0x735a2d97) >>> 0;
+  return (mixed ^ (mixed >>> 15)) >>> 0;
+}
+
 function seededUnit(seed) {
-  let state = seed >>> 0;
+  let state = scrambleSeed(seed);
   return () => {
     state = (1664525 * state + 1013904223) >>> 0;
     return state / 4294967296;

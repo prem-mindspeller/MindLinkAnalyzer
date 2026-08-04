@@ -184,6 +184,31 @@ This is still a pilot default, not a validated timing norm.
   no grading-side code changes were needed -- the new stories flow through
   automatically.
 
+### Parallel-form independence (seeded stimulus generation)
+
+`toneForm` (Tasks 3 and 7) and `visualComparisonForm` (Task 9) generate their
+stimuli from a seeded LCG, and each family's three parallel forms are authored
+with **consecutive** seeds (`3101/3102/3103`, `7101/7102/7103`, ...). A bare
+LCG advances as `state = a*seed + c`, so two seeds one apart differ by only
+`a / 2^32` (~0.0004) on the first draw and by a fixed step on the second. Used
+unscrambled, that made the three "parallel" forms correlated by construction:
+every Task 3 form drew the **same** first target index (18), every Task 7 form
+the same one (33), and their second target indices formed exact arithmetic
+progressions (23/27/31 and 12/15/18). Parallel forms exist precisely so the
+three test-retest sessions are not the same stimulus in disguise, so this
+defeated their purpose, and it also skewed per-phase target density — all three
+Task 7 forms landed 1 target before the rule switch and 4 after.
+
+`scrambleSeed` (a splitmix32 finalizer, in `optimizedBatteryConfig.mjs`) now
+mixes the seed before it enters the LCG. The authored seed constants are
+unchanged; only their expansion is decorrelated. First target indices are now
+distinct across forms, and Task 7's before/after target split is far closer to
+even in two of three forms. Note this changes the generated stimuli for Tasks
+3, 7 and 9 relative to any recording made before the fix — recordings are
+stamped with `stimulus_pack_version`, so mixed-vintage data stays
+distinguishable, but the pack version should be bumped before any data
+collected pre-fix is pooled with data collected after it.
+
 ### Multiple-choice option order
 
 Four tasks render plain-text `<select>` options scored by comparing the

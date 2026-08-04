@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 
 import {
   ACTIVE_BATTERY_PROFILE,
@@ -194,10 +196,25 @@ test('pre-recording instructions do not leak Task-2 encoding and fully state Tas
     [`Start with ${dual.startValue}.`],
   );
   const switchAt = TASK_DEFINITIONS[TASK_IDS.DUAL_TASK].phases[1].start;
-  assert.deepEqual(
-    dual.spokenEvents.filter((event) => event.at === switchAt).map((event) => event.text),
-    ['Switch.'],
-  );
+  // The switch cue marks the phase boundary, but nudgeAwayFromTones may shift
+  // it by up to its search window to keep it from being spoken over a tone
+  // (an unheard "Switch." is worse than a slightly offset one). Assert the
+  // contract that actually holds -- exactly one switch cue, close to the
+  // boundary -- rather than exact equality, which only held by luck of where
+  // the tones happened to fall.
+  for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.DUAL_TASK]) {
+    const switchCues = form.spokenEvents.filter((event) => event.text === 'Switch.');
+    assert.equal(switchCues.length, 1, `${form.id} switch cue count`);
+    assert.ok(
+      Math.abs(switchCues[0].at - switchAt) <= 1.2,
+      `${form.id} switch cue at ${switchCues[0].at}s is too far from the ${switchAt}s boundary`,
+    );
+    // Every post-switch update must still fall after the boundary, or the
+    // before/after classification the switch cost depends on would break.
+    for (const at of form.updateTimes.filter((time) => time > switchAt)) {
+      assert.ok(at > switchCues[0].at, `${form.id}: update at ${at}s must follow the switch cue`);
+    }
+  }
 });
 
 test('every visuospatial turn changes position and orientation without leaving the grid', () => {
@@ -657,5 +674,42 @@ test('the bundled speech-in-noise audio is a calibrated premixed asset with a ma
     const asset = speech.assetsByForm[formId];
     assert.ok(asset?.uri, `${formId} must have an asset uri`);
     assert.match(asset.sha256, /^[0-9a-f]{64}$/, `${formId} must record a sha256`);
+  }
+});
+
+// `acousticallyCalibrated: true` is what unlocks Speech Recognition and Oral
+// Comprehension, and it is a claim about a *measured file*. Recording a hash
+// without checking it means a regenerated WAV (or a profile edited without
+// regenerating) would ship audio whose real SNR nobody verified, while the
+// export still asserts calibration. These two tests close that loop.
+test('every shipped speech-in-noise asset matches the sha256 the profile calibrates against', () => {
+  const speech = audioProfileForTask(TASK_IDS.SPEECH_NOISE);
+  const assetsDir = new URL('../../assets/', import.meta.url);
+  for (const [formId, asset] of Object.entries(speech.assetsByForm)) {
+    const file = new URL(asset.uri, assetsDir);
+    assert.ok(existsSync(file), `${formId}: ${asset.uri} is missing from src/assets`);
+    const actual = createHash('sha256').update(readFileSync(file)).digest('hex');
+    assert.equal(
+      actual, asset.sha256,
+      `${formId}: shipped audio does not match the calibrated sha256 -- regenerate with `
+      + 'tools/build_speech_in_noise_assets.py --target-snr-db 11.5 and update the profile',
+    );
+  }
+});
+
+test('the narration text the audio was generated from still matches the scored passage', () => {
+  // The passage in SPEECH_BASE_FORMS is the answer key's source, while the WAV
+  // is generated from tools/narration/<id>_text.txt. If those drift, the
+  // participant hears one story and is scored against another -- silently, and
+  // with no failing signal anywhere else in the suite.
+  const narrationDir = new URL('../../../tools/narration/', import.meta.url);
+  for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE]) {
+    const file = new URL(`${form.id}_text.txt`, narrationDir);
+    assert.ok(existsSync(file), `${form.id}_text.txt is missing`);
+    assert.equal(
+      readFileSync(file, 'utf8').trim(), form.passage.trim(),
+      `${form.id}: narration text has drifted from the scored passage -- re-export it and `
+      + 'regenerate the narration (see tools/README.md)',
+    );
   }
 });
