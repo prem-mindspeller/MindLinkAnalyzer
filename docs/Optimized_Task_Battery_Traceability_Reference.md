@@ -164,9 +164,13 @@ ability score. Tasks without one are reported descriptively.
 
 ### 6. Divergent Ideation
 
-- **Protocol:** 120 seconds, eyes closed, eyes-closed baseline; silent idea
-  generation in early, middle, and late phases. Ideas are entered after EEG
-  scoring finishes.
+- **Protocol:** 75 seconds (shortened from the page-47 example's 120s),
+  eyes closed, eyes-closed baseline; silent idea generation in early, middle,
+  and late phases of 25 seconds each, matching Task 3's identical 3-phase
+  margin fix (25s/phase keeps a real buffer above the
+  20-contiguous-clean-second floor, rather than sitting exactly on it). The
+  object prompt is still spoken at the very start of the block. Ideas are
+  entered after EEG scoring finishes.
 - **Behavioural evidence:** captured idea count and text; optionally, an
   external rubric can supply relevant-idea count, originality, and category
   diversity.
@@ -181,9 +185,12 @@ ability score. Tasks without one are reported descriptively.
 
 ### 7. Dual-Task Performance and Rule Switching
 
-- **Protocol:** 120 seconds, eyes closed, eyes-closed baseline; target-tone
-  counting and numerical updating run together, with a rule switch after 60
-  seconds.
+- **Protocol:** 60 seconds (shortened from the page-47 example's 120s), eyes
+  closed, eyes-closed baseline; target-tone counting and numerical updating
+  run together, with a rule switch after 30 seconds. Unlike other shortened
+  tasks, the 3+3 update structure was kept rather than reduced, so its
+  spacing compresses uniformly (~20s -> ~9-10s apart) instead of being
+  preserved; the tone stream was trimmed to preserve its original pacing.
 - **Behavioural evidence:** target-count error, numerical-update error,
   optional dual-task cost, and optional switch cost. Both final outputs must
   be exact. Cost values need matched Tasks 2 and 3 reference metrics and

@@ -101,18 +101,37 @@ const taskTimings = {
     ],
   },
   [TASK.IDEATION]: {
-    durationSeconds: 120,
+    // Shortened from the page-47 example's 120s to 75s (25s/phase), matching
+    // Task 3's same 3-equal-phase shape: a flat 60s (20s/phase) would sit
+    // exactly on the 20-contiguous-clean-second analysis floor with zero
+    // slack, so any brief signal artifact in a phase would zero out that
+    // phase's early/middle/late comparison. 25s/phase keeps a real buffer.
+    // minimumRelevantIdeas/minimumCategoryDiversity/minimumOriginality are
+    // scored against the whole response, not per-phase, so behavioral
+    // scoring itself was never affected by this -- only the EEG phase
+    // comparison carries the risk this margin protects against.
+    durationSeconds: 75,
     phases: [
-      phase('early', 'Early ideation', 0, 40),
-      phase('middle', 'Middle ideation', 40, 80),
-      phase('late', 'Late ideation', 80, 120),
+      phase('early', 'Early ideation', 0, 25),
+      phase('middle', 'Middle ideation', 25, 50),
+      phase('late', 'Late ideation', 50, 75),
     ],
   },
   [TASK.DUAL_TASK]: {
-    durationSeconds: 120,
+    // Shortened from the page-47 example's 120s to 60s per explicit user
+    // request. The 3+3 update structure was kept (not reduced), so its
+    // spacing compresses uniformly by half (~20s -> ~9-10s apart) rather
+    // than being preserved -- unlike most other tasks in this batch, this is
+    // a deliberate choice to accept a tighter pace over losing trials, since
+    // switchCost's threshold derivation assumes exactly 3 post-switch
+    // updates (see thresholds[DUAL_TASK] below) and changing that count
+    // would have required re-deriving it. The tone stream was trimmed the
+    // same way as Task 3's, to preserve its pacing -- see dualTaskForm calls
+    // in optimizedBatteryConfig.mjs.
+    durationSeconds: 60,
     phases: [
-      phase('before_switch', 'Before rule switch', 0, 60),
-      phase('after_switch', 'After rule switch', 60, 120),
+      phase('before_switch', 'Before rule switch', 0, 30),
+      phase('after_switch', 'After rule switch', 30, 60),
     ],
   },
   [TASK.ANOMALY]: {

@@ -110,8 +110,21 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # since only 18s of span is available once the phase itself is 30s
     # (see ROUTE_FORMS in optimizedBatteryConfig.mjs).
     CANONICAL_TASKS[5]["id"]: 60,
-    CANONICAL_TASKS[6]["id"]: 120,
-    CANONICAL_TASKS[7]["id"]: 120,
+    # Task 6 shortened from the page-47 example's 120s to 75s (25s/phase),
+    # matching Task 3's same 3-equal-phase shape: a flat 60s (20s/phase) would
+    # sit exactly on the 20-contiguous-clean-second floor with zero slack.
+    # Behavioral scoring (minimumRelevantIdeas/etc.) is against the whole
+    # response, not per-phase, so only the EEG early/middle/late comparison
+    # ever carried this risk -- 25s/phase removes it.
+    CANONICAL_TASKS[6]["id"]: 75,
+    # Task 7 shortened from the page-47 example's 120s to 60s. Unlike other
+    # tasks in this batch, the 3+3 update structure was kept rather than
+    # reduced (per explicit user request), so its spacing compresses
+    # uniformly by half (~20s -> ~9-10s apart) instead of being preserved.
+    # The tone stream was trimmed the same way as Task 3's, to preserve
+    # pacing. maximumSwitchCost's threshold did not need re-deriving, since
+    # it assumes exactly 3 post-switch updates and that count didn't change.
+    CANONICAL_TASKS[7]["id"]: 60,
     CANONICAL_TASKS[8]["id"]: 90,
     CANONICAL_TASKS[9]["id"]: 60,
     CANONICAL_TASKS[10]["id"]: 75,

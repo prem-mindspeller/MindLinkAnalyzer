@@ -54,10 +54,10 @@ test('every canonical task resolves all runner configs (no missing-profile crash
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
-  // Tasks 1, 2, 4 and 5 deliberately shortened from the page-47 example's 90s
-  // to 60s; Task 3 shortened from 120s to 75s (25s/phase, not 60s -- see
-  // optimizedBatteryProfile.mjs for why 3 equal 20s phases would be too tight).
-  const expectedDurations = [60, 60, 75, 60, 60, 120, 120, 90, 60, 75, 120, 180];
+  // Tasks 1, 2, 4, 5 and 7 deliberately shortened from the page-47 example's
+  // 90s/120s to 60s; Tasks 3 and 6 (both 3-equal-phase tasks) shortened to
+  // 75s rather than a flat 60s, for the same 20s-phase-floor-margin reason.
+  const expectedDurations = [60, 60, 75, 60, 60, 75, 60, 90, 60, 75, 120, 180];
   assert.deepEqual(
     Object.values(TASK_DEFINITIONS)
       .sort((left, right) => left.number - right.number)
@@ -214,8 +214,21 @@ test('every visuospatial turn changes position and orientation without leaving t
 test('dual-task forms keep canonical ids and Task-3-comparable tone streams', () => {
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.DUAL_TASK]) {
     assert.match(form.id, /^dual_[abc]$/);
-    assert.ok(form.toneEvents.length >= 65 && form.toneEvents.length <= 75, form.id);
+    // Trimmed from the 120s original's 65-75 tones to preserve pacing at 60s.
+    assert.ok(form.toneEvents.length >= 30 && form.toneEvents.length <= 38, form.id);
     assert.equal(form.toneEvents.filter((event) => event.target).length, form.targetCount, form.id);
+  }
+});
+
+test('dual-task spoken cues never play close enough to a tone to overlap it', () => {
+  // The tone stream and the spoken update/switch cues are scheduled
+  // independently, so nothing guarantees they land apart -- this is what
+  // dualTaskForm's nudgeAwayFromTones step is responsible for.
+  for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.DUAL_TASK]) {
+    for (const spoken of form.spokenEvents) {
+      const nearestGap = Math.min(...form.toneEvents.map((tone) => Math.abs(tone.at - spoken.at)));
+      assert.ok(nearestGap >= 0.6, `${form.id} "${spoken.text}" at ${spoken.at}s is only ${nearestGap.toFixed(2)}s from a tone`);
+    }
   }
 });
 
@@ -488,10 +501,10 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
 
-// Page 47 durations (Tasks 1, 2, 4 and 5 deliberately shortened to 60s, Task 3
-// to 75s -- see optimizedBatteryProfile.mjs), the eyes-open/closed slide, and
-// each task's "can provide evidence for" / "does not support direct claims
-// regarding" lists. The backend repeats this table in
+// Page 47 durations (Tasks 1, 2, 4, 5 and 7 deliberately shortened to 60s,
+// Tasks 3 and 6 to 75s -- see optimizedBatteryProfile.mjs), the
+// eyes-open/closed slide, and each task's "can provide evidence for" / "does
+// not support direct claims regarding" lists. The backend repeats this table in
 // neuroprofile_traceability.py, so drift here silently desynchronizes
 // acquisition from ability gating.
 const PDF_TASK_CONTRACT = [
@@ -510,10 +523,10 @@ const PDF_TASK_CONTRACT = [
   [5, TASK_IDS.VISUOSPATIAL, 60, 'open', 'eyes_open',
     ['Visualization', 'Spatial Orientation'],
     ['Perceptual Speed', 'Speed of Closure', 'Flexibility of Closure', 'Reaction Time', 'Visual sensory abilities']],
-  [6, TASK_IDS.IDEATION, 120, 'closed', 'eyes_closed',
+  [6, TASK_IDS.IDEATION, 75, 'closed', 'eyes_closed',
     ['Category Flexibility', 'Fluency of Ideas', 'Originality'],
     ['Written Expression', 'Oral Expression', 'Inductive Reasoning', 'Deductive Reasoning', 'Visualization']],
-  [7, TASK_IDS.DUAL_TASK, 120, 'closed', 'eyes_closed',
+  [7, TASK_IDS.DUAL_TASK, 60, 'closed', 'eyes_closed',
     ['Time Sharing', 'Category Flexibility', 'Deductive Reasoning', 'Selective Attention', 'Information Ordering'],
     ['Mathematical Reasoning', 'Number Facility', 'Memorization', 'Reaction Time', 'Auditory Attention']],
   [8, TASK_IDS.ANOMALY, 90, 'open', 'eyes_open',

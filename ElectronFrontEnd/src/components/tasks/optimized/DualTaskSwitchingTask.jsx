@@ -55,6 +55,14 @@ function IdleExtras({ previewingTone, onPreviewTone, previewingSpeech, onPreview
 function ResponseFields({ response, setResponse }) {
   return (
     <div className="optimized-response-grid">
+      <ResponseField label="Final number">
+        <input
+          type="number"
+          required
+          value={response.finalValue || ''}
+          onChange={(event) => setResponse({ ...response, finalValue: event.target.value })}
+        />
+      </ResponseField>
       <ResponseField label="High-tone count">
         <input
           type="number"
@@ -62,14 +70,6 @@ function ResponseFields({ response, setResponse }) {
           required
           value={response.targetCount || ''}
           onChange={(event) => setResponse({ ...response, targetCount: event.target.value })}
-        />
-      </ResponseField>
-      <ResponseField label="Final number">
-        <input
-          type="number"
-          required
-          value={response.finalValue || ''}
-          onChange={(event) => setResponse({ ...response, finalValue: event.target.value })}
         />
       </ResponseField>
     </div>

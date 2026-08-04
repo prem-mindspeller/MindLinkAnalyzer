@@ -59,16 +59,6 @@ function Stimulus({ form, elapsedSeconds }) {
 function ResponseFields({ response, setResponse }) {
   return (
     <div className="optimized-response-grid">
-      <ResponseField label="Final column (1–5)">
-        <input
-          type="number"
-          min="1"
-          max="5"
-          required
-          value={response.x == null ? '' : Number(response.x) + 1}
-          onChange={(event) => setResponse({ ...response, x: Number(event.target.value) - 1 })}
-        />
-      </ResponseField>
       <ResponseField label="Final row (1–5)">
         <input
           type="number"
@@ -77,6 +67,16 @@ function ResponseFields({ response, setResponse }) {
           required
           value={response.y == null ? '' : Number(response.y) + 1}
           onChange={(event) => setResponse({ ...response, y: Number(event.target.value) - 1 })}
+        />
+      </ResponseField>
+      <ResponseField label="Final column (1–5)">
+        <input
+          type="number"
+          min="1"
+          max="5"
+          required
+          value={response.x == null ? '' : Number(response.x) + 1}
+          onChange={(event) => setResponse({ ...response, x: Number(event.target.value) - 1 })}
         />
       </ResponseField>
       <ResponseField label="Final orientation">

@@ -641,19 +641,41 @@ const IDEATION_FORMS = [
   ideationForm('ideas_c', 'A shoelace.'),
 ];
 
+// The tone stream and the spoken update/switch cues are scheduled
+// independently, so they can land close enough to overlap in playback. Nudges
+// the audio-only copy of a cue's time to the nearest moment that's clear of
+// every tone, searching outward in small steps; never touches the logical
+// updateTimes used for scoring (before/after-switch classification), only
+// when the cue is actually spoken.
+function nudgeAwayFromTones(time, toneEvents, minGapSeconds = 0.6, maxSearchSeconds = 1.2) {
+  const farEnoughFromEveryTone = (candidate) => toneEvents.every(
+    (tone) => Math.abs(tone.at - candidate) >= minGapSeconds,
+  );
+  if (farEnoughFromEveryTone(time)) return time;
+  for (let delta = 0.1; delta <= maxSearchSeconds; delta += 0.1) {
+    if (farEnoughFromEveryTone(time + delta)) return Number((time + delta).toFixed(2));
+    if (time - delta >= 0 && farEnoughFromEveryTone(time - delta)) return Number((time - delta).toFixed(2));
+  }
+  return time;
+}
+
 function dualTaskForm(id, seed, toneCount, targetCount, startValue, beforeDelta, afterDelta) {
   const definition = TASK_DEFINITIONS[TASK_IDS.DUAL_TASK];
   const switchAt = definition.phases[1].start;
   const tones = toneForm(`${id}_tones`, seed, toneCount, targetCount, definition.duration);
-  // Few, widely spaced updates (~20 s apart, with a clear gap around the switch
-  // cue) keep the running total easy and unhurried.
-  const beforeUpdateTimes = [14, 34, 52];
-  const afterUpdateTimes = [74, 94, 112];
+  // Update times are exactly half of the original 60s-per-phase offsets
+  // (14/34/52 and 74/94/112), scaled to the current 30s phases so the same
+  // relative structure -- gap before the first update, spacing between
+  // updates, gap before the switch cue -- carries over, just compressed 2x
+  // (~20s -> ~9-10s apart) rather than dropping a trial.
+  const beforeUpdateTimes = [7, 17, 26];
+  const afterUpdateTimes = [37, 47, 56];
   const updateTimes = [...beforeUpdateTimes, ...afterUpdateTimes];
   const finalValue = updateTimes.reduce(
     (value, at) => value + (at < switchAt ? beforeDelta : afterDelta),
     startValue,
   );
+  const speak = (at) => nudgeAwayFromTones(at, tones.toneEvents);
   return {
     ...tones,
     id,
@@ -663,9 +685,9 @@ function dualTaskForm(id, seed, toneCount, targetCount, startValue, beforeDelta,
     updateTimes,
     finalValue,
     spokenEvents: [
-      { at: 0, text: `Start with ${startValue}.` },
-      ...updateTimes.map((at) => ({ at, text: 'Update.' })),
-      { at: switchAt, text: 'Switch.' },
+      { at: speak(0), text: `Start with ${startValue}.` },
+      ...updateTimes.map((at) => ({ at: speak(at), text: 'Update.' })),
+      { at: speak(switchAt), text: 'Switch.' },
     ],
   };
 }
@@ -675,11 +697,13 @@ function dualTaskForm(id, seed, toneCount, targetCount, startValue, beforeDelta,
 // addition-only running total. This preserves the report's ability set
 // (Time Sharing, Deductive Reasoning, Information Ordering) without the mental
 // arithmetic the report excludes (Mathematical Reasoning, Number Facility).
-// Fewer target tones (10) further lighten the concurrent count.
+// Tone/target counts reduced from the 120s original (70/10, 68/10, 72/10) to
+// preserve the original average inter-tone interval (~1.64-1.74s, same
+// approach as Task 3's AUDITORY_FORMS) rather than compressing it.
 const DUAL_FORMS = [
-  dualTaskForm('dual_a', 7101, 70, 10, 0, 1, 2),
-  dualTaskForm('dual_b', 7102, 68, 10, 4, 2, 1),
-  dualTaskForm('dual_c', 7103, 72, 10, 10, 1, 2),
+  dualTaskForm('dual_a', 7101, 34, 5, 0, 1, 2),
+  dualTaskForm('dual_b', 7102, 33, 5, 4, 2, 1),
+  dualTaskForm('dual_c', 7103, 35, 5, 10, 1, 2),
 ];
 
 const VALID_CODES = ['A-47', 'B-18', 'C-62', 'D-05', 'E-91', 'F-33', 'G-74', 'H-26', 'J-80', 'K-14', 'L-59', 'M-42', 'N-07', 'P-68', 'Q-31', 'R-95', 'S-24', 'T-76', 'U-11', 'V-53', 'W-89', 'X-36', 'Y-20', 'Z-64'];
@@ -1048,7 +1072,7 @@ export function taskIntroduction(taskId, form) {
       `The arrow starts at a specific cell, facing a specific direction.`,
       'The arrow moves one cell at a time, it can also change its direction. Follow it with your eyes.',
       'Rows are counted from top to bottom. Columns are counted from left to right.',
-      'At the end, give the arrow’s final column, row, and direction.',
+      'At the end, give the arrow’s final row, column and direction.',
     ],
     [TASK_IDS.IDEATION]: () => [
       'Think of as many different uses for a single object as you can.',

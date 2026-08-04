@@ -30,8 +30,8 @@ completion marker cannot unlock a new run.
 | 3 | `auditory_target_counting` | closed | eyes closed | 75 |
 | 4 | `semantic_induction_category_switching` | closed | eyes closed | 60 |
 | 5 | `visuospatial_transformation_orientation` | open | eyes open | 60 |
-| 6 | `divergent_ideation` | closed | eyes closed | 120 |
-| 7 | `dual_task_rule_switching` | closed | eyes closed | 120 |
+| 6 | `divergent_ideation` | closed | eyes closed | 75 |
+| 7 | `dual_task_rule_switching` | closed | eyes closed | 60 |
 | 8 | `rule_based_anomaly_detection` | open | eyes open | 90 |
 | 9 | `rapid_visual_comparison` | open | eyes open | 60 |
 | 10 | `pattern_closure_visual_noise` | open | eyes open | 75 |
@@ -48,9 +48,9 @@ window, the active candidate/pilot profile extends the stimulus pacing and
 phase plan without changing the canonical task identity. Those extensions are
 pilot defaults and must not be described as validated timing norms.
 
-Tasks 1, 2, 3, 4 and 5 are deliberate exceptions in the other direction:
-their active blocks are shorter than the page-47 example. This is still a
-pilot default, not a validated timing norm.
+Tasks 1, 2, 3, 4, 5, 6 and 7 are deliberate exceptions in the other
+direction: their active blocks are shorter than the page-47 example. This is
+still a pilot default, not a validated timing norm.
 
 - Task 1: operation count was first reduced (6 lower-load + 10 higher-load ->
   4 + 7, the 90s->60s conversion) to keep the per-operation pace effectively
@@ -85,6 +85,29 @@ pilot default, not a validated timing norm.
   pace stays close to the original (7s -> 6.75s); lower-density pace still
   compresses (11s -> 9s) since only 18s of span is available for it once the
   phase itself is 30s.
+- Task 6: initially shortened to a flat 60s (3x20s phases), then bumped to
+  75s (25s/phase) to match Task 3's same 3-equal-phase margin fix, once it
+  became clear the zero-slack floor risk applied here too. The object prompt
+  is still spoken at t=0 as required; nothing else is scheduled across the
+  block, so there was no pacing to preserve -- the phase floor was the only
+  real trade-off, and it affects the EEG early/middle/late comparison only
+  (behavioral scoring is against the whole response, not per-phase).
+- Task 7: unlike Tasks 1-6, the 3+3 update structure (per phase, before and
+  after the rule switch) was deliberately kept rather than reduced, per
+  explicit user request, so its spacing compresses uniformly by half
+  (~20s -> ~9-10s apart) instead of being preserved. The tone stream was
+  trimmed the same way as Task 3's (70/10, 68/10, 72/10 -> 34/5, 33/5, 35/5)
+  to preserve its ~1.64-1.74s pacing. `maximumSwitchCost` did not need
+  re-deriving: it assumes exactly 3 post-switch updates, and that count
+  didn't change -- only their timing did.
+
+  The tone stream and the spoken "Start"/"Update"/"Switch" cues are scheduled
+  independently, so after the 60s conversion some cues landed close enough to
+  a tone to overlap it in playback. `nudgeAwayFromTones` (in
+  optimizedBatteryConfig.mjs) shifts only the audio-scheduling copy of each
+  cue's time to the nearest moment at least 0.6s from every tone -- the
+  logical `updateTimes` used for before/after-switch scoring are untouched,
+  so this is audio-only and doesn't affect correctness.
 
 ### Versioned configuration contract
 

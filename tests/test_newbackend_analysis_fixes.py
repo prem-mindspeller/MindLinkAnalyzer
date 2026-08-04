@@ -1667,9 +1667,9 @@ _PDF_TASK_CONTRACT = {
         "Inductive Reasoning", "Category Flexibility"]),
     5: ("visuospatial_transformation_orientation", 60, "eyes_open", [
         "Visualization", "Spatial Orientation"]),
-    6: ("divergent_ideation", 120, "eyes_closed", [
+    6: ("divergent_ideation", 75, "eyes_closed", [
         "Category Flexibility", "Fluency of Ideas", "Originality"]),
-    7: ("dual_task_rule_switching", 120, "eyes_closed", [
+    7: ("dual_task_rule_switching", 60, "eyes_closed", [
         "Time Sharing", "Category Flexibility", "Deductive Reasoning",
         "Selective Attention", "Information Ordering"]),
     8: ("rule_based_anomaly_detection", 90, "eyes_open", [
