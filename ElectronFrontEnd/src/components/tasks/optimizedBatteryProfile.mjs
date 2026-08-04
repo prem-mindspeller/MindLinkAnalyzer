@@ -135,10 +135,18 @@ const taskTimings = {
     ],
   },
   [TASK.ANOMALY]: {
-    durationSeconds: 90,
+    // Shortened from the page-47 example's 90s to 60s per explicit user
+    // request. entryIntervalSeconds is a fixed 2s cadence, not derived from
+    // dividing a span across a count, so the pace is automatically
+    // unchanged -- entryCount just drops (45 -> 30) along with duration. The
+    // anomaly slot positions (which entries are anomalies vs valid codes)
+    // were rescaled to the new phase boundaries and reduced proportionally
+    // (3 lower + 6 higher -> 2 lower + 4 higher) -- see anomalyForm in
+    // optimizedBatteryConfig.mjs.
+    durationSeconds: 60,
     phases: [
-      phase('lower_density', 'Lower anomaly density', 0, 45),
-      phase('higher_density', 'Higher anomaly density', 45, 90),
+      phase('lower_density', 'Lower anomaly density', 0, 30),
+      phase('higher_density', 'Higher anomaly density', 30, 60),
     ],
   },
   [TASK.VISUAL_COMPARISON]: {

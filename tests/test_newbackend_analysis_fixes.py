@@ -1672,7 +1672,7 @@ _PDF_TASK_CONTRACT = {
     7: ("dual_task_rule_switching", 60, "eyes_closed", [
         "Time Sharing", "Category Flexibility", "Deductive Reasoning",
         "Selective Attention", "Information Ordering"]),
-    8: ("rule_based_anomaly_detection", 90, "eyes_open", [
+    8: ("rule_based_anomaly_detection", 60, "eyes_open", [
         "Problem Sensitivity", "Deductive Reasoning", "Selective Attention",
         "Information Ordering"]),
     9: ("rapid_visual_comparison", 60, "eyes_open", [

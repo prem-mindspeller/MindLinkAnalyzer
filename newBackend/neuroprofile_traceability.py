@@ -125,7 +125,14 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # pacing. maximumSwitchCost's threshold did not need re-deriving, since
     # it assumes exactly 3 post-switch updates and that count didn't change.
     CANONICAL_TASKS[7]["id"]: 60,
-    CANONICAL_TASKS[8]["id"]: 90,
+    # Task 8 shortened from the page-47 example's 90s to 60s. entryIntervalSeconds
+    # is a fixed 2s cadence (not derived from a span/count division), so the
+    # pace was automatically unchanged -- entryCount just dropped (45 -> 30).
+    # Anomaly slot positions were rescaled to the new phase boundaries and
+    # reduced proportionally (3 lower + 6 higher -> 2 + 4) to keep the
+    # lower/higher density ratio close to the original (see anomalyForm in
+    # optimizedBatteryConfig.mjs).
+    CANONICAL_TASKS[8]["id"]: 60,
     CANONICAL_TASKS[9]["id"]: 60,
     CANONICAL_TASKS[10]["id"]: 75,
     CANONICAL_TASKS[11]["id"]: 120,

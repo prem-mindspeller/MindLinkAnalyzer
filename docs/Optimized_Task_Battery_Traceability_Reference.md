@@ -207,8 +207,12 @@ ability score. Tasks without one are reported descriptively.
 
 ### 8. Rule-Based Anomaly Detection
 
-- **Protocol:** 90 seconds, eyes open, eyes-open baseline; monitor a visual
-  code stream with lower then higher anomaly density, 45 seconds each.
+- **Protocol:** 60 seconds (shortened from the page-47 example's 90s), eyes
+  open, eyes-open baseline; monitor a visual code stream with lower then
+  higher anomaly density, 30 seconds each. The 2s code-entry cadence is
+  unchanged; only the number of entries (and anomalies within them) dropped
+  with the shorter duration, keeping the density ratio between phases close
+  to the original.
 - **Behavioural evidence:** anomaly count, count error, selected anomaly
   types, expected types, exact type-recall flag, and optional confidence.
   The count and complete type set must match.

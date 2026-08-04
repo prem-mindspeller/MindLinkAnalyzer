@@ -54,10 +54,11 @@ test('every canonical task resolves all runner configs (no missing-profile crash
 });
 
 test('all recording blocks and declared analysis phases respect protocol timing', () => {
-  // Tasks 1, 2, 4, 5 and 7 deliberately shortened from the page-47 example's
-  // 90s/120s to 60s; Tasks 3 and 6 (both 3-equal-phase tasks) shortened to
-  // 75s rather than a flat 60s, for the same 20s-phase-floor-margin reason.
-  const expectedDurations = [60, 60, 75, 60, 60, 75, 60, 90, 60, 75, 120, 180];
+  // Tasks 1, 2, 4, 5, 7 and 8 deliberately shortened from the page-47
+  // example's 90s/120s to 60s; Tasks 3 and 6 (both 3-equal-phase tasks)
+  // shortened to 75s rather than a flat 60s, for the same
+  // 20s-phase-floor-margin reason.
+  const expectedDurations = [60, 60, 75, 60, 60, 75, 60, 60, 60, 75, 120, 180];
   assert.deepEqual(
     Object.values(TASK_DEFINITIONS)
       .sort((left, right) => left.number - right.number)
@@ -352,7 +353,8 @@ test('stimulus schedules cover the corrected continuous windows', () => {
     assert.ok(form.moves.at(-1).at >= 55, form.id);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.ANOMALY]) {
-    assert.equal(form.entries.length * form.entryIntervalSeconds, 90, form.id);
+    // Task 8 is 60s (shortened from 90s); entryIntervalSeconds is unchanged.
+    assert.equal(form.entries.length * form.entryIntervalSeconds, 60, form.id);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE]) {
     const wordCount = form.passage.trim().split(/\s+/).length;
@@ -501,7 +503,7 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
 });
 
-// Page 47 durations (Tasks 1, 2, 4, 5 and 7 deliberately shortened to 60s,
+// Page 47 durations (Tasks 1, 2, 4, 5, 7 and 8 deliberately shortened to 60s,
 // Tasks 3 and 6 to 75s -- see optimizedBatteryProfile.mjs), the
 // eyes-open/closed slide, and each task's "can provide evidence for" / "does
 // not support direct claims regarding" lists. The backend repeats this table in
@@ -529,7 +531,7 @@ const PDF_TASK_CONTRACT = [
   [7, TASK_IDS.DUAL_TASK, 60, 'closed', 'eyes_closed',
     ['Time Sharing', 'Category Flexibility', 'Deductive Reasoning', 'Selective Attention', 'Information Ordering'],
     ['Mathematical Reasoning', 'Number Facility', 'Memorization', 'Reaction Time', 'Auditory Attention']],
-  [8, TASK_IDS.ANOMALY, 90, 'open', 'eyes_open',
+  [8, TASK_IDS.ANOMALY, 60, 'open', 'eyes_open',
     ['Problem Sensitivity', 'Deductive Reasoning', 'Selective Attention', 'Information Ordering'],
     ['Inductive Reasoning', 'Perceptual Speed', 'Reaction Time', 'Speed of Closure', 'Flexibility of Closure']],
   [9, TASK_IDS.VISUAL_COMPARISON, 60, 'open', 'eyes_open',

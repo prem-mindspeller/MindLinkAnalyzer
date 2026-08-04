@@ -32,7 +32,7 @@ completion marker cannot unlock a new run.
 | 5 | `visuospatial_transformation_orientation` | open | eyes open | 60 |
 | 6 | `divergent_ideation` | closed | eyes closed | 75 |
 | 7 | `dual_task_rule_switching` | closed | eyes closed | 60 |
-| 8 | `rule_based_anomaly_detection` | open | eyes open | 90 |
+| 8 | `rule_based_anomaly_detection` | open | eyes open | 60 |
 | 9 | `rapid_visual_comparison` | open | eyes open | 60 |
 | 10 | `pattern_closure_visual_noise` | open | eyes open | 75 |
 | 11 | `speech_in_noise_comprehension` | closed | eyes closed | 120 |
@@ -48,7 +48,7 @@ window, the active candidate/pilot profile extends the stimulus pacing and
 phase plan without changing the canonical task identity. Those extensions are
 pilot defaults and must not be described as validated timing norms.
 
-Tasks 1, 2, 3, 4, 5, 6 and 7 are deliberate exceptions in the other
+Tasks 1, 2, 3, 4, 5, 6, 7 and 8 are deliberate exceptions in the other
 direction: their active blocks are shorter than the page-47 example. This is
 still a pilot default, not a validated timing norm.
 
@@ -108,6 +108,13 @@ still a pilot default, not a validated timing norm.
   cue's time to the nearest moment at least 0.6s from every tone -- the
   logical `updateTimes` used for before/after-switch scoring are untouched,
   so this is audio-only and doesn't affect correctness.
+- Task 8: entryIntervalSeconds is a fixed 2s cadence, not derived from
+  dividing a span across a count, so the pace was automatically unchanged --
+  entryCount simply dropped from 45 to 30 along with the shorter duration.
+  Anomaly slot positions were rescaled to the new phase boundaries and
+  reduced proportionally (3 lower-density + 6 higher-density -> 2 + 4) to
+  keep the density *ratio* between phases -- the actual point of this task --
+  close to the original (~13% -> ~27%, roughly double either way).
 
 ### Versioned configuration contract
 

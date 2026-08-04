@@ -155,7 +155,7 @@ def test_candidate_protocol_profile_uses_normative_p47_recording_durations():
         "visuospatial_transformation_orientation": 60,
         "divergent_ideation": 75,
         "dual_task_rule_switching": 60,
-        "rule_based_anomaly_detection": 90,
+        "rule_based_anomaly_detection": 60,
         "rapid_visual_comparison": 60,
         "pattern_closure_visual_noise": 75,
         "speech_in_noise_comprehension": 120,

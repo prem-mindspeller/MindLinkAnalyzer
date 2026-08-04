@@ -720,8 +720,13 @@ function anomalyForm(id, offset) {
   const presentation = taskPresentationFor(TASK_IDS.ANOMALY);
   const duration = TASK_DEFINITIONS[TASK_IDS.ANOMALY].duration;
   const entryCount = Math.ceil(duration / presentation.entryIntervalSeconds);
-  const lowerAnomalySlots = [8, 16, 22];
-  const higherAnomalySlots = [25, 29, 33, 37, 41, 44];
+  // Rescaled from the 90s original's [8,16,22]/[25,29,33,37,41,44] (entryCount
+  // 45, phase boundary at index 23) to fit the 60s task's entryCount 30 and
+  // phase boundary at index 15, reduced proportionally (3 lower + 6 higher ->
+  // 2 + 4) so the density *ratio* between phases -- the actual point of this
+  // task -- stays close to the original (~13% -> ~27%, roughly double).
+  const lowerAnomalySlots = [5, 11];
+  const higherAnomalySlots = [17, 21, 24, 28];
   const anomalySlots = [...lowerAnomalySlots, ...higherAnomalySlots]
     .filter((index) => index < entryCount);
   const entries = [];
