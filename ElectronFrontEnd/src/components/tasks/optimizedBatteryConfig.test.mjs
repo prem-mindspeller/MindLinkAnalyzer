@@ -17,6 +17,7 @@ import {
   maximumWordsFor,
   normalizeText,
   pacedPassageChunk,
+  randomizeMultipleChoiceOrder,
   resolveSessionDepth,
   scoringRubricFor,
   scoringThresholdsFor,
@@ -404,8 +405,7 @@ test('word counts are correct for every script the app is localized in', () => {
   assert.equal(countWords('!!! ???'), 0);
 });
 
-test('every multiple-choice answer is selectable and not guessable by position', () => {
-  const correctPositions = { mainIdea: new Set(), keyDetail: new Set() };
+test('every multiple-choice answer is selectable and its option list has no duplicates', () => {
   for (const taskId of [TASK_IDS.SPEECH_NOISE, TASK_IDS.WRITTEN]) {
     for (const form of FORM_REGISTRY_FOR_TESTS[taskId]) {
       // The scorer compares the response to `mainIdea`/`keyDetail`, so an
@@ -413,7 +413,6 @@ test('every multiple-choice answer is selectable and not guessable by position',
       // task could never be passed.
       assert.ok(form.mainIdeaOptions.includes(form.mainIdea), `${form.id} main idea`);
       assert.equal(new Set(form.mainIdeaOptions).size, form.mainIdeaOptions.length, `${form.id} main idea duplicates`);
-      correctPositions.mainIdea.add(form.mainIdeaOptions.indexOf(form.mainIdea));
 
       if (!form.keyDetailOptions) continue;
       assert.ok(form.keyDetailOptions.includes(form.keyDetail), `${form.id} key detail`);
@@ -421,13 +420,57 @@ test('every multiple-choice answer is selectable and not guessable by position',
       // Four options rather than three keep the blind-guess rate at 25% for the
       // one item that decides Speech Recognition.
       assert.equal(form.keyDetailOptions.length, 4, `${form.id} key detail option count`);
-      correctPositions.keyDetail.add(form.keyDetailOptions.indexOf(form.keyDetail));
     }
   }
-  // Options render in array order, so a correct answer parked at the same index
-  // in every form is learnable across the three sessions.
-  assert.ok(correctPositions.mainIdea.size > 1, 'main-idea answers must not share one position');
-  assert.ok(correctPositions.keyDetail.size > 1, 'key-detail answers must not share one position');
+  for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SEMANTIC]) {
+    assert.ok(form.ruleOptions.includes(form.ruleOne), `${form.id} rule one`);
+    assert.equal(new Set(form.ruleOptions).size, form.ruleOptions.length, `${form.id} rule one duplicates`);
+    assert.ok(form.secondRuleOptions.includes(form.ruleTwo), `${form.id} rule two`);
+    assert.equal(new Set(form.secondRuleOptions).size, form.secondRuleOptions.length, `${form.id} rule two duplicates`);
+  }
+  for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.CLOSURE]) {
+    assert.ok(form.options.includes(form.target), `${form.id} target`);
+    assert.equal(new Set(form.options).size, form.options.length, `${form.id} option duplicates`);
+  }
+});
+
+// Position-learnability is now guarded by actual per-attempt randomization
+// (randomizeMultipleChoiceOrder, applied once per task attempt in
+// OptimizedBatteryTask.jsx) rather than by hand-varying each form's authored
+// order -- a static order, however varied, is still the same on every replay
+// of a given form and was found clustering the correct answer at index 0 in
+// every SEMANTIC and CLOSURE form.
+test('multiple-choice randomization preserves content and actually varies position', () => {
+  const cases = [
+    [TASK_IDS.SEMANTIC, 'ruleOptions', 'ruleOne'],
+    [TASK_IDS.SEMANTIC, 'secondRuleOptions', 'ruleTwo'],
+    [TASK_IDS.CLOSURE, 'options', 'target'],
+    [TASK_IDS.SPEECH_NOISE, 'mainIdeaOptions', 'mainIdea'],
+    [TASK_IDS.SPEECH_NOISE, 'keyDetailOptions', 'keyDetail'],
+    [TASK_IDS.WRITTEN, 'mainIdeaOptions', 'mainIdea'],
+  ];
+  for (const [taskId, optionsField, answerField] of cases) {
+    const form = FORM_REGISTRY_FOR_TESTS[taskId][0];
+    const originalOptions = [...form[optionsField]];
+    const positionsSeen = new Set();
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const randomized = randomizeMultipleChoiceOrder(taskId, form);
+      // Same items, just reordered -- content and correctness never change.
+      assert.deepEqual([...randomized[optionsField]].sort(), [...originalOptions].sort(), `${taskId}/${optionsField} content`);
+      assert.ok(randomized[optionsField].includes(form[answerField]), `${taskId}/${optionsField} still has the answer`);
+      positionsSeen.add(randomized[optionsField].indexOf(form[answerField]));
+    }
+    // The original form object is never mutated by randomization.
+    assert.deepEqual(form[optionsField], originalOptions, `${taskId}/${optionsField} source untouched`);
+    // Over 100 attempts, an unbiased shuffle of >= 3 options should not land
+    // the answer on the same index every single time (astronomically
+    // unlikely by chance -- this is the actual regression guard for "always
+    // first").
+    assert.ok(positionsSeen.size > 1, `${taskId}/${optionsField} answer position never varied across 100 attempts`);
+  }
+  // A task with no configured multiple-choice fields is returned unchanged.
+  const numerical = FORM_REGISTRY_FOR_TESTS[TASK_IDS.NUMERICAL][0];
+  assert.equal(randomizeMultipleChoiceOrder(TASK_IDS.NUMERICAL, numerical), numerical);
 });
 
 test('the summary word ceiling widens only for scripts that segment more finely', () => {

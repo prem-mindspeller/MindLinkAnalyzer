@@ -19,6 +19,7 @@ import {
   taskPresentationFor,
   taskFormForSession,
   taskIntroduction,
+  randomizeMultipleChoiceOrder,
 } from './optimizedBatteryConfig.mjs';
 import {
   initialResponseFor,
@@ -187,7 +188,14 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   const { t } = useTranslation();
   const definition = TASK_DEFINITIONS[taskId];
   const taskModule = useMemo(() => taskModuleFor(taskId), [taskId]);
-  const form = useMemo(() => taskFormForSession(taskId, sessionDepth), [taskId, sessionDepth]);
+  // Multiple-choice option order is randomized once per attempt here (not
+  // inside taskFormForSession, which stays a pure/deterministic lookup used
+  // by tests and scoring) and stays stable across this component's re-renders
+  // because the memo only recomputes when taskId/sessionDepth change.
+  const form = useMemo(
+    () => randomizeMultipleChoiceOrder(taskId, taskFormForSession(taskId, sessionDepth)),
+    [taskId, sessionDepth],
+  );
   const presentation = useMemo(() => taskPresentationFor(taskId), [taskId]);
   const audioProfile = useMemo(() => audioProfileForTask(taskId), [taskId]);
   // Spoken cues always use a speech-synthesis profile — even on the dual task,

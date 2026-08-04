@@ -184,6 +184,29 @@ This is still a pilot default, not a validated timing norm.
   no grading-side code changes were needed -- the new stories flow through
   automatically.
 
+### Multiple-choice option order
+
+Four tasks render plain-text `<select>` options scored by comparing the
+selected string's value, never its index: Task 4's `ruleOptions`/
+`secondRuleOptions`, Task 10's `options`, Task 11's `mainIdeaOptions`/
+`keyDetailOptions`, and Task 12's `mainIdeaOptions`. Auditing every form's
+authored order found the correct answer at index 0 (the first rendered
+option) in all three forms of both Task 4 and Task 10, with no exception --
+an unintentional, learnable pattern. `randomizeMultipleChoiceOrder`
+(`optimizedBatteryConfig.mjs`) now shuffles each of these fields with an
+unseeded Fisher-Yates shuffle, applied once per task attempt in
+`OptimizedBatteryTask.jsx` (memoized on `[taskId, sessionDepth]`, so it does
+not reshuffle mid-attempt on the component's periodic re-renders) rather
+than baked into the form data. This is deliberately unseeded, unlike the
+stimulus generators elsewhere in the same file (`toneForm`/`anomalyForm`/
+etc.), whose whole point is reproducible content: display order should be
+genuinely unpredictable per attempt, not a fixed property of the form,
+otherwise the correct answer's position is just as learnable as
+always-first was -- both within one participant's three fixed sessions and
+across many participants comparing notes. `taskFormForSession` itself stays
+a pure, deterministic lookup (tests and scoring still rely on that), and
+scoring is unaffected either way since every comparison is by value.
+
 ### Versioned configuration contract
 
 The active protocol profile is `mindspeller_optimized_task_battery`, version

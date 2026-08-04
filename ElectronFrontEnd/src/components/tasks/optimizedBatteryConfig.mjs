@@ -963,6 +963,47 @@ export function taskFormForSession(taskId, sessionDepth, stimulusPack = ACTIVE_S
   return forms[Math.min(sessionFormIndex(taskId, sessionDepth), forms.length - 1)];
 }
 
+// Fisher-Yates shuffle. Deliberately NOT seeded, unlike the stimulus
+// generators above (toneForm/anomalyForm/etc.) whose whole point is
+// reproducible content -- multiple-choice display order should be genuinely
+// unpredictable per attempt, not a fixed property of the form, or the
+// correct answer's position becomes just as learnable as always-first was.
+function shuffle(array) {
+  const result = [...array];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+// Every task field that renders as a <select> of plain-text options, scored
+// by comparing the selected string's value (never its index -- see e.g.
+// PatternClosureTask.jsx's `<option key={option}>{option}</option>`), so
+// reordering these is always safe.
+const MULTIPLE_CHOICE_FIELDS = {
+  [TASK_IDS.SEMANTIC]: ['ruleOptions', 'secondRuleOptions'],
+  [TASK_IDS.CLOSURE]: ['options'],
+  [TASK_IDS.SPEECH_NOISE]: ['mainIdeaOptions', 'keyDetailOptions'],
+  [TASK_IDS.WRITTEN]: ['mainIdeaOptions'],
+};
+
+// Applied once per task attempt (by the caller, memoized on [taskId,
+// sessionDepth] so it doesn't reshuffle mid-attempt on every re-render) so
+// the correct answer's on-screen position can never be learned -- neither
+// within one participant's fixed 3 sessions nor across many participants,
+// which a static per-form authoring order (even a deliberately varied one)
+// cannot fully rule out.
+export function randomizeMultipleChoiceOrder(taskId, form) {
+  const fields = MULTIPLE_CHOICE_FIELDS[taskId];
+  if (!fields || !form) return form;
+  const randomized = { ...form };
+  for (const field of fields) {
+    if (Array.isArray(form[field])) randomized[field] = shuffle(form[field]);
+  }
+  return randomized;
+}
+
 export function visualRouteState(form, elapsedSeconds) {
   return routeStateAt(form, elapsedSeconds);
 }
