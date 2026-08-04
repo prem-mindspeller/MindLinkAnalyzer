@@ -1161,6 +1161,7 @@ export function taskIntroduction(taskId, form) {
       'Think of as many different uses for a single object as you can.',
       'You will hear the object’s name at the beginning of the task',
       'Generate as many ideas as possible with your eyes closed. Keep them in your head, do not say or write anything yet.',
+      'Please keep trying to come up with new ideas until the task ends, even if you feel you have run out of ideas!',
       'After the task ends, type one idea on each line.',
       'You may type your answer in your preferred language.',
     ],
