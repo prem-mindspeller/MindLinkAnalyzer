@@ -4855,17 +4855,10 @@ def analyze(body: Dict) -> Dict:
 
     # Each matched baseline condition contributes its windows exactly once, so
     # pooling many eyes-closed tasks cannot restate one baseline as independent
-    # observations and shrink the combined p-values.
+    # observations and shrink the across-task omnibus's p-values.
     all_matched_baseline_rows: List[Dict] = []
     for cache_key in scored_baseline_conditions:
         all_matched_baseline_rows.extend(matched_baseline_cache[cache_key][0])
-
-    # ── Combined (all tasks pooled vs baseline) ───────────────────────────────
-    comb_summary, comb_analysis = ({}, {})
-    if all_task_rows and all_matched_baseline_rows:
-        comb_summary, comb_analysis = _analyze_task_vs_baseline(
-            all_task_rows, all_matched_baseline_rows, windows_per_block=win_per_block
-        )
 
     # ── Across-task omnibus (Kruskal-Wallis per feature + BH FDR) ─────────────
     n_sessions = len(per_task_rows)
@@ -4933,10 +4926,6 @@ def analyze(body: Dict) -> Dict:
 
     response = {
         "per_task": per_task,
-        "combined": {
-            "summary":  comb_summary,
-            "analysis": comb_analysis,
-        },
         "across_task": {
             "ranking_only":   not can_test,
             "sessions_used":  n_sessions,

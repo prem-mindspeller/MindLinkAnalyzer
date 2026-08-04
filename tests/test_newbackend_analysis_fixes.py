@@ -550,7 +550,6 @@ def test_analyze_adds_montage_metadata_inside_existing_export():
     assert export["multi_channel_gain"]["used_occipital_evidence"] is True
     assert export["multi_channel_gain"]["fallback_to_single_channel"] is False
     assert "per_task" in result
-    assert "combined" in result
     assert "across_task" in result
 
 
@@ -1754,21 +1753,40 @@ def _steady_montage_samples(n, fs=500, alpha=20.0, seed=1):
     return samples
 
 
-def test_pooled_combined_baseline_counts_each_condition_once():
-    """One session baseline must not be restated once per task that matches it.
+def _spy_on_feature_extraction(backend):
+    """Count calls to _feature_rows_for_transport_segments during analyze()."""
+    original = backend._feature_rows_for_transport_segments
+    calls = {"count": 0}
 
-    Two eyes-closed tasks share a single eyes-closed recording, so the pooled
-    comparison must see that baseline's windows once, not twice.
+    def spy(*args, **kwargs):
+        calls["count"] += 1
+        return original(*args, **kwargs)
+
+    backend._feature_rows_for_transport_segments = spy
+    return original, calls
+
+
+# Every analyze() call extracts baseline features once per declared condition
+# up front for QC (eyes_closed, eyes_open -- 2 calls, even if one is empty),
+# before any per-task work starts.
+UPFRONT_BASELINE_QC_CALLS = 2
+
+
+def test_shared_baseline_is_feature_extracted_once_not_once_per_matching_task():
+    """One session baseline must not be recomputed once per task that matches it.
+
+    Two eyes-closed tasks share a single eyes-closed recording. Baseline
+    feature extraction for scoring is cached per (condition, montage profile)
+    key -- `matched_baseline_cache` in analyze() -- specifically so a shared
+    baseline isn't restated as independent observations once per task that
+    uses it (that used to matter for the now-removed "combined" pooled
+    comparison, and still matters for the across-task omnibus, which draws
+    its baseline rows from the same deduplicated pool). If the cache broke,
+    the second task would trigger a second, redundant extraction of the same
+    baseline recording.
     """
     backend = _load_backend()
-    calls = []
-    original = backend._analyze_task_vs_baseline
-
-    def spy(task_rows, baseline_rows, *args, **kwargs):
-        calls.append((len(task_rows), len(baseline_rows)))
-        return original(task_rows, baseline_rows, *args, **kwargs)
-
-    backend._analyze_task_vs_baseline = spy
+    original, calls = _spy_on_feature_extraction(backend)
     try:
         result = backend.analyze({
             "baseline": {
@@ -1783,35 +1801,27 @@ def test_pooled_combined_baseline_counts_each_condition_once():
             },
         })
     finally:
-        backend._analyze_task_vs_baseline = original
+        backend._feature_rows_for_transport_segments = original
 
     per_task = result["per_task"]
     assert all(entry["scorable"] for entry in per_task.values()), {
         task_id: entry["invalid_reasons"] for task_id, entry in per_task.items()
     }
-
-    per_task_calls = calls[:-1]
-    combined_task_rows, combined_baseline_rows = calls[-1]
-    single_baseline_rows = per_task_calls[0][1]
-
-    assert len(per_task_calls) == 2
-    assert all(baseline == single_baseline_rows for _, baseline in per_task_calls)
-    # Task rows accumulate across tasks; the shared baseline must not.
-    assert combined_task_rows == sum(task for task, _ in per_task_calls)
-    assert combined_baseline_rows == single_baseline_rows
+    task_count = 2
+    unique_baseline_conditions_used = 1  # both tasks share eyes_closed
+    assert calls["count"] == UPFRONT_BASELINE_QC_CALLS + task_count + unique_baseline_conditions_used
 
 
-def test_pooled_combined_baseline_keeps_both_eye_states_once_each():
-    """A mixed session pools eyes-closed and eyes-open baselines exactly once each."""
+def test_mixed_eye_state_baselines_are_each_feature_extracted_once():
+    """A mixed session extracts eyes-closed and eyes-open baseline features once each.
+
+    Three tasks (two eyes-closed, one eyes-open) share two distinct baseline
+    conditions. If the shared eyes-closed baseline were recomputed for its
+    second matching task instead of reused from cache, this would be one call
+    higher than asserted.
+    """
     backend = _load_backend()
-    calls = []
-    original = backend._analyze_task_vs_baseline
-
-    def spy(task_rows, baseline_rows, *args, **kwargs):
-        calls.append((kwargs.get("task_id") or (args[0] if args else None), len(baseline_rows)))
-        return original(task_rows, baseline_rows, *args, **kwargs)
-
-    backend._analyze_task_vs_baseline = spy
+    original, calls = _spy_on_feature_extraction(backend)
     try:
         result = backend.analyze({
             "baseline": {
@@ -1834,21 +1844,16 @@ def test_pooled_combined_baseline_keeps_both_eye_states_once_each():
             "task_metadata": {"rapid_visual_comparison": {"eye_state": "eyes_open"}},
         })
     finally:
-        backend._analyze_task_vs_baseline = original
+        backend._feature_rows_for_transport_segments = original
 
     per_task = result["per_task"]
     assert all(entry["scorable"] for entry in per_task.values()), {
         task_id: entry["invalid_reasons"] for task_id, entry in per_task.items()
     }
     assert per_task["rapid_visual_comparison"]["baseline_condition"] == "eyes_open"
-
-    by_task = {task_id: rows for task_id, rows in calls[:-1]}
-    combined_baseline_rows = calls[-1][1]
-    eyes_closed_rows = by_task["adaptive_numerical_reasoning"]
-    eyes_open_rows = by_task["rapid_visual_comparison"]
-
-    assert eyes_closed_rows > 0 and eyes_open_rows > 0
-    assert combined_baseline_rows == eyes_closed_rows + eyes_open_rows
+    task_count = 3
+    unique_baseline_conditions_used = 2  # eyes_closed (shared by 2 tasks) + eyes_open
+    assert calls["count"] == UPFRONT_BASELINE_QC_CALLS + task_count + unique_baseline_conditions_used
 
 
 def test_mindrove_signal_debouncer_is_quick_to_good_and_slow_to_bad():

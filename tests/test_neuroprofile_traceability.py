@@ -520,8 +520,15 @@ def test_analyze_existing_keys_preserved():
     # If baseline rejected, allow error key
     if "error" in data:
         return
-    for key in ("per_task", "combined", "across_task"):
+    for key in ("per_task", "across_task"):
         assert key in data, f"Missing key: {key}"
+    # "combined" (all tasks pooled vs. baseline, pooling eyes-closed and
+    # eyes-open baselines together) was removed: nothing consumed it, and it
+    # was never a scientifically valid comparison -- alpha power differs
+    # sharply between eye states, so pooling them confounds any observed
+    # difference with the eye-state mix of whichever tasks happened to be
+    # in the pool, rather than isolating a task effect.
+    assert "combined" not in data
     assert "neuroprofile_feature_export" in data
 
 
