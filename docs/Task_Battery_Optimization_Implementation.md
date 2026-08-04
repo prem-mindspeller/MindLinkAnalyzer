@@ -131,18 +131,27 @@ This is still a pilot default, not a validated timing norm.
 - Task 11: shortened from 120s to 60s. Unlike Tasks 1-8's repetition-count
   tasks, Task 11's core manipulation is a single narrated passage played
   against calibrated noise, so there was no repetition count to trim -- the
-  passages in `SPEECH_BASE_FORMS` were condensed instead (~206-216 words ->
-  ~102-108 words) so the same `playbackRate` (0.85) and noise calibration
+  passages in `SPEECH_BASE_FORMS` were shortened instead (~206-216 words ->
+  ~101-110 words) so the same `playbackRate` (0.85) and noise calibration
   (11.5 dB SNR) still deliver the whole passage comfortably inside the
-  shorter block. The narration was re-synthesized (Windows SAPI) and
-  re-mixed against the same seeded noise at the same 11.5 dB target; the
-  longest resulting narration (`speech_b`, 42.35s raw) finishes at
-  0.5s onset + 42.35s / 0.85 = 50.3s, ~10s inside the new 60s ceiling. Its
-  single phase spans the whole block, so the 20-contiguous-clean-second
-  phase floor was never a risk at either duration. `mainIdea`/`keyDetail`
-  answer keys and their distractor option lists were re-grounded in the
-  condensed wording; each distractor is still an element the passage
-  actually names.
+  shorter block. The first shortened revision was produced by trimming the
+  original passages sentence-by-sentence; per user feedback that the result
+  read as unclear/choppy by ear, the three passages were rewritten from
+  scratch as short, simple single-character narratives (a lost dog following
+  a smell home, a boy solving a rabbit problem, a librarian starting a
+  reading club) instead -- one clear problem and one clear resolution each,
+  in short plain sentences with no compound clauses. The narration was
+  re-synthesized (Windows SAPI) and re-mixed against the same seeded noise
+  at the same 11.5 dB target; the longest resulting narration (`speech_c`,
+  42.38s raw) finishes at 0.5s onset + 42.38s / 0.85 = 50.4s, ~10s inside
+  the 60s ceiling. Its single phase spans the whole block, so the
+  20-contiguous-clean-second phase floor was never a risk at any point in
+  this task's history. `mainIdea`/`keyDetail` answer keys and their
+  distractor option lists were rewritten to match: each distractor is
+  either an element the new passage actually names (e.g. the cloth and
+  fence Sam tried before marigolds worked) or a plausible-but-unmentioned
+  guess, matching the original design intent that no option should be
+  dismissible on sight.
 - Task 12: shortened from 180s to 90s. As with Task 11, the passage in
   `WRITTEN_BASE_FORMS` was condensed (~178-196 words -> ~91-97 words) rather
   than the reading window compressed around it, so the same paced-reading
@@ -160,6 +169,20 @@ This is still a pilot default, not a validated timing norm.
   sentences left to give it, producing an empty on-screen chunk -- the same
   class of edge case as Task 5's `route_c` grid-boundary issue, fixed the
   same way, by giving the algorithm slack rather than special-casing it.
+  Per user feedback that these condensed passages read as unclear, they were
+  later rewritten from scratch as short, simple single-character narratives
+  (a boy retrieving a kite from a tree, a baker fixing a forgotten
+  ingredient, a family relocating a tree before it damaged their house) at
+  ~94-99 words each -- the same length as, not shorter than, the passages
+  they replaced, and each with a comfortable 8-9 sentences so the
+  `route_c`/`written_c`-style empty-chunk risk above has real margin rather
+  than landing exactly on `chunkCount`. `mainIdea` and its distractor options
+  were rewritten to match, with the correct answer's list position varied
+  across the three forms so it is not positionally guessable. The free-text
+  summary is graded by an external rubric service that reads `form.passage`
+  as its reference material at grading time (`rubricGradingService.mjs`), so
+  no grading-side code changes were needed -- the new stories flow through
+  automatically.
 
 ### Versioned configuration contract
 

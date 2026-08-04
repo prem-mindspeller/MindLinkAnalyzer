@@ -165,11 +165,11 @@ const taskTimings = {
     phases: [phase('pre_response', 'Progressive visual closure', 0, 60)],
   },
   [TASK.SPEECH_NOISE]: {
-    // Shortened from 120s to 60s: the passages in SPEECH_BASE_FORMS were
-    // condensed (~206-216 words -> ~102-108 words) rather than the block
-    // compressed around them, so the narration still plays at the same
+    // Shortened from 120s to 60s. The passages in SPEECH_BASE_FORMS were
+    // rewritten as short, simple narratives (~101-110 words) rather than the
+    // block compressed around them, so the narration still plays at the same
     // playbackRate/SNR calibration below. The longest narration
-    // (speech_b, 42.35s raw) finishes at 0.5s onset + 42.35/0.85 = 50.3s,
+    // (speech_c, 42.38s raw) finishes at 0.5s onset + 42.38/0.85 = 50.4s,
     // ~10s inside the 60s ceiling -- see audioProfiles.speech_in_noise.
     durationSeconds: 60,
     phases: [phase('listening', 'Continuous listening', 0, 60)],
@@ -219,7 +219,7 @@ const audioProfiles = {
   speech_in_noise: {
     mode: 'premixed_audio_asset',
     // Built with tools/build_speech_in_noise_assets.py from narration of the
-    // (simplified, plain-language) passages in SPEECH_BASE_FORMS, mixed
+    // (simple, plain-language narrative) passages in SPEECH_BASE_FORMS, mixed
     // against the same seeded noise `noise` below describes (seed 11011,
     // looped 2s buffer) and re-measured after mixing rather than assumed.
     // Narration source: Windows SAPI (Microsoft David Desktop voice) via
@@ -233,15 +233,15 @@ const audioProfiles = {
     assetsByForm: {
       speech_a: {
         uri: 'audio/speech_a_snr11p5.wav',
-        sha256: 'fd183b137aa30fd77824c2f75ff6775e6d6c4480a15d05412e31a47f641ce288',
+        sha256: '4c3811c14ca9124d47b588e9955e628118965359dbc08880f08e5bd942431b91',
       },
       speech_b: {
         uri: 'audio/speech_b_snr11p5.wav',
-        sha256: 'fff5080bfefc757d3165661b8259cf31cd3166918c54946a18da5ba1adaa9d56',
+        sha256: '576e19141a7212a13198870a54d7a1b08757fe55c7fdf0e5c02d3479fb7bfb02',
       },
       speech_c: {
         uri: 'audio/speech_c_snr11p5.wav',
-        sha256: 'c43b110555102a8055983e1a5a0f7053c44e8daa39d271e2cb52e23581299190',
+        sha256: '8194b5151bd8c56c2da69438f30508f1abf0330fa60642421ddda20869391630',
       },
     },
     assetsByStimulusKey: {},
@@ -261,11 +261,10 @@ const audioProfiles = {
     // (noise 25% quieter than before, not 25% quieter than the speech itself).
     nominalSnrDb: 11.5,
     acousticallyCalibrated: true,
-    // Shortest of the three narrations (speech_a, 38.1s, condensed from the
-    // original 75.7s to fit the 60s block) played at playbackRate above;
-    // kept conservative so this is never overstated relative to what
-    // actually plays.
-    expectedDeliverySeconds: 44,
+    // Shortest of the three narrations (speech_a, 40.06s) played at
+    // playbackRate above; kept conservative so this is never overstated
+    // relative to what actually plays.
+    expectedDeliverySeconds: 47,
     settlingSeconds: 5,
     // Documents the noise this asset was calibrated against, for audit and
     // regeneration; not read by the runtime while mode is premixed_audio_asset.

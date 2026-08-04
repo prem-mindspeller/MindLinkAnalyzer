@@ -106,8 +106,10 @@ at a given playbackRate the raw narration must be short enough that
 margin (aim for >= 8s) before the block ends — otherwise the passage gets cut
 off mid-sentence and the attempt fails its audio-delivery check.
 
-The checked-in `narration/*.wav` (102–108 words each, ~38–42s at normal
-speed, condensed from the original ~206–216 words / ~76–85s to fit the
-shortened 60s block) leave a ~10–15s margin at the current playbackRate
-(0.85). If `playbackRate` drops further or the passages grow substantially
-longer, recompute the margin above first.
+The checked-in `narration/*.wav` are short, simple narratives (~101–110
+words each, ~40–42s at normal speed) rather than edited/condensed versions
+of longer source text — an earlier condensed-from-~206–216-words revision
+read as choppy and hard to follow by ear, so the passages were rewritten
+from scratch instead. They leave a ~10–12s margin at the current
+playbackRate (0.85). If `playbackRate` drops further or the passages grow
+substantially longer, recompute the margin above first.

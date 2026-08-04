@@ -831,50 +831,54 @@ const CLOSURE_FORMS = [
 const SPEECH_BASE_FORMS = [
   {
     id: 'speech_a',
-    // Simplified to short, plain sentences (same intent as Task 12's
-    // passages) so a listener with weak reading/language skills can still
-    // follow it by ear. Condensed to ~105 words (from ~206) so the narration,
-    // played at the same 0.85 playbackRate, fits inside the shortened 60s
-    // block with margin to spare -- see the durationSeconds comment in
-    // optimizedBatteryProfile.mjs for the timing budget this targets.
-    passage: 'A coastal town used to flood every winter. Instead of one giant wall, workers rebuilt the sand dunes and made the marsh bigger. The next storm still brought high water, but the marsh slowed the wave and the dunes kept it away from homes. Because no single fix could stop all danger, the town also built escape routes and ran warning tests. Before the plan started, workers checked where water entered the streets. People practiced the escape routes on a dry day and found one bridge was too narrow for trucks. The plan worked because nature, planning, and ready people all helped each other.',
+    // Rewritten as a short, simple narrative (not an edited/trimmed policy
+    // summary) after the earlier condensed passages read as choppy and hard
+    // to follow by ear: a single character, a single clear problem, and a
+    // single clear resolution, in short plain sentences with no compound
+    // clauses. ~110 words so the narration, played at the same 0.85
+    // playbackRate, fits inside the 60s block with margin to spare -- see
+    // the durationSeconds comment in optimizedBatteryProfile.mjs.
+    passage: 'A dog named Max got lost during a thunderstorm. He ran through the rain until he did not know where he was. Max found a small barn and hid inside until the storm stopped. In the morning, he smelled fresh bread. It was coming from a bakery two streets away. Every Saturday, his owner brought bread home from that same bakery. So Max followed the smell all the way home. His owner was so happy to see him. She gave him a warm bath and a big bowl of food. After that day, Max always wore a collar with his name and address on it. He never got lost again.',
     continuation: '',
-    mainIdea: 'Many different steps together lowered the flood risk.',
-    mainIdeaOptions: ['One giant wall stopped every future flood.', 'Many different steps together lowered the flood risk.', 'The town stopped caring for the coast once the project ended.'],
-    keyDetailQuestion: 'What slowed the wave?',
-    keyDetail: 'the marsh',
-    // Every distractor is a flood defence the passage actually describes, so
-    // the item cannot be solved by picking the most sensible-sounding answer —
-    // only by recalling which one the passage credited with slowing the wave.
-    keyDetailOptions: ['the sand dunes', 'the marsh', 'the escape routes', 'the warning tests'],
+    mainIdea: 'A lost dog found his way home by following a familiar smell.',
+    mainIdeaOptions: ['A dog ran away from home and never returned.', 'A lost dog found his way home by following a familiar smell.', 'A dog was trained to always stay in the yard.'],
+    keyDetailQuestion: 'What smell helped Max find his way home?',
+    keyDetail: 'fresh bread',
+    // Every distractor is something the passage actually describes (the
+    // storm, the barn, the food bowl at the end), so the item cannot be
+    // solved by picking the most sensible-sounding answer alone.
+    keyDetailOptions: ['fresh bread', 'the sound of rain', 'a warm barn', 'a bowl of food'],
   },
   {
     id: 'speech_b',
-    // Simplified and condensed (see speech_a's comment) to ~108 words.
-    passage: 'A hospital saw that medicine often arrived late, even though every team worked fast. A review found that each team used different names for the same supplies, so staff kept stopping to check labels. The hospital gave everyone one shared code instead, and moved common supplies closer to patient rooms. Short handover checks were added too. Delivery got faster, and nobody had to rush, because the real problem was how things were organized, not effort. One storage room used a short name for a ward, and a cart was restocked at random times. Workers from many teams designed the fix together and tested it on one floor first.',
+    // Rewritten narrative (see speech_a's comment) to ~103 words: a boy, a
+    // repeated failed fix, then the fix that finally works.
+    passage: 'A boy named Sam planted tomato seeds every spring. One year, rabbits kept eating the young plants. Sam first tried covering them with cloth, but the wind blew it away. Next he built a small fence, but the rabbits dug under it. Then his grandmother gave him an idea. She told him to plant marigold flowers around the tomatoes, because rabbits do not like their smell. Sam planted a full circle of orange marigolds. This time, the rabbits finally stayed away. By summer, Sam had more tomatoes than ever before. He gave a basket of tomatoes to his grandmother to say thank you.',
     continuation: '',
-    mainIdea: 'Shared systems and better layout made medicine delivery faster.',
-    mainIdeaOptions: ['Nurses were told to walk and work faster.', 'Shared systems and better layout made medicine delivery faster.', 'The hospital slowed down deliveries on purpose.'],
-    keyDetailQuestion: 'Why did staff keep stopping?',
-    keyDetail: 'to check labels',
-    // Each distractor is a real friction point the passage names (the
-    // randomly restocked cart, the handover checks, the storage room's own
-    // short ward name), so all four read as plausible causes for a delay.
-    keyDetailOptions: ['to wait for the restocking cart', 'to do the handover checks', 'to check labels', 'to find the right ward name'],
+    mainIdea: 'Sam kept rabbits away from his tomatoes by planting marigold flowers.',
+    mainIdeaOptions: ['Sam kept rabbits away from his tomatoes by planting marigold flowers.', 'Sam gave up on growing tomatoes after rabbits ate them.', 'A tall fence was all Sam needed to stop the rabbits.'],
+    keyDetailQuestion: "What finally kept the rabbits away from Sam's tomatoes?",
+    keyDetail: 'marigold flowers',
+    // The cloth and the fence are the two things the passage says Sam tried
+    // and failed with; the taller fence is the plausible next guess a
+    // listener might make without having heard that fences did not work.
+    keyDetailOptions: ['a cloth cover', 'a small fence', 'marigold flowers', 'a taller fence'],
   },
   {
     id: 'speech_c',
-    // Simplified and condensed (see speech_a's comment) to ~102 words.
-    passage: 'A school library wanted more students to use its science books, but buying more books had not helped much. The librarian tried something new: small displays connected science topics to class projects, and teachers got short guides showing where to find good material. Students could also leave questions on a board for the next class to answer. More books got borrowed, but the biggest change was that students started talking about their sources and comparing ideas. The library kept changing the displays so they matched what each class was learning. At first, the displays covered a space project and a water project.',
+    // Rewritten narrative (see speech_a's comment) to ~101 words: a
+    // librarian, a repeated failed fix, then the fix that finally works --
+    // the same shape as speech_b, different setting.
+    passage: 'A librarian named Mrs. Chen noticed that fewer children were visiting after school. She started a reading club that met every week. At first, only three children came, and they mostly sat in silence. Mrs. Chen had tried picture books and joke books, but nothing kept their attention. Then she picked a mystery book. She stopped reading right at the most exciting part. The children begged to know what happened next. So they came back the following week to find out. Soon, ten children were coming every week, and some even brought friends. The library became a busy, favorite place again.',
     continuation: '',
-    mainIdea: 'Connecting visible materials to class projects made the library more useful.',
-    mainIdeaOptions: ['The library only succeeded by buying many new books.', 'Connecting visible materials to class projects made the library more useful.', 'The displays never changed once they were set up.'],
-    keyDetailQuestion: 'Where could students leave questions?',
-    keyDetail: 'on a board',
-    // The displays and the librarian are both central to the passage, and a
-    // question box is the answer a listener would expect from a school library
-    // without having heard this one, so no option is dismissible on sight.
-    keyDetailOptions: ['at the display', 'with the librarian', 'in a question box', 'on a board'],
+    mainIdea: 'Mrs. Chen brought children back to the library with an exciting mystery story.',
+    mainIdeaOptions: ['The children stopped visiting the library completely.', 'Mrs. Chen made the library open for longer hours.', 'Mrs. Chen brought children back to the library with an exciting mystery story.'],
+    keyDetailQuestion: 'What kind of book kept the children coming back?',
+    keyDetail: 'a mystery book',
+    // Picture books and joke books are the two things the passage says
+    // Mrs. Chen tried first; a comic book is the plausible next guess a
+    // listener might make without having heard which book actually worked.
+    keyDetailOptions: ['picture books', 'joke books', 'a mystery book', 'a comic book'],
   },
 ];
 
@@ -891,29 +895,33 @@ const SPEECH_FORMS = SPEECH_BASE_FORMS.map(({ continuation, ...form }) => {
 const WRITTEN_BASE_FORMS = [
   {
     id: 'written_a',
-    // Simplified to short, plain sentences (see tools/README.md-style intent:
-    // easy enough for a low-literacy reader) while keeping the same topic and
-    // main idea as before. Condensed to ~91 words (from ~178) so the same
-    // paced-reading pace (~1.5 words/sec) fits inside the shortened 60s
-    // reading window -- see the durationSeconds comment in
-    // optimizedBatteryProfile.mjs for the timing budget this targets.
-    passage: 'Cities get very hot in summer. Many people turn on air conditioners, but a city can also cool itself in other ways. Trees give shade to streets, and plants release water into the air, which cools things down. Light-colored roofs stay cooler than dark roofs. But one roof only cools one building, while many trees together can cool a whole street. These ideas do not work alone: new trees take years to grow, and shiny roofs can create glare. Because of this, a good city plan needs more than one idea.',
-    mainIdea: 'Cities cool down best when several ideas work together, not just one.',
-    mainIdeaOptions: ['Air conditioners are the only way to cool a city.', 'Planting trees fixes city heat right away and needs no care.', 'Cities cool down best when several ideas work together, not just one.'],
+    // Rewritten as a short, simple narrative (not an edited/trimmed policy
+    // summary) after the earlier condensed passages read as choppy and hard
+    // to follow -- same fix applied to Task 11's SPEECH_BASE_FORMS: a single
+    // character, a single clear problem, and a single clear resolution, in
+    // short plain sentences with no compound clauses. ~99 words, matching
+    // the previous passages' length so the same paced-reading pace
+    // (~1.5 words/sec) fits inside the 60s reading window -- see the
+    // durationSeconds comment in optimizedBatteryProfile.mjs.
+    passage: 'A boy named Leo flew a red kite at the park every Saturday. One windy day, the string snapped, and the kite flew high above the trees. Leo felt very sad and thought he would never see it again. He ran to tell his neighbor, an old man who fixed clocks nearby. The old man looked over his fence and saw the kite stuck in a tall oak tree. Together, they used a long pole to gently pull it free. Leo tied a stronger string to his kite before flying it again. He never lost his kite after that.',
+    mainIdea: 'Leo got his lost kite back with help from his neighbor.',
+    mainIdeaOptions: ['The kite was gone forever after the string snapped.', 'Leo got his lost kite back with help from his neighbor.', 'Leo decided kites were too much trouble to fly.'],
   },
   {
     id: 'written_b',
-    // Condensed to ~97 words (see written_a's comment).
-    passage: 'Some people think more numbers always lead to better choices, but too many numbers can make a decision harder, not easier. A good chart should start with the choice you need to make, then pick only a few numbers that show the result clearly. Numbers still need context, since a sudden change might just be a mistake in how data was collected. Because of this, good charts explain what each number means and let people check the original data if something looks wrong. Being simple does not mean hiding problems; it means showing the important facts clearly.',
-    mainIdea: 'Good charts use a few clear numbers that are picked to help people decide.',
-    mainIdeaOptions: ['The best chart always shows as many numbers as possible.', 'Good charts use a few clear numbers that are picked to help people decide.', 'Charts should hide problems so users do not get confused.'],
+    // Rewritten narrative (see written_a's comment) to ~94 words: a baker,
+    // a mistake, and the fix that wins a customer back.
+    passage: 'A baker named Rosa made bread every morning for her small shop. One day, she forgot to add salt to the dough. The bread looked perfect, but it tasted flat and dull. Her first customer took one bite and made a strange face. Rosa was embarrassed and almost closed the shop early. Instead, she baked a new batch and remembered the salt. She gave the good loaf to that same customer for free. He came back the next day and told his friends. Rosa never forgot an ingredient again, and her shop grew busier.',
+    mainIdea: 'Rosa fixed her mistake and her bread shop became more popular.',
+    mainIdeaOptions: ['Rosa fixed her mistake and her bread shop became more popular.', 'Rosa closed her shop because of one bad loaf of bread.', 'The customer never came back to Rosa’s shop again.'],
   },
   {
     id: 'written_c',
-    // Condensed to ~94 words (see written_a's comment).
-    passage: 'Fixing broken things can save money and materials. But whether a thing can be fixed depends on choices made before it ever breaks. A product is easy to fix if its screws can be opened and broken parts can be swapped out. Even a fixable product might still get thrown away if new parts cost almost as much as a new item. New rules can help by making manuals and spare parts easier to find. Fixing things is not just one shop’s job. Designers, sellers, repair shops, lawmakers, and users all play a part.',
-    mainIdea: 'Whether something can be fixed depends on many people working together, not just repair shops.',
-    mainIdeaOptions: ['Every broken item should always be repaired, no matter the cost or danger.', 'Only repair shops decide whether something can be fixed.', 'Whether something can be fixed depends on many people working together, not just repair shops.'],
+    // Rewritten narrative (see written_a's comment) to ~95 words: a planted
+    // tree, an unexpected problem, and the fix that solves it.
+    passage: 'A girl named Mia planted a small tree in her front yard. She picked a spot close to the house because it seemed easy to water. After a few years, the tree grew tall, and its roots pushed against the house wall. A crack appeared near the kitchen window. Mia’s father explained that tree roots need space to spread out safely. They hired a worker to move the tree further away. It was hard work, but the tree survived the move. Years later, the tree gave shade to the whole yard without harming the house.',
+    mainIdea: 'Mia’s family moved a tree to a safer spot before it caused more damage.',
+    mainIdeaOptions: ['The tree was cut down because it cracked the house wall.', 'Trees never need space away from a house.', 'Mia’s family moved a tree to a safer spot before it caused more damage.'],
   },
 ];
 

@@ -357,13 +357,14 @@ test('stimulus schedules cover the corrected continuous windows', () => {
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE]) {
     const wordCount = form.passage.trim().split(/\s+/).length;
-    // Condensed to ~102-108 words (from ~206-216) so the same playbackRate/
-    // SNR-safety budget fits inside the shortened 60s block.
+    // Short simple narratives at ~101-110 words (see SPEECH_BASE_FORMS) so
+    // the same playbackRate/SNR-safety budget fits inside the shortened 60s
+    // block.
     assert.ok(wordCount >= 90 && wordCount <= 120, `${form.id}: ${wordCount} words`);
-    // 44 = the shortest of the three calibrated narrations
+    // 47 = the shortest of the three calibrated narrations
     // (tools/build_speech_in_noise_assets.py) played at the profile's
     // playbackRate, kept conservative rather than overstated.
-    assert.equal(form.audioProfile.expectedDeliverySeconds, 44);
+    assert.equal(form.audioProfile.expectedDeliverySeconds, 47);
   }
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.WRITTEN]) {
     assert.equal(form.readingDurationSeconds, 60);

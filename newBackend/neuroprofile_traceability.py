@@ -144,11 +144,11 @@ TASK_RECORDING_DURATIONS_SECONDS: Dict[str, int] = {
     # to offset the guessing risk from an immediately-clickable button.
     CANONICAL_TASKS[10]["id"]: 60,
     # Task 11 shortened from the page-47 example's 120s to 60s. The narrated
-    # passages in SPEECH_BASE_FORMS were condensed (~206-216 words ->
-    # ~102-108 words) rather than the block compressed around them, so the
-    # same playbackRate (0.85) and noise calibration (11.5 dB SNR) still
-    # apply -- the longest re-recorded narration (speech_b, 42.35s raw)
-    # finishes at 0.5s onset + 42.35/0.85 = 50.3s, ~10s inside the new
+    # passages in SPEECH_BASE_FORMS are short, simple single-character
+    # narratives (~101-110 words) rather than the block compressed around
+    # them, so the same playbackRate (0.85) and noise calibration (11.5 dB
+    # SNR) still apply -- the longest narration (speech_c, 42.38s raw)
+    # finishes at 0.5s onset + 42.38/0.85 = 50.4s, ~10s inside the new
     # ceiling (see optimizedBatteryProfile.mjs's speech_in_noise profile).
     CANONICAL_TASKS[11]["id"]: 60,
     # Task 12 shortened from the page-47 example's 180s to 90s. The passage in
