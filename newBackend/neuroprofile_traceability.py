@@ -1791,9 +1791,9 @@ def _build_all_task_entries(
         for mc in entry["task_summary"].get("moderator_characteristics", []):
             if mc not in moderator_chars:
                 moderator_chars.append(mc)
-        for bl in task_blocked:
-            if bl not in blocked_unsupported:
-                blocked_unsupported.append(bl)
+        # ``task_blocked`` describes what this task cannot establish.  It must
+        # remain on the task/feature records instead of becoming a session-wide
+        # blocklist that suppresses evidence from the other tasks.
 
     return (
         tasks,

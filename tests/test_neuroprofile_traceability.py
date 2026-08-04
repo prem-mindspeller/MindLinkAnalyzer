@@ -491,6 +491,35 @@ def test_allowed_ability_pool_no_blocked_labels():
         assert not overlap, f"Blocked labels in per-task ability pool: {overlap}"
 
 
+def test_blocked_unsupported_labels_is_not_a_cross_task_union():
+    # Regression guard: auditory_target_counting blocks "Time Sharing" (which
+    # dual_task_rule_switching measures), and dual_task_rule_switching blocks
+    # "Auditory Attention" (which auditory_target_counting measures). Earlier,
+    # _build_all_task_entries() unioned every task's blocked_inferences into
+    # the top-level blocked_unsupported_labels export field. Downstream
+    # consumers (the flask-backend O*NET ability layer) correctly treat that
+    # field as session-wide/authoritative, so the union silently suppressed
+    # 22 of the 23 task_battery_v2 abilities one hop downstream even though
+    # each task's own per-task ability pool was never blocked (see
+    # test_allowed_ability_pool_no_blocked_labels above, which only checks
+    # per-task scoping and does not catch this). blocked_unsupported_labels
+    # must stay empty; per-task blocks live only on each task's own record.
+    per_task = {}
+    per_task.update(_make_per_task("auditory_target_counting"))
+    per_task.update(_make_per_task("dual_task_rule_switching"))
+    existing = _make_existing_analysis(per_task)
+    export = build_neuroprofile_export(per_task, existing)
+
+    assert export["blocked_unsupported_labels"] == []
+
+    pools_by_task = {
+        t["canonical_task_id"]: set(t["task_summary"]["allowed_onet_ability_candidates"])
+        for t in export["tasks_detected"]
+    }
+    assert "Auditory Attention" in pools_by_task["auditory_target_counting"]
+    assert "Time Sharing" in pools_by_task["dual_task_rule_switching"]
+
+
 # ─── Test 19: existing per_task, combined, across_task keys preserved ─────────
 
 def test_analyze_existing_keys_preserved():
