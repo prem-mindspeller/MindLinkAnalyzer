@@ -45,6 +45,34 @@ export const classifySpeed = (elapsedMs, bands) => {
   return SPEED_SLOW;
 };
 
+export const ACCURACY_EXACT = 'exact';
+export const ACCURACY_CLOSE = 'close';
+
+/**
+ * Classify an error magnitude against a task's configured accuracy
+ * tolerance. Accuracy-defined abilities (e.g. Task 8's Problem Sensitivity,
+ * Selective Attention, Deductive Reasoning, Information Ordering) are graded
+ * rather than gated by a zero-tolerance cliff: a small miss still
+ * demonstrates the ability, just less cleanly than an exact one. Returns
+ * null -- ungraded, not credited -- when the error was not measured, the
+ * task declares no tolerance, or the error exceeds the tolerated band
+ * entirely (a genuine miss, not a minor one).
+ *
+ * @param {number|null} errorMagnitude non-negative distance from a perfect
+ *   answer (e.g. |reported - actual| for a count, or
+ *   expectedCount - effectiveCorrectCount for a set-recall task).
+ * @param {{exactMaxError: number, closeMaxError: number}|null|undefined} tolerance
+ */
+export const classifyAccuracy = (errorMagnitude, tolerance) => {
+  if (errorMagnitude == null || !tolerance) return null;
+  const exactMax = numeric(tolerance.exactMaxError);
+  const closeMax = numeric(tolerance.closeMaxError);
+  if (exactMax == null || closeMax == null) return null;
+  if (errorMagnitude <= exactMax) return ACCURACY_EXACT;
+  if (errorMagnitude <= closeMax) return ACCURACY_CLOSE;
+  return null;
+};
+
 const allAbilities = (taskId, status) => Object.fromEntries(
   (TASK_DEFINITIONS[taskId]?.abilities || []).map((ability) => [ability, status]),
 );
@@ -372,24 +400,63 @@ export function scoreOptimizedTask(
     const selectedTypes = [...new Set(
       Array.isArray(response.anomalyTypes) ? response.anomalyTypes : [],
     )];
-    const countError = reportedCount == null ? null : reportedCount - form.anomalyCount;
-    const countCorrect = countError != null
-      && Math.abs(countError) <= thresholds.maximumAbsoluteCountError;
     const expectedTypes = [...new Set(form.anomalyTypes)];
-    const typeRecallCorrect = thresholds.requireExactTypeSet
-      ? selectedTypes.length === expectedTypes.length
-        && expectedTypes.every((type) => selectedTypes.includes(type))
-      : expectedTypes.every((type) => selectedTypes.includes(type));
-    const correct = countCorrect && typeRecallCorrect;
-    return scoredResult(taskId, correct ? PASSED : FAILED, response, {
+
+    // Count accuracy -> Problem Sensitivity + Selective Attention: noticing
+    // something is wrong and sustaining attention across the whole stream.
+    // Graded (exact/close/miss) instead of the previous zero-tolerance gate,
+    // so a single miscount no longer scores identically to losing the thread
+    // entirely.
+    const countError = reportedCount == null ? null : reportedCount - form.anomalyCount;
+    const countGrade = classifyAccuracy(
+      countError == null ? null : Math.abs(countError),
+      thresholds.countTolerance,
+    );
+    const countAcceptable = countGrade != null;
+
+    // Type accuracy -> Deductive Reasoning + Information Ordering: applying
+    // the rule to correctly categorize each violation. Extra (wrong)
+    // selections count against the participant exactly like missed ones do,
+    // so checking every box can never trivially maximise this score -- each
+    // extra cancels one correct selection before the error magnitude is
+    // graded.
+    const correctlySelectedCount = expectedTypes.filter((type) => selectedTypes.includes(type)).length;
+    const extraSelectedCount = selectedTypes.filter((type) => !expectedTypes.includes(type)).length;
+    const effectiveTypeCorrect = Math.max(0, correctlySelectedCount - extraSelectedCount);
+    const typeError = expectedTypes.length - effectiveTypeCorrect;
+    const typeGrade = classifyAccuracy(typeError, thresholds.typeTolerance);
+    const typeAcceptable = typeGrade != null;
+
+    // Each ability group is gated independently: a clean count with a poor
+    // type recall (or vice versa) credits only the abilities its own
+    // dimension actually evidenced, rather than one verdict deciding all
+    // four abilities together.
+    const status = countAcceptable && typeAcceptable ? PASSED : FAILED;
+    const abilityValidation = {
+      'Problem Sensitivity': countAcceptable ? PASSED : FAILED,
+      'Selective Attention': countAcceptable ? PASSED : FAILED,
+      'Deductive Reasoning': typeAcceptable ? PASSED : FAILED,
+      'Information Ordering': typeAcceptable ? PASSED : FAILED,
+    };
+    const abilityGrades = {
+      ...(countAcceptable ? { 'Problem Sensitivity': countGrade, 'Selective Attention': countGrade } : {}),
+      ...(typeAcceptable ? { 'Deductive Reasoning': typeGrade, 'Information Ordering': typeGrade } : {}),
+    };
+
+    return scoredResult(taskId, status, response, {
       actual_anomaly_count: form.anomalyCount,
       reported_anomaly_count: reportedCount,
       anomaly_count_error: countError,
+      count_grade: countGrade,
       expected_anomaly_types: expectedTypes,
       reported_anomaly_types: selectedTypes,
-      anomaly_type_recall_correct: typeRecallCorrect,
+      anomaly_type_correctly_selected: correctlySelectedCount,
+      anomaly_type_extra_selected: extraSelectedCount,
+      anomaly_type_effective_correct: effectiveTypeCorrect,
+      type_grade: typeGrade,
       confidence: numeric(response.confidence),
-    }, allAbilities(taskId, correct ? PASSED : FAILED), 'count_and_anomaly_type_key');
+    }, abilityValidation, 'count_and_type_accuracy_bands', [],
+    Object.keys(abilityGrades).length ? abilityGrades : null);
   }
 
   if (taskId === TASK_IDS.VISUAL_COMPARISON) {

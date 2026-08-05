@@ -9,7 +9,7 @@ import {
   taskFormForSession,
   taskTimingFor,
 } from './optimizedBatteryConfig.mjs';
-import { scoreOptimizedTask, classifySpeed } from './optimizedTaskScoring.mjs';
+import { scoreOptimizedTask, classifySpeed, classifyAccuracy } from './optimizedTaskScoring.mjs';
 
 const form = (taskId) => taskFormForSession(taskId, 'session_1');
 
@@ -316,20 +316,133 @@ test('classifySpeed treats an unmeasured time or missing bands as ungraded, neve
   assert.equal(classifySpeed(1000, { fastMaxMs: 5000 }), null, 'a partial band config grades nothing');
 });
 
-test('anomaly-type scoring rejects checkbox over-selection', () => {
+// Real form data: 6 anomalies (out of 30 codes), 5 distinct rule-violation
+// types. Count tolerance and type tolerance are both {exactMaxError: 0,
+// closeMaxError: 1} -- see optimizedBatteryProfile.mjs's ANOMALY thresholds.
+test('anomaly detection: exact count and exact types -> passed, both ability groups graded exact', () => {
   const anomaly = form(TASK_IDS.ANOMALY);
-  const exact = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
+  const r = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
     anomalyCount: anomaly.anomalyCount,
     anomalyTypes: [...anomaly.anomalyTypes],
   });
-  assert.equal(exact.status, 'passed');
+  assert.equal(r.status, 'passed');
+  assert.deepEqual(r.ability_validation, {
+    'Problem Sensitivity': 'passed',
+    'Selective Attention': 'passed',
+    'Deductive Reasoning': 'passed',
+    'Information Ordering': 'passed',
+  });
+  assert.deepEqual(r.ability_grades, {
+    'Problem Sensitivity': 'exact',
+    'Selective Attention': 'exact',
+    'Deductive Reasoning': 'exact',
+    'Information Ordering': 'exact',
+  });
+  assert.equal(r.metrics.count_grade, 'exact');
+  assert.equal(r.metrics.type_grade, 'exact');
+});
 
-  const overSelected = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
+test('anomaly detection: count off by one is graded close, not a hard fail', () => {
+  const anomaly = form(TASK_IDS.ANOMALY);
+  const r = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
+    anomalyCount: anomaly.anomalyCount + 1,
+    anomalyTypes: [...anomaly.anomalyTypes],
+  });
+  // Count-linked abilities are still credited (graded down); type-linked
+  // abilities are unaffected by the count error.
+  assert.equal(r.ability_validation['Problem Sensitivity'], 'passed');
+  assert.equal(r.ability_validation['Selective Attention'], 'passed');
+  assert.equal(r.ability_validation['Deductive Reasoning'], 'passed');
+  assert.equal(r.ability_grades['Problem Sensitivity'], 'close');
+  assert.equal(r.ability_grades['Selective Attention'], 'close');
+  assert.equal(r.ability_grades['Deductive Reasoning'], 'exact');
+  // Both dimensions must clear tolerance for the task overall to pass.
+  assert.equal(r.status, 'passed');
+});
+
+test('anomaly detection: count off by two or more zeroes only the count-linked abilities', () => {
+  const anomaly = form(TASK_IDS.ANOMALY);
+  const r = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
+    anomalyCount: anomaly.anomalyCount + 2,
+    anomalyTypes: [...anomaly.anomalyTypes],
+  });
+  assert.equal(r.ability_validation['Problem Sensitivity'], 'failed');
+  assert.equal(r.ability_validation['Selective Attention'], 'failed');
+  // Type recall was exact and independent of the count miss.
+  assert.equal(r.ability_validation['Deductive Reasoning'], 'passed');
+  assert.equal(r.ability_validation['Information Ordering'], 'passed');
+  assert.deepEqual(r.ability_grades, { 'Deductive Reasoning': 'exact', 'Information Ordering': 'exact' });
+  assert.equal(r.metrics.count_grade, null, 'a genuine miss is ungraded, not a low grade');
+  // One dimension failing outright fails the task overall, per the
+  // configured "both must clear tolerance" rule -- even though the
+  // type-linked abilities above are still individually credited.
+  assert.equal(r.status, 'failed');
+});
+
+test('anomaly detection: missing one type is graded close; missing two or more fails those abilities', () => {
+  const anomaly = form(TASK_IDS.ANOMALY);
+  const closeType = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
+    anomalyCount: anomaly.anomalyCount,
+    anomalyTypes: anomaly.anomalyTypes.slice(1), // missing exactly one of five
+  });
+  assert.equal(closeType.ability_validation['Deductive Reasoning'], 'passed');
+  assert.equal(closeType.ability_grades['Deductive Reasoning'], 'close');
+  assert.equal(closeType.ability_grades['Information Ordering'], 'close');
+  assert.equal(closeType.status, 'passed');
+
+  const failType = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
+    anomalyCount: anomaly.anomalyCount,
+    anomalyTypes: anomaly.anomalyTypes.slice(2), // missing two of five
+  });
+  assert.equal(failType.ability_validation['Deductive Reasoning'], 'failed');
+  assert.equal(failType.ability_validation['Information Ordering'], 'failed');
+  assert.equal(failType.ability_validation['Problem Sensitivity'], 'passed', 'count was still exact');
+  assert.equal(failType.status, 'failed');
+});
+
+// The actual regression this replaces: over-selection used to hard-fail the
+// whole task outright. It now degrades gracefully -- one extra selection
+// cancels one correct one (4/5 effective -> close), matching how a genuine
+// miss of one type is graded, while still never being free: selecting every
+// possible type can never trivially maximise the score.
+test('anomaly-type scoring: extra selections cancel correct ones instead of being free', () => {
+  const anomaly = form(TASK_IDS.ANOMALY);
+  const oneExtra = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
     anomalyCount: anomaly.anomalyCount,
     anomalyTypes: [...anomaly.anomalyTypes, 'not_present_in_form'],
   });
-  assert.equal(overSelected.status, 'failed');
-  assert.equal(overSelected.metrics.anomaly_type_recall_correct, false);
+  assert.equal(oneExtra.metrics.anomaly_type_correctly_selected, 5);
+  assert.equal(oneExtra.metrics.anomaly_type_extra_selected, 1);
+  assert.equal(oneExtra.metrics.anomaly_type_effective_correct, 4);
+  assert.equal(oneExtra.ability_grades['Deductive Reasoning'], 'close');
+  assert.equal(oneExtra.status, 'passed');
+
+  // Selecting every option (all 5 real types plus junk) still cannot beat a
+  // clean, correct answer: it is graded down exactly like any other 4/5.
+  const everything = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, {
+    anomalyCount: anomaly.anomalyCount,
+    anomalyTypes: [...anomaly.anomalyTypes, 'junk_a', 'junk_b'],
+  });
+  assert.equal(everything.metrics.anomaly_type_effective_correct, 3);
+  assert.equal(everything.ability_validation['Deductive Reasoning'], 'failed');
+});
+
+test('anomaly detection: a missing response is ungraded, not silently passed or wrongly graded', () => {
+  const anomaly = form(TASK_IDS.ANOMALY);
+  const r = scoreOptimizedTask(TASK_IDS.ANOMALY, anomaly, { anomalyCount: null, anomalyTypes: [] });
+  assert.equal(r.status, 'failed');
+  assert.equal(r.metrics.count_grade, null);
+  assert.equal(r.ability_validation['Problem Sensitivity'], 'failed');
+  assert.equal(r.ability_grades, undefined, 'nothing was credited, so no grades are published');
+});
+
+test('classifyAccuracy treats an unmeasured error or missing tolerance as ungraded, never a pass', () => {
+  assert.equal(classifyAccuracy(null, { exactMaxError: 0, closeMaxError: 1 }), null);
+  assert.equal(classifyAccuracy(0, null), null);
+  assert.equal(classifyAccuracy(0, {}), null);
+  assert.equal(classifyAccuracy(0, { exactMaxError: 0, closeMaxError: 1 }), 'exact');
+  assert.equal(classifyAccuracy(1, { exactMaxError: 0, closeMaxError: 1 }), 'close');
+  assert.equal(classifyAccuracy(2, { exactMaxError: 0, closeMaxError: 1 }), null, 'beyond tolerance is a miss, not a grade');
 });
 
 test('speech key-detail rejects a wrong option and passes outright once calibrated and correct', () => {

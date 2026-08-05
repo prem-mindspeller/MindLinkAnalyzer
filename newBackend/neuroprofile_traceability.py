@@ -743,20 +743,30 @@ def behaviorally_validated_abilities_for_task(
     return theoretical if behavioral_evidence_passes(evidence) else []
 
 
-SPEED_GRADES = ("fast", "mediocre", "slow")
+# fast/mediocre/slow: speed-defined abilities (Task 9/10 -- Reaction Time,
+# Perceptual Speed, Speed of Closure), graded on response latency.
+# exact/close: accuracy-defined abilities (Task 8 -- Problem Sensitivity,
+# Selective Attention, Deductive Reasoning, Information Ordering), graded on
+# count/type error magnitude. Both vocabularies share one transport field and
+# one backend scoring path (onet_ability_mapping.compute_ability_evidence_
+# score's grade penalty) -- the grade values themselves fully determine the
+# score effect, independent of which construct produced them.
+KNOWN_ABILITY_GRADES = ("fast", "mediocre", "slow", "exact", "close")
 
 
 def ability_grades_for_task(
     canonical_task_id: str,
     evidence: Any,
 ) -> Dict[str, str]:
-    """Return {ability: 'fast'|'mediocre'|'slow'} for this task's graded abilities.
+    """Return {ability: grade} for this task's graded abilities -- see
+    KNOWN_ABILITY_GRADES for the accepted values.
 
-    Speed-defined abilities (Reaction Time, Perceptual Speed, Speed of Closure)
-    are graded rather than merely gated by the task runner, because "did they
-    notice it" and "how fast did they notice it" are different claims and only
-    the second is what the ability actually names. The grade travels into the
-    neuroprofile as part of the ability's numeric evidence score.
+    Graded (not merely gated) abilities are graded by the task runner because
+    "did they demonstrate it" and "how well did they demonstrate it" are
+    different claims and only the second is what a magnitude-defined ability
+    actually names (e.g. Reaction Time, or count accuracy for Problem
+    Sensitivity). The grade travels into the neuroprofile as part of the
+    ability's numeric evidence score.
 
     Grades naming an ability this task does not measure are dropped, and any
     value outside the declared vocabulary is ignored -- an unrecognised grade
@@ -773,7 +783,7 @@ def ability_grades_for_task(
     for ability, grade in grades.items():
         canonical = theoretical.get(str(ability).strip().casefold())
         normalized = str(grade).strip().lower()
-        if canonical and normalized in SPEED_GRADES:
+        if canonical and normalized in KNOWN_ABILITY_GRADES:
             out[canonical] = normalized
     return out
 
@@ -1453,7 +1463,7 @@ def _task_summary_block(
         "allowed_onet_ability_candidates": unique_abilities,
         "behavioral_evidence_status":      behavioral_status,
         # Only ever contains abilities that ALSO cleared the behavioral gate and
-        # the EEG gate: a speed grade for an ability the participant did not
+        # the EEG gate: a grade for an ability the participant did not
         # otherwise evidence would be meaningless, and must not reach the
         # backend's ability scoring as if it were support.
         "ability_grades":                  {

@@ -350,7 +350,7 @@ const rubrics = {
     dimensions: ['relevantIdeaCount', 'categoryDiversity', 'originality'],
   },
   [TASK.DUAL_TASK]: { id: 'exact_outputs_with_reference_costs', mode: 'objective_plus_thresholds' },
-  [TASK.ANOMALY]: { id: 'count_and_anomaly_type_key', mode: 'objective_key' },
+  [TASK.ANOMALY]: { id: 'count_and_type_accuracy_bands', mode: 'objective_plus_thresholds' },
   [TASK.VISUAL_COMPARISON]: { id: 'single_rendered_onset_latency', mode: 'objective_key_and_latency' },
   [TASK.CLOSURE]: { id: 'recognition_and_visibility_schedule', mode: 'objective_plus_thresholds' },
   [TASK.SPEECH_NOISE]: {
@@ -400,7 +400,25 @@ const thresholds = {
     maximumDualTaskCost: 0.25,
     maximumSwitchCost: 0.34,
   },
-  [TASK.ANOMALY]: { maximumAbsoluteCountError: 0, requireExactTypeSet: true },
+  [TASK.ANOMALY]: {
+    // Every form presents exactly 6 anomalies (2 in an early, sparser phase;
+    // 4 in a later, denser one) drawn from a pool of 5 distinct rule-
+    // violation types, out of 30 codes shown across the 60s block -- see
+    // anomalyForm() below. Both dimensions are graded (exact/close/miss)
+    // rather than the previous zero-tolerance gate, and scored independently
+    // (see optimizedTaskScoring.mjs's ANOMALY branch): a single miscount or
+    // one wrong type no longer zeroes every ability the task measures.
+    //
+    // Count: exact = the right count; close = off by exactly one (a single
+    // miscount is still real evidence of monitoring); miss (not credited) =
+    // off by two or more -- genuinely lost track of the stream.
+    countTolerance: { exactMaxError: 0, closeMaxError: 1 },
+    // Type: exact = all 5 correct; close = 4 of 5 (one missed or one wrong
+    // extra -- extras cancel correct selections 1-for-1 before grading, so
+    // checking every box can never trivially maximise this score); miss (not
+    // credited) = 3 or fewer of 5.
+    typeTolerance: { exactMaxError: 0, closeMaxError: 1 },
+  },
   [TASK.VISUAL_COMPARISON]: {
     requireRenderedMismatchOnset: true,
     minimumPostOnsetLatencyMs: 0,
