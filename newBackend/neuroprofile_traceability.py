@@ -970,6 +970,66 @@ def _infer_repeat_status(
     return "repeated_unstable"
 
 
+def _compare_task_attempts(
+    current_features: List[Dict[str, Any]],
+    prior_attempt: Optional[Dict[str, Any]],
+) -> Tuple[Optional[bool], Optional[bool]]:
+    """Compare this task attempt's features against a prior attempt of the
+    same task, producing the two booleans _infer_repeat_status() needs.
+
+    This module has no access to a caller's session history on its own --
+    ``prior_attempt`` must be supplied by the caller, expected to be a
+    previously-returned task entry from this same pipeline (i.e. what a
+    caller stored from an earlier session's
+    neuroprofile_feature_export.tasks[] for this canonical_task_id: a dict
+    with ``features`` and ``signal_quality`` keys in the same shape
+    build_neuroprofile_task_entry() returns).
+
+    Returns (direction_consistent, quality_consistent); either is None when
+    there isn't enough matched data between the two attempts to judge --
+    _infer_repeat_status() maps that to "insufficient" rather than guessing.
+    """
+    if not isinstance(prior_attempt, dict):
+        return None, None
+    prior_features = prior_attempt.get("features")
+    if not isinstance(prior_features, list) or not prior_features:
+        return None, None
+
+    prior_by_metric = {
+        f.get("metric_name"): f
+        for f in prior_features
+        if isinstance(f, dict) and f.get("metric_name")
+    }
+    agreements: List[bool] = []
+    for f in current_features:
+        prior_f = prior_by_metric.get(f.get("metric_name"))
+        if prior_f is None:
+            continue
+        cur_dir, prior_dir = f.get("direction"), prior_f.get("direction")
+        if cur_dir is None or prior_dir is None:
+            continue
+        agreements.append(cur_dir == prior_dir)
+
+    # Majority of matched features must agree in direction.
+    direction_consistent = (
+        None if not agreements else (sum(agreements) / len(agreements)) >= 0.5
+    )
+
+    _quality_rank = {"low": 0, "medium": 1, "high": 2}
+    current_quality = _signal_quality_for_task(current_features, {}).get("quality_level")
+    prior_quality = (prior_attempt.get("signal_quality") or {}).get("quality_level")
+    cur_rank = _quality_rank.get(current_quality)
+    prior_rank = _quality_rank.get(prior_quality)
+    # Adjacent tiers (e.g. high vs medium) count as consistent; only a full
+    # two-tier swing (high vs low) counts as a real quality shift.
+    quality_consistent = (
+        None if cur_rank is None or prior_rank is None
+        else abs(cur_rank - prior_rank) <= 1
+    )
+
+    return direction_consistent, quality_consistent
+
+
 def _feature_direction(feature: Dict[str, Any]) -> Optional[str]:
     delta = feature.get("delta") or feature.get("effect_measure")
     if delta is None:
@@ -1386,6 +1446,7 @@ def build_neuroprofile_task_entry(
     single_task_reference_comparison: Optional[Dict[str, Any]] = None,
     invalid_reasons: Optional[List[str]] = None,
     protocol_profile: Optional[Dict[str, Any]] = None,
+    prior_attempt: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build a full task entry for the neuroprofile export block."""
     canonical_task_id = resolve_canonical_task(raw_task_id) or raw_task_id
@@ -1441,12 +1502,23 @@ def build_neuroprofile_task_entry(
         scorable=scorable,
     )
 
+    # Repeat-status classification: "not_repeated" unless the caller supplies
+    # a prior attempt of this same task (this module has no session history
+    # of its own -- see _compare_task_attempts()).
+    _direction_consistent, _quality_consistent = _compare_task_attempts(
+        features_out, prior_attempt
+    )
+    _task_occurrences = 2 if isinstance(prior_attempt, dict) and prior_attempt else 1
+    repeat_status = _infer_repeat_status(
+        _task_occurrences, _direction_consistent, _quality_consistent
+    )
+
     return {
         "task_number":          task_number,
         "canonical_task_id":    canonical_task_id,
         "canonical_task_name":  task_info.get("name", canonical_task_id),
         "raw_task_labels":      list(raw_task_labels or [raw_task_id]),
-        "repeat_status":        "not_repeated",
+        "repeat_status":        repeat_status,
         "role_matching_status": rm_status,
         "baseline_condition":   task_baseline_condition(canonical_task_id),
         "task_metadata":        dict(task_metadata or {}),
@@ -1776,6 +1848,7 @@ def _build_all_task_entries(
             ),
             invalid_reasons=task_result.get("invalid_reasons"),
             protocol_profile=task_result.get("protocol_profile"),
+            prior_attempt=task_result.get("prior_attempt"),
         )
         tasks.append(entry)
         canonical_id = entry["canonical_task_id"]

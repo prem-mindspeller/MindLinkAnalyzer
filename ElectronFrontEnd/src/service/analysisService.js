@@ -16,6 +16,7 @@ import loginService from './loginService';
 import i18n from '../i18n';
 import { createCompressedReportEnvelope } from './reportEnvelope.mjs';
 import { buildNeuroprofileReportDocument } from './reportDocument.mjs';
+import { loadPriorTaskAttempts } from './priorAttemptService.mjs';
 import {
     buildSingleTaskAnalysisPayload,
     evaluateTaskQuality,
@@ -187,6 +188,23 @@ export async function runAnalysis({
     }
     if (Object.keys(taskMetadata).length > 0) {
         analysisPayload.task_metadata = taskMetadata;
+    }
+
+    // Best-effort: enables repeat_status classification (repeated_stable/
+    // repeated_unstable) for tasks this user has already attempted in a
+    // prior session. A first-ever session or any fetch/decode failure
+    // resolves to {} and every task falls back to today's "not_repeated" --
+    // this must never block starting the analysis. See priorAttemptService.mjs.
+    const priorAttempts = await loadPriorTaskAttempts({
+        fetchImpl,
+        getToken: () => loginService.getToken(),
+        getRegion: () => loginService.getRegion(),
+    });
+    const relevantPriorAttempts = Object.fromEntries(
+        Object.entries(priorAttempts).filter(([taskId]) => taskId in tasks),
+    );
+    if (Object.keys(relevantPriorAttempts).length > 0) {
+        analysisPayload.prior_attempt = relevantPriorAttempts;
     }
 
     const res = await fetchImpl(`${BACKEND_HTTP}/analyze`, {

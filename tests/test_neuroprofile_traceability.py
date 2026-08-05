@@ -24,8 +24,11 @@ from neuroprofile_traceability import (
     resolve_canonical_task,
     canonical_task_number,
     build_neuroprofile_export,
+    build_neuroprofile_task_entry,
     SESSION_TASK_GATES,
     _infer_session_depth,
+    _infer_repeat_status,
+    _compare_task_attempts,
     _apply_reliability_cap,
     _compute_session_confidence_cap,
     _gate_transparency,
@@ -1042,3 +1045,151 @@ def test_retired_diverse_thinking_id_is_not_silently_relabelled():
     assert creative_task["task_number"] is None
     assert creative_task["role_matching_status"] == "not_eligible"
     assert export["protocol_session_depth"] == "partial_unknown"
+
+
+# ─── Repeat-status wiring: _compare_task_attempts / _infer_repeat_status ──────
+#
+# This backend is a stateless per-call service -- it has no session history
+# of its own, so a prior attempt of the same task must be supplied by the
+# caller (the same pattern Task 7's single_task_reference_comparison already
+# uses). Without a prior_attempt, behaviour is unchanged from before this
+# fix: every task reports "not_repeated". _infer_repeat_status() itself
+# predates this fix and was already tested indirectly; these tests cover the
+# new wiring that actually calls it.
+
+def _analysis_with_direction(delta: float) -> dict:
+    return {
+        "theta_power": _make_analysis_feature("theta_power", q=0.001, d=1.1, pct=25.0, delta=delta),
+        "alpha_power": _make_analysis_feature("alpha_power", q=0.001, d=1.1, pct=25.0, delta=delta),
+    }
+
+
+class TestCompareTaskAttempts:
+    def test_no_prior_attempt_is_unjudgeable(self):
+        assert _compare_task_attempts([{"metric_name": "theta_power", "direction": "increase"}], None) == (None, None)
+
+    def test_prior_attempt_with_no_features_is_unjudgeable(self):
+        current = [{"metric_name": "theta_power", "direction": "increase"}]
+        assert _compare_task_attempts(current, {"features": []}) == (None, None)
+
+    def test_matching_direction_is_consistent(self):
+        current = [{"metric_name": "theta_power", "direction": "increase", "passes_neuroprofile_gate": True}]
+        prior = {"features": [{"metric_name": "theta_power", "direction": "increase"}],
+                 "signal_quality": {"quality_level": "high"}}
+        direction_consistent, _ = _compare_task_attempts(current, prior)
+        assert direction_consistent is True
+
+    def test_opposing_direction_is_inconsistent(self):
+        current = [{"metric_name": "theta_power", "direction": "decrease", "passes_neuroprofile_gate": True}]
+        prior = {"features": [{"metric_name": "theta_power", "direction": "increase"}],
+                 "signal_quality": {"quality_level": "high"}}
+        direction_consistent, _ = _compare_task_attempts(current, prior)
+        assert direction_consistent is False
+
+    def test_unmatched_metrics_are_unjudgeable(self):
+        current = [{"metric_name": "beta_power", "direction": "increase", "passes_neuroprofile_gate": True}]
+        prior = {"features": [{"metric_name": "theta_power", "direction": "increase"}],
+                 "signal_quality": {"quality_level": "high"}}
+        direction_consistent, _ = _compare_task_attempts(current, prior)
+        assert direction_consistent is None
+
+    def test_adjacent_quality_tiers_count_as_consistent(self):
+        current = [{"metric_name": "theta_power", "direction": "increase", "passes_neuroprofile_gate": True}]
+        prior = {"features": [{"metric_name": "theta_power", "direction": "increase"}],
+                 "signal_quality": {"quality_level": "medium"}}
+        _, quality_consistent = _compare_task_attempts(current, prior)
+        assert quality_consistent is True  # high (current, all features pass) vs medium
+
+    def test_two_tier_quality_swing_is_inconsistent(self):
+        current = [{"metric_name": "theta_power", "direction": "increase", "passes_neuroprofile_gate": False}]
+        prior = {"features": [{"metric_name": "theta_power", "direction": "increase"}],
+                 "signal_quality": {"quality_level": "high"}}
+        _, quality_consistent = _compare_task_attempts(current, prior)
+        assert quality_consistent is False  # low (current, no features pass) vs high
+
+
+class TestInferRepeatStatus:
+    def test_single_occurrence_is_not_repeated(self):
+        assert _infer_repeat_status(1, True, True) == "not_repeated"
+
+    def test_missing_judgement_is_insufficient(self):
+        assert _infer_repeat_status(2, None, True) == "insufficient"
+        assert _infer_repeat_status(2, True, None) == "insufficient"
+
+    def test_both_consistent_is_stable(self):
+        assert _infer_repeat_status(2, True, True) == "repeated_stable"
+
+    def test_either_inconsistent_is_unstable(self):
+        assert _infer_repeat_status(2, False, True) == "repeated_unstable"
+        assert _infer_repeat_status(2, True, False) == "repeated_unstable"
+
+
+class TestBuildNeuroprofileTaskEntryRepeatStatusWiring:
+    def test_no_prior_attempt_defaults_not_repeated(self):
+        # Regression guard: this must stay the default -- every existing
+        # caller (and every other test in this file) that doesn't know
+        # about prior_attempt must see unchanged behaviour.
+        entry = build_neuroprofile_task_entry(
+            "adaptive_numerical_reasoning", _analysis_with_direction(2.5),
+            {"expectation": {"grade": "A", "insufficient_metrics": False}},
+            reliability="high", scorable=True,
+        )
+        assert entry["repeat_status"] == "not_repeated"
+
+    def test_consistent_repeat_is_stable(self):
+        first = build_neuroprofile_task_entry(
+            "adaptive_numerical_reasoning", _analysis_with_direction(2.5),
+            {"expectation": {"grade": "A", "insufficient_metrics": False}},
+            reliability="high", scorable=True,
+        )
+        second = build_neuroprofile_task_entry(
+            "adaptive_numerical_reasoning", _analysis_with_direction(2.5),
+            {"expectation": {"grade": "A", "insufficient_metrics": False}},
+            reliability="high", scorable=True, prior_attempt=first,
+        )
+        assert second["repeat_status"] == "repeated_stable"
+
+    def test_inconsistent_repeat_is_unstable(self):
+        first = build_neuroprofile_task_entry(
+            "adaptive_numerical_reasoning", _analysis_with_direction(2.5),
+            {"expectation": {"grade": "A", "insufficient_metrics": False}},
+            reliability="high", scorable=True,
+        )
+        second = build_neuroprofile_task_entry(
+            "adaptive_numerical_reasoning", _analysis_with_direction(-2.5),
+            {"expectation": {"grade": "A", "insufficient_metrics": False}},
+            reliability="high", scorable=True, prior_attempt=first,
+        )
+        assert second["repeat_status"] == "repeated_unstable"
+
+    def test_prior_attempt_with_no_usable_features_is_insufficient(self):
+        entry = build_neuroprofile_task_entry(
+            "adaptive_numerical_reasoning", _analysis_with_direction(2.5),
+            {"expectation": {"grade": "A", "insufficient_metrics": False}},
+            reliability="high", scorable=True,
+            prior_attempt={"features": [], "signal_quality": {}},
+        )
+        assert entry["repeat_status"] == "insufficient"
+
+    def test_prior_attempt_threads_through_build_neuroprofile_export(self):
+        # Full pipeline, not just the single-task builder: per_task's
+        # "prior_attempt" key (as a caller supplying a prior /analyze
+        # response's task entry would set it) must reach repeat_status.
+        first_per_task = {
+            "adaptive_numerical_reasoning": {
+                "analysis": _analysis_with_direction(2.5),
+                "summary": {"expectation": {"grade": "A", "insufficient_metrics": False}},
+            }
+        }
+        first_export = build_neuroprofile_export(first_per_task, _make_existing_analysis(first_per_task))
+        first_entry = first_export["tasks"][0]
+
+        second_per_task = {
+            "adaptive_numerical_reasoning": {
+                "analysis": _analysis_with_direction(2.5),
+                "summary": {"expectation": {"grade": "A", "insufficient_metrics": False}},
+                "prior_attempt": first_entry,
+            }
+        }
+        second_export = build_neuroprofile_export(second_per_task, _make_existing_analysis(second_per_task))
+        assert second_export["tasks"][0]["repeat_status"] == "repeated_stable"

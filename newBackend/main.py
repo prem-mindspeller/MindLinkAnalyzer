@@ -4566,6 +4566,15 @@ def analyze(body: Dict) -> Dict:
           "task_durations_seconds": {"<canonical_task_id>": 90, ...}
         },
         "behavioral_evidence": { "<task_id>": {"status": "passed"}, ... },
+        "prior_attempt": {
+          "<task_id>": <prior neuroprofile_feature_export.tasks[] entry for
+                         this canonical_task_id, e.g. one this caller stored
+                         from an earlier session's response -- this backend
+                         has no session history of its own. Optional; when
+                         present, enables repeat_status classification
+                         (repeated_stable/repeated_unstable/insufficient)
+                         instead of the default "not_repeated">, ...
+        },
         "block_seconds": 8.0   # optional; default 8.0 s per block
       }
 
@@ -4581,6 +4590,7 @@ def analyze(body: Dict) -> Dict:
     tasks_raw:    Dict[str, List] = body.get("tasks", {}) if isinstance(body.get("tasks", {}), dict) else {}
     task_metadata_raw = body.get("task_metadata", {})
     behavioral_evidence_raw = body.get("behavioral_evidence", {})
+    prior_attempt_raw = body.get("prior_attempt", {})
     protocol_profile, protocol_profile_errors = normalize_protocol_profile(
         body.get("protocol_profile"),
         declaration_source=(
@@ -4643,12 +4653,16 @@ def analyze(body: Dict) -> Dict:
         )
         if behavioral_evidence is None:
             behavioral_evidence = metadata.get("behavioral_evidence")
+        prior_attempt = _task_sidecar_value(
+            prior_attempt_raw, raw_label, canonical_task_id
+        )
         normalized_tasks.append({
             "canonical_task_id": canonical_task_id,
             "raw_task_id": raw_label,
             "samples": list(raw_samples or []) if isinstance(raw_samples, list) else [],
             "task_metadata": metadata,
             "behavioral_evidence": behavioral_evidence,
+            "prior_attempt": prior_attempt if isinstance(prior_attempt, dict) else None,
             "recognized": canonical_task_id in TASK_BASELINE_CONDITIONS,
         })
 
@@ -4705,6 +4719,7 @@ def analyze(body: Dict) -> Dict:
         samples = task["samples"]
         task_metadata = task["task_metadata"]
         behavioral_evidence = task["behavioral_evidence"]
+        prior_attempt = task["prior_attempt"]
         expected_baseline = task_baseline_condition(task_id)
         reported_eye_state = _normalize_eye_state(task_metadata.get("eye_state"))
 
@@ -4830,6 +4845,7 @@ def analyze(body: Dict) -> Dict:
                 protocol_profile, task_id
             ),
             "behavioral_evidence": behavioral_evidence,
+            "prior_attempt": prior_attempt,
             "theoretical_onet_ability_candidates": theoretical_abilities_for_task(task_id),
         }
         if continuous_time_series is not None:
