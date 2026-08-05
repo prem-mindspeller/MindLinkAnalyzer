@@ -743,6 +743,41 @@ def behaviorally_validated_abilities_for_task(
     return theoretical if behavioral_evidence_passes(evidence) else []
 
 
+SPEED_GRADES = ("fast", "mediocre", "slow")
+
+
+def ability_grades_for_task(
+    canonical_task_id: str,
+    evidence: Any,
+) -> Dict[str, str]:
+    """Return {ability: 'fast'|'mediocre'|'slow'} for this task's graded abilities.
+
+    Speed-defined abilities (Reaction Time, Perceptual Speed, Speed of Closure)
+    are graded rather than merely gated by the task runner, because "did they
+    notice it" and "how fast did they notice it" are different claims and only
+    the second is what the ability actually names. The grade travels into the
+    neuroprofile as part of the ability's numeric evidence score.
+
+    Grades naming an ability this task does not measure are dropped, and any
+    value outside the declared vocabulary is ignored -- an unrecognised grade
+    must not silently become a score.
+    """
+    grades = evidence.get("ability_grades") if isinstance(evidence, dict) else None
+    if not isinstance(grades, dict):
+        return {}
+    theoretical = {
+        ability.casefold(): ability
+        for ability in theoretical_abilities_for_task(canonical_task_id)
+    }
+    out: Dict[str, str] = {}
+    for ability, grade in grades.items():
+        canonical = theoretical.get(str(ability).strip().casefold())
+        normalized = str(grade).strip().lower()
+        if canonical and normalized in SPEED_GRADES:
+            out[canonical] = normalized
+    return out
+
+
 def classify_feature_family(metric_name: str) -> str:
     """Return the feature family for a metric emitted by the existing analyzer."""
     m = (metric_name or "").lower()
@@ -1358,6 +1393,7 @@ def _task_summary_block(
         behavioral_evidence,
     )
     behavioral_status       = normalize_behavioral_status(behavioral_evidence)
+    ability_grades          = ability_grades_for_task(canonical_task_id, behavioral_evidence)
     mod_chars:     List[str] = []
 
     for feat in features:
@@ -1416,6 +1452,15 @@ def _task_summary_block(
         "behaviorally_validated_onet_ability_candidates": behaviorally_validated_abilities,
         "allowed_onet_ability_candidates": unique_abilities,
         "behavioral_evidence_status":      behavioral_status,
+        # Only ever contains abilities that ALSO cleared the behavioral gate and
+        # the EEG gate: a speed grade for an ability the participant did not
+        # otherwise evidence would be meaningless, and must not reach the
+        # backend's ability scoring as if it were support.
+        "ability_grades":                  {
+            ability: grade
+            for ability, grade in ability_grades.items()
+            if ability in behaviorally_validated_abilities and ability in unique_abilities
+        },
         "passes_behavioral_gate":          bool(behaviorally_validated_abilities),
         "passes_ability_gate":             bool(unique_abilities),
         "scorable":                        bool(scorable),

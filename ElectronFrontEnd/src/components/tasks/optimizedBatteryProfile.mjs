@@ -404,18 +404,40 @@ const thresholds = {
   [TASK.VISUAL_COMPARISON]: {
     requireRenderedMismatchOnset: true,
     minimumPostOnsetLatencyMs: 0,
-    maximumReactionTimeMs: null,
+    // Reaction Time and Perceptual Speed are abilities *defined* by speed, so
+    // they are graded, not merely gated: speedBands below turn the measured
+    // post-onset latency into fast/mediocre/slow, which becomes a numeric
+    // ability score that reaches role ranking (see SPEED_GRADE_SCORES).
+    // Measured from the RENDERED mismatch onset (27s in every current form),
+    // not from block start -- so these are "seconds after the mismatch
+    // appears", which is what the ability actually is. 0-5s after onset =
+    // fast (absolute 27-32s), 5-15s = mediocre (32-42s), beyond = slow.
+    // maximumReactionTimeMs is the ability gate and is deliberately equal to
+    // the mediocre bound: a response slower than that is not evidence of
+    // Reaction Time at all, so the ability is not credited. Was null (no
+    // bound whatsoever), which credited both abilities to a 20-second
+    // responder identically to a 50ms one.
+    maximumReactionTimeMs: 15000,
+    speedBands: { fastMaxMs: 5000, mediocreMaxMs: 15000 },
   },
   [TASK.CLOSURE]: {
     requireCorrectTarget: true,
-    // revealFraction runs 0 at revealStartSeconds to 1 at fullyVisibleSeconds,
-    // and responses only become possible at 0.10. Crediting Flexibility of
-    // Closure requires recognising the target while it is still embedded in
-    // dense noise, so the midpoint of the reveal schedule is the candidate
-    // boundary: at 0.50 the noise overlay is still ~54% opaque and blur is at
-    // half maximum. Above it the target is largely visible and only Speed of
-    // Closure is evidenced.
-    flexibilityMaximumRevealFraction: 0.5,
+    // Flexibility of Closure is now purely a recognition-accuracy construct:
+    // did the participant identify the right object out of the six options,
+    // regardless of when. Timing no longer contributes to it -- the previous
+    // flexibilityMaximumRevealFraction (0.5, reached at t=30s) has been
+    // removed, because with the object only reliably recognisable in the
+    // low-40s it was effectively unearnable.
+    //
+    // Speed of Closure carries the timing instead, graded on absolute elapsed
+    // time from block start (the reveal ramp is a fixed schedule, so elapsed
+    // time and revealFraction are interchangeable): <=47s fast, 47-50s
+    // mediocre, >50s slow. The object becomes reliably recognisable around
+    // 42s; a correct response before that is still graded fast but is flagged
+    // responded_before_recognizable, because with six options an early
+    // correct answer can be a 1-in-6 guess rather than genuine early closure.
+    speedBands: { fastMaxMs: 47000, mediocreMaxMs: 50000 },
+    recognizableFromMs: 42000,
   },
   [TASK.SPEECH_NOISE]: {
     // Both main_idea and key_detail are selected from a fixed option list, so

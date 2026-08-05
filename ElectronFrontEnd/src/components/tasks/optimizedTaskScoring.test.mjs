@@ -9,7 +9,7 @@ import {
   taskFormForSession,
   taskTimingFor,
 } from './optimizedBatteryConfig.mjs';
-import { scoreOptimizedTask } from './optimizedTaskScoring.mjs';
+import { scoreOptimizedTask, classifySpeed } from './optimizedTaskScoring.mjs';
 
 const form = (taskId) => taskFormForSession(taskId, 'session_1');
 
@@ -212,39 +212,108 @@ test('closure has no minimum-exposure delay -- an immediate correct response is 
   assert.equal(immediate.ability_validation['Flexibility of Closure'], 'passed');
 });
 
-test('flexibility of closure resolves against the configured reveal-fraction threshold', () => {
+test('flexibility of closure is recognition accuracy only, independent of timing', () => {
+  // Flexibility of Closure no longer depends on responding before a
+  // reveal-fraction threshold: with the object only reliably recognizable in
+  // the low-40s, that made the ability effectively unearnable. It is now
+  // purely "did they identify the right object". Speed carries the timing.
   const closure = form(TASK_IDS.CLOSURE);
-  const { revealStartSeconds, fullyVisibleSeconds } = closure.revealSchedule;
-  const revealSpan = fullyVisibleSeconds - revealStartSeconds;
-  const atFraction = (fraction) => (revealStartSeconds + fraction * revealSpan) * 1000;
 
-  // Recognised while the target is still embedded in dense noise: flexibility credited.
-  const dense = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
+  const early = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
     detected: true,
-    responseElapsedMs: atFraction(0.3),
+    responseElapsedMs: 20000,
   });
-  assert.equal(dense.metrics.flexibility_threshold_available, true);
-  assert.equal(dense.ability_validation['Flexibility of Closure'], 'passed');
-  assert.equal(dense.ability_validation['Speed of Closure'], 'passed');
-  assert.equal(dense.status, 'passed');
-
-  // Recognised only once the target is largely visible: speed only, not flexibility.
   const late = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
     detected: true,
-    responseElapsedMs: atFraction(0.8),
+    responseElapsedMs: 58000,
   });
-  assert.equal(late.ability_validation['Speed of Closure'], 'passed');
-  assert.equal(late.ability_validation['Flexibility of Closure'], 'failed');
+  for (const outcome of [early, late]) {
+    assert.equal(outcome.ability_validation['Flexibility of Closure'], 'passed');
+    assert.equal(outcome.ability_validation['Speed of Closure'], 'passed');
+    assert.equal(outcome.status, 'passed');
+  }
 
-  // With no configured threshold the ability must fall back to pending review.
-  const profile = JSON.parse(JSON.stringify(ACTIVE_BATTERY_PROFILE));
-  profile.thresholds[TASK_IDS.CLOSURE].flexibilityMaximumRevealFraction = null;
-  const unthresholded = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
+  // A wrong target fails both, regardless of how fast it was answered.
+  const wrong = scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: 'definitely_not_the_target' }, {
     detected: true,
-    responseElapsedMs: atFraction(0.3),
-  }, profile);
-  assert.equal(unthresholded.ability_validation['Flexibility of Closure'], 'pending_review');
-  assert.equal(unthresholded.status, 'pending_review');
+    responseElapsedMs: 43000,
+  });
+  assert.equal(wrong.status, 'failed');
+  assert.equal(wrong.ability_validation['Flexibility of Closure'], 'failed');
+  assert.equal(wrong.ability_validation['Speed of Closure'], 'failed');
+  assert.equal(wrong.ability_grades, undefined, 'a failed task grades nothing');
+});
+
+test('speed of closure is graded fast/mediocre/slow from the configured bands', () => {
+  const closure = form(TASK_IDS.CLOSURE);
+  const gradeAt = (ms) => scoreOptimizedTask(TASK_IDS.CLOSURE, closure, { target: closure.target }, {
+    detected: true,
+    responseElapsedMs: ms,
+  });
+
+  // Configured bands: <=47s fast, 47-50s mediocre, >50s slow.
+  assert.equal(gradeAt(43000).metrics.speed_grade, 'fast');
+  assert.equal(gradeAt(47000).metrics.speed_grade, 'fast', 'upper bound is inclusive');
+  assert.equal(gradeAt(48500).metrics.speed_grade, 'mediocre');
+  assert.equal(gradeAt(50000).metrics.speed_grade, 'mediocre', 'upper bound is inclusive');
+  assert.equal(gradeAt(52000).metrics.speed_grade, 'slow');
+
+  // The grade is published per ability so it can reach the backend's scoring.
+  assert.deepEqual(gradeAt(43000).ability_grades, { 'Speed of Closure': 'fast' });
+  assert.deepEqual(gradeAt(52000).ability_grades, { 'Speed of Closure': 'slow' });
+  // A slow response still demonstrates closure -- the ability is credited and
+  // the grade carries the penalty downstream.
+  assert.equal(gradeAt(52000).ability_validation['Speed of Closure'], 'passed');
+
+  // Responding before the object is reliably recognizable is graded fast but
+  // flagged: with six options an early correct answer can be a 1-in-6 guess.
+  assert.equal(gradeAt(20000).metrics.responded_before_recognizable, true);
+  assert.equal(gradeAt(43000).metrics.responded_before_recognizable, false);
+});
+
+test('reaction time and perceptual speed are graded, and a too-slow response is not credited', () => {
+  const compare = form(TASK_IDS.VISUAL_COMPARISON);
+  const onsetMs = compare.mismatchOnset * 1000;
+  const at = (reactionMs) => scoreOptimizedTask(TASK_IDS.VISUAL_COMPARISON, compare, {}, {
+    detected: true,
+    responseElapsedMs: onsetMs + reactionMs,
+    mismatchRenderedElapsedMs: onsetMs,
+  });
+
+  // Bands are measured from the rendered mismatch onset: <=5s fast,
+  // 5-15s mediocre, beyond that the ability is not credited at all.
+  assert.equal(at(500).metrics.speed_grade, 'fast');
+  assert.equal(at(5000).metrics.speed_grade, 'fast', 'upper bound is inclusive');
+  assert.equal(at(8000).metrics.speed_grade, 'mediocre');
+  assert.equal(at(15000).metrics.speed_grade, 'mediocre', 'upper bound is inclusive');
+
+  assert.deepEqual(at(500).ability_grades, { 'Perceptual Speed': 'fast', 'Reaction Time': 'fast' });
+  assert.deepEqual(at(8000).ability_grades, { 'Perceptual Speed': 'mediocre', 'Reaction Time': 'mediocre' });
+
+  // The regression this replaces: maximumReactionTimeMs was null, so a
+  // 20-second response was credited identically to a 50ms one.
+  const tooSlow = at(20000);
+  assert.equal(tooSlow.status, 'failed');
+  assert.equal(tooSlow.ability_validation['Reaction Time'], 'failed');
+  assert.equal(tooSlow.ability_validation['Perceptual Speed'], 'failed');
+  assert.equal(tooSlow.ability_grades, undefined, 'a failed task grades nothing');
+
+  // A press before the mismatch is rendered remains a false alarm, ungraded.
+  const falseAlarm = scoreOptimizedTask(TASK_IDS.VISUAL_COMPARISON, compare, {}, {
+    detected: true,
+    responseElapsedMs: onsetMs - 1000,
+    mismatchRenderedElapsedMs: onsetMs,
+  });
+  assert.equal(falseAlarm.status, 'failed');
+  assert.equal(falseAlarm.metrics.false_alarm, true);
+  assert.equal(falseAlarm.metrics.speed_grade, null);
+});
+
+test('classifySpeed treats an unmeasured time or missing bands as ungraded, never slow', () => {
+  assert.equal(classifySpeed(null, { fastMaxMs: 5000, mediocreMaxMs: 15000 }), null);
+  assert.equal(classifySpeed(1000, null), null);
+  assert.equal(classifySpeed(1000, {}), null);
+  assert.equal(classifySpeed(1000, { fastMaxMs: 5000 }), null, 'a partial band config grades nothing');
 });
 
 test('anomaly-type scoring rejects checkbox over-selection', () => {

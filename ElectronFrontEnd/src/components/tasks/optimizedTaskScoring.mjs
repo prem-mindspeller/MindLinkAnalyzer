@@ -17,6 +17,34 @@ const PASSED = 'passed';
 const FAILED = 'failed';
 const PENDING = 'pending_review';
 
+export const SPEED_FAST = 'fast';
+export const SPEED_MEDIOCRE = 'mediocre';
+export const SPEED_SLOW = 'slow';
+
+/**
+ * Classify a measured time against a task's configured speed bands.
+ *
+ * Speed-defined abilities (Reaction Time, Perceptual Speed, Speed of Closure)
+ * are graded rather than merely gated: the grade travels with the behavioral
+ * evidence into the neuroprofile, where it becomes part of the ability's
+ * numeric score and therefore influences role ranking. Returns null when the
+ * time was not measured or the task declares no bands, which callers must
+ * treat as "ungraded", never as slow.
+ *
+ * @param {number|null} elapsedMs measured time (post-onset latency for Task 9,
+ *   absolute elapsed time for Task 10 -- each task defines its own zero).
+ * @param {{fastMaxMs: number, mediocreMaxMs: number}|null|undefined} bands
+ */
+export const classifySpeed = (elapsedMs, bands) => {
+  if (elapsedMs == null || !bands) return null;
+  const fastMax = numeric(bands.fastMaxMs);
+  const mediocreMax = numeric(bands.mediocreMaxMs);
+  if (fastMax == null || mediocreMax == null) return null;
+  if (elapsedMs <= fastMax) return SPEED_FAST;
+  if (elapsedMs <= mediocreMax) return SPEED_MEDIOCRE;
+  return SPEED_SLOW;
+};
+
 const allAbilities = (taskId, status) => Object.fromEntries(
   (TASK_DEFINITIONS[taskId]?.abilities || []).map((ability) => [ability, status]),
 );
@@ -87,6 +115,7 @@ function result(
   scoringMethod,
   notes = [],
   configuration = null,
+  abilityGrades = null,
 ) {
   return {
     task_id: taskId,
@@ -95,6 +124,11 @@ function result(
     response,
     metrics,
     ability_validation: abilityValidation,
+    // {abilityName: 'fast'|'mediocre'|'slow'} for speed-defined abilities only.
+    // Omitted entirely (not an empty object) for tasks with no graded ability,
+    // so downstream consumers can distinguish "this task grades nothing" from
+    // "this task grades something but produced no grade this run".
+    ...(abilityGrades ? { ability_grades: abilityGrades } : {}),
     scoring_method: scoringMethod,
     notes,
     configuration,
@@ -140,6 +174,7 @@ export function scoreOptimizedTask(
     abilityValidation,
     scoringMethod,
     notes = [],
+    abilityGrades = null,
   ) => result(
     configuredTaskId,
     status,
@@ -154,6 +189,7 @@ export function scoreOptimizedTask(
     scoringMethod,
     notes,
     scoringConfiguration,
+    abilityGrades,
   );
 
   if (taskId === TASK_IDS.NUMERICAL) {
@@ -370,6 +406,18 @@ export function scoreOptimizedTask(
       && reactionTimeMs >= thresholds.minimumPostOnsetLatencyMs
       && (thresholds.maximumReactionTimeMs == null || reactionTimeMs <= thresholds.maximumReactionTimeMs);
     const correct = detected && !falseAlarm && latencyWithinRange;
+    // Graded, not just gated: reactionTimeMs is measured from the rendered
+    // mismatch onset, so the grade is "how quickly did they notice", which is
+    // exactly what Reaction Time and Perceptual Speed are. A response slower
+    // than the mediocre bound already fails latencyWithinRange above, so a
+    // graded task is never slow -- 'slow' is reachable only as the reason the
+    // task failed, and is reported for traceability rather than credited.
+    const speedGrade = classifySpeed(reactionTimeMs, thresholds.speedBands);
+    const abilityGrades = correct && speedGrade
+      ? Object.fromEntries(
+        (TASK_DEFINITIONS[taskId]?.abilities || []).map((ability) => [ability, speedGrade]),
+      )
+      : null;
     return scoredResult(taskId, correct ? PASSED : FAILED, response, {
       planned_mismatch_onset_ms: plannedOnsetMs,
       rendered_mismatch_onset_ms: renderedOnsetMs,
@@ -379,7 +427,10 @@ export function scoreOptimizedTask(
       false_alarm: falseAlarm,
       reaction_time_ms: reactionTimeMs,
       latency_within_configured_range: latencyWithinRange,
-    }, allAbilities(taskId, correct ? PASSED : FAILED), 'single_rendered_onset_latency');
+      speed_grade: speedGrade,
+      configured_speed_bands: thresholds.speedBands || null,
+    }, allAbilities(taskId, correct ? PASSED : FAILED), 'single_rendered_onset_latency',
+    [], abilityGrades);
   }
 
   if (taskId === TASK_IDS.CLOSURE) {
@@ -392,19 +443,28 @@ export function scoreOptimizedTask(
     const responded = runtime.detected === true && responseMs != null;
     const targetCorrect = normalizeText(response.target) === normalizeText(form.target);
     const correct = responded && (!thresholds.requireCorrectTarget || targetCorrect);
-    const flexibilityThresholdAvailable = thresholds.flexibilityMaximumRevealFraction != null;
-    const flexibilityPassed = correct
-      && flexibilityThresholdAvailable
-      && revealState.revealFraction <= thresholds.flexibilityMaximumRevealFraction;
+    // Flexibility of Closure is now purely a recognition-accuracy construct:
+    // did they identify the right object, regardless of when. The previous
+    // reveal-fraction gate (respond before 50% revealed) was removed from it --
+    // with the object only reliably recognisable in the low-40s, that made the
+    // ability effectively unearnable. See the CLOSURE thresholds comment in
+    // optimizedBatteryProfile.mjs.
+    //
+    // Speed of Closure carries the timing instead, graded on absolute elapsed
+    // time. A slow response still demonstrates closure (they did recognise
+    // it), so unlike Task 9 the ability is credited and the grade carries the
+    // penalty downstream -- speed is the whole construct here, but recognition
+    // is not in doubt.
+    const speedGrade = classifySpeed(responseMs, thresholds.speedBands);
+    const respondedBeforeRecognizable = correct
+      && thresholds.recognizableFromMs != null
+      && responseMs != null
+      && responseMs < thresholds.recognizableFromMs;
     const abilityValidation = correct
-      ? {
-        'Speed of Closure': PASSED,
-        'Flexibility of Closure': flexibilityThresholdAvailable
-          ? (flexibilityPassed ? PASSED : FAILED)
-          : PENDING,
-      }
+      ? { 'Speed of Closure': PASSED, 'Flexibility of Closure': PASSED }
       : allAbilities(taskId, FAILED);
-    const status = !correct ? FAILED : flexibilityThresholdAvailable ? (flexibilityPassed ? PASSED : FAILED) : PENDING;
+    const abilityGrades = correct && speedGrade ? { 'Speed of Closure': speedGrade } : null;
+    const status = correct ? PASSED : FAILED;
     return scoredResult(taskId, status, response, {
       recognition_accuracy: targetCorrect,
       recognition_time_ms: responseMs,
@@ -412,11 +472,19 @@ export function scoreOptimizedTask(
       symbol_opacity_at_response: responseMs == null ? null : revealState.symbolOpacity,
       blur_px_at_response: responseMs == null ? null : revealState.blurPx,
       noise_opacity_at_response: responseMs == null ? null : revealState.noiseOpacity,
-      flexibility_threshold_available: flexibilityThresholdAvailable,
-    }, abilityValidation, 'recognition_key_and_visibility_schedule', [
-      'Recognition latency yields candidate Speed of Closure evidence.',
-      'Flexibility of Closure remains pending until a validated visibility/noise threshold separates it from speed.',
-    ]);
+      speed_grade: speedGrade,
+      configured_speed_bands: thresholds.speedBands || null,
+      // With six options an early correct answer can be a 1-in-6 guess rather
+      // than genuine early closure; surfaced so it is auditable rather than
+      // silently graded fast.
+      responded_before_recognizable: respondedBeforeRecognizable,
+    }, abilityValidation, 'recognition_key_and_speed_bands', [
+      'Flexibility of Closure is evidenced by identifying the correct object, independent of timing.',
+      'Speed of Closure is graded fast/mediocre/slow from the configured response-time bands.',
+      ...(respondedBeforeRecognizable
+        ? ['Responded before the object was reliably recognizable; an early correct answer may be a guess.']
+        : []),
+    ], abilityGrades);
   }
 
   if (taskId === TASK_IDS.SPEECH_NOISE) {
