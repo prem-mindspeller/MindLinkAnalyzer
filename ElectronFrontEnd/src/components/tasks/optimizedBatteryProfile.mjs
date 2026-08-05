@@ -378,10 +378,15 @@ const thresholds = {
     // set low deliberately so they reject an empty or single-theme response
     // without asserting a normative creativity cut-off.
     // relevantIdeaCount: integer; categoryDiversity: integer count of distinct
-    // use-categories; originality: mean 1-5 rubric rating.
+    // use-categories; originality: integer 1-5 rubric rating (the backend
+    // grader's prompt constrains the model to an integer -- see
+    // QUALITY_SCALE_DESCRIPTION in task_battery_rubric_grader.py -- so a
+    // fractional floor here was never actually reachable; 3 is the true
+    // floor this enforced. Was 2.5, which read as if the model could clear
+    // a midpoint no integer output can land on.
     minimumRelevantIdeas: 4,
     minimumCategoryDiversity: 2,
-    minimumOriginality: 2.5,
+    minimumOriginality: 3,
   },
   [TASK.DUAL_TASK]: {
     maximumAbsoluteCountError: 0,
