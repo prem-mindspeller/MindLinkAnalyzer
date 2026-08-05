@@ -6,10 +6,11 @@ import Footer from '../components/footer';
 import AnalysisResultsPanel from '../components/AnalysisResultsPanel';
 import { runAnalysis, seedReport } from '../service/analysisService';
 import { buildNeuroprofileReportDocument } from '../service/reportDocument.mjs';
+import { buildEegReportExportDocument } from '../service/eegReportExport.mjs';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faPlay, faSpinner, faDownload, faCloud,
-    faArrowLeft, faCheck,
+    faArrowLeft, faCheck, faFileExport,
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/liveEegReading.css';
 import '../styles/upload.css';
@@ -65,6 +66,31 @@ const UploadPage = () => {
         a.download = `neuroprofile_feature_export_${Date.now()}.json`;
         a.click();
         URL.revokeObjectURL(url);
+    };
+
+    // Downloads exactly what handleSeed() would POST to
+    // /api/cas/eeg-reports/seed, plus the exact string that endpoint writes
+    // into brainlink_eeg_reports.report_text -- without uploading anything.
+    // For manually re-seeding this same session against the backend later
+    // (e.g. testing), see report_text_column_value in the downloaded file.
+    const [exportingBackendPayload, setExportingBackendPayload] = useState(false);
+    const handleDownloadBackendPayload = async () => {
+        if (!results || exportingBackendPayload) return;
+        setExportingBackendPayload(true);
+        try {
+            const email = loginService.getUser() || '';
+            const protocolType = hasCompletedInitial ? 'advanced' : 'initial';
+            const doc = await buildEegReportExportDocument(email, protocolType, results);
+            const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `eeg_report_backend_upload_${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } finally {
+            setExportingBackendPayload(false);
+        }
     };
 
 
@@ -148,6 +174,19 @@ const UploadPage = () => {
                                             : seedStatus === 'success'
                                                 ? <><FontAwesomeIcon icon={faCheck} style={{ marginRight: 8 }} />{t('upload.uploaded')}</>
                                                 : <><FontAwesomeIcon icon={faCloud} style={{ marginRight: 8 }} />{t('upload.upload')}</>}
+                                    </button>
+                                    {/* Developer/testing action, deliberately not translated: exports the
+                                        exact backend upload payload (including the report_text DB-column
+                                        value) to a local file instead of / alongside actually uploading it. */}
+                                    <button
+                                        className="upload-btn-secondary"
+                                        onClick={handleDownloadBackendPayload}
+                                        disabled={exportingBackendPayload}
+                                        title="Download the exact data normally sent to the backend on upload, including the report_text database column value, without uploading it."
+                                    >
+                                        {exportingBackendPayload
+                                            ? <><FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />Exporting backend payload…</>
+                                            : <><FontAwesomeIcon icon={faFileExport} style={{ marginRight: 8 }} />Download backend upload data</>}
                                     </button>
                                 </>
                             )}

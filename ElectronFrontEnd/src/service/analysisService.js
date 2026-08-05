@@ -14,8 +14,7 @@
  */
 import loginService from './loginService';
 import i18n from '../i18n';
-import { createCompressedReportEnvelope } from './reportEnvelope.mjs';
-import { buildNeuroprofileReportDocument } from './reportDocument.mjs';
+import { buildEegReportSeedPayload } from './eegReportExport.mjs';
 import { loadPriorTaskAttempts } from './priorAttemptService.mjs';
 import {
     buildSingleTaskAnalysisPayload,
@@ -294,54 +293,7 @@ export async function seedReport(email, protocolType, analysisResults) {
 
     if (!token) throw new Error(i18n.t('errors.notAuthenticated'));
 
-    const partnerId = sessionStorage.getItem('partnerId');
-    // Generate session ID matching legacy format: session_YYYYMMDD_HHMMSS_xxxxxxxx
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-    const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const randPart = Math.random().toString(36).substring(2, 10);
-    const sessionId = `session_${datePart}_${timePart}_${randPart}`;
-
-    // Seed the canonical neuroprofile export as compressed JSON.
-    const reportJson = buildNeuroprofileReportDocument(analysisResults);
-    const reportEnvelope = await createCompressedReportEnvelope(reportJson, {
-        contentType: 'application/json',
-        now: () => now,
-    });
-
-    const taskCount = Object.keys(analysisResults.per_task || {}).length;
-
-    const payload = {
-        email,
-        report_text: reportEnvelope.report_blob,
-        is_base64: reportEnvelope.is_base64,
-        is_compressed: reportEnvelope.is_compressed,
-        compression: reportEnvelope.compression,
-        storage_format: reportEnvelope.storage_format,
-        content_type: reportEnvelope.content_type,
-        encoding: reportEnvelope.encoding,
-        original_size_bytes: reportEnvelope.original_size_bytes,
-        compressed_size_bytes: reportEnvelope.compressed_size_bytes,
-        report_sha256: reportEnvelope.sha256,
-        protocol_type: protocolType,
-        partner_id: partnerId,
-        session_id: sessionId,
-        generation_meta: {
-            generated_at: now.toISOString(),
-            analyzer_version: '1.0',
-            workflow: 'electron_frontend',
-            task_count: taskCount,
-            report_contract: 'neuroprofile_feature_export',
-            report_storage: {
-                storage_format: reportEnvelope.storage_format,
-                compression: reportEnvelope.compression,
-                original_size_bytes: reportEnvelope.original_size_bytes,
-                compressed_size_bytes: reportEnvelope.compressed_size_bytes,
-                sha256: reportEnvelope.sha256,
-            },
-        },
-    };
+    const payload = await buildEegReportSeedPayload(email, protocolType, analysisResults);
 
     const res = await fetch(`${baseUrl}/api/cas/eeg-reports/seed`, {
         method: 'POST',
