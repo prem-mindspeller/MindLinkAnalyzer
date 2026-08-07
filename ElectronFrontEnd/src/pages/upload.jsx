@@ -5,10 +5,9 @@ import LoggedInHeader from '../components/LoggedInHeader';
 import Footer from '../components/footer';
 import AnalysisResultsPanel from '../components/AnalysisResultsPanel';
 import { runAnalysis, seedReport } from '../service/analysisService';
-import { buildNeuroprofileReportDocument } from '../service/reportDocument.mjs';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-    faPlay, faSpinner, faDownload, faCloud,
+    faPlay, faSpinner, faCloud,
     faArrowLeft, faCheck,
 } from '@fortawesome/free-solid-svg-icons';
 import '../styles/liveEegReading.css';
@@ -33,7 +32,6 @@ const UploadPage = () => {
     const [seedStatus, setSeedStatus] = useState(null); // null | 'seeding' | 'success' | 'error'
     const [seedMsg, setSeedMsg] = useState('');
     const [notUploadedProfile, setNotUploadedProfile] = useState(true);
-    const [showDownloadProfileButton, setShowDownloadProfileButton] = useState(false);
 
 
     const hasCompletedInitial = Boolean(
@@ -55,19 +53,6 @@ const UploadPage = () => {
         }
     };
 
-    const handleDownload = () => {
-        if (!results) return;
-        const text = buildNeuroprofileReportDocument(results);
-        const blob = new Blob([text], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `neuroprofile_feature_export_${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-
     const handleSeed = async () => {
         if (seedStatus === 'seeding' || seedStatus === 'success') return;
         const email = loginService.getUser() || '';
@@ -81,7 +66,6 @@ const UploadPage = () => {
         } catch (err) {
             setSeedStatus('error');
             setSeedMsg(t('upload.seedFailed', { message: err.message }));
-            setShowDownloadProfileButton(true);
         }
     };
 
@@ -132,24 +116,17 @@ const UploadPage = () => {
                             </button>
 
                             {status === STATUS.DONE && (
-                                <>
-                                    {showDownloadProfileButton && (
-                                        <button className="upload-btn-secondary" onClick={handleDownload}>
-                                            <FontAwesomeIcon icon={faDownload} style={{ marginRight: 8 }} />{t('upload.downloadReport')}
-                                        </button>
-                                    )}
-                                    <button
-                                        className="upload-btn-seed"
-                                        onClick={handleSeed}
-                                        disabled={seedStatus === 'seeding' || seedStatus === 'success'}
-                                    >
-                                        {seedStatus === 'seeding'
-                                            ? <><FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />{t('upload.uploading')}</>
-                                            : seedStatus === 'success'
-                                                ? <><FontAwesomeIcon icon={faCheck} style={{ marginRight: 8 }} />{t('upload.uploaded')}</>
-                                                : <><FontAwesomeIcon icon={faCloud} style={{ marginRight: 8 }} />{t('upload.upload')}</>}
-                                    </button>
-                                </>
+                                <button
+                                    className="upload-btn-seed"
+                                    onClick={handleSeed}
+                                    disabled={seedStatus === 'seeding' || seedStatus === 'success'}
+                                >
+                                    {seedStatus === 'seeding'
+                                        ? <><FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: 8 }} />{t('upload.uploading')}</>
+                                        : seedStatus === 'success'
+                                            ? <><FontAwesomeIcon icon={faCheck} style={{ marginRight: 8 }} />{t('upload.uploaded')}</>
+                                            : <><FontAwesomeIcon icon={faCloud} style={{ marginRight: 8 }} />{t('upload.upload')}</>}
+                                </button>
                             )}
                         </div>
 
