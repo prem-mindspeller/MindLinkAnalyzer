@@ -2,7 +2,7 @@ import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import RegionPage from './pages/region';
 import LoginPage from './pages/login';
-import LiveEegReading from './pages/liveEegReding';
+import LiveEegReading from './pages/liveEegReading';
 import BaselineCalibration1 from './pages/BaselineCalibration1';
 import TaskSelection from './pages/TaskSelection';
 import UploadPage from './pages/upload';

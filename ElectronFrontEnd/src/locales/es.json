@@ -458,7 +458,7 @@
         },
         "3": {
             "title": "Tareas cognitivas",
-            "content": "Cada tarea se ejecuta durante 45 a 114 segundos. Siga atentamente las instrucciones que aparecen en pantalla. Permanezca lo más quieto posible para minimizar los artefactos de movimiento. Una vez completadas todas las tareas seleccionadas, continúe con la pantalla de carga."
+            "content": "Cada tarea incluye un bloque EEG continuo de 60 a 180 segundos. Siga el orden fijo de la sesión y la indicación de ojos abiertos o cerrados. Permanezca lo más quieto posible para reducir los artefactos de movimiento."
         },
         "4": {
             "title": "Subiendo resultados",
@@ -573,7 +573,7 @@
             },
             "taskSelection": {
                 "title": "Paso 6: Selección y grabación de tareas",
-                "why": "Diferentes tareas cognitivas activan distintas regiones del cerebro. Elegir las tareas correctas mapea habilidades mentales específicas (concentración, memoria, creatividad y más) brindándole un perfil cognitivo rico y personalizado."
+                "why": "Las características EEG específicas de cada tarea se comparan con una línea base del mismo estado ocular. Las respuestas conductuales y la calidad de la señal determinan qué vínculos con aptitudes O*NET pueden informarse; el EEG por sí solo no mide directamente una aptitud."
             },
             "upload": {
                 "title": "Paso 7: cargar y analizar",

@@ -12,9 +12,14 @@ const Header = () => {
     const { t } = useTranslation();
 
     const loggedInUser = sessionStorage.getItem('loggedInUser');
-    const handleLogout = () => {
-        loginService.logout();
-        navigate('/login');
+    const handleLogout = async () => {
+        try {
+            await loginService.logout();
+        } catch (error) {
+            console.error('Battery-run cleanup failed during logout.', error);
+        } finally {
+            navigate('/login');
+        }
     };
 
     return (

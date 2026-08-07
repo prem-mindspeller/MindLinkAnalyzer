@@ -462,7 +462,7 @@
         },
         "3": {
             "title": "Cognitive Tasks",
-            "content": "Each task runs for 45 to 114 seconds. Follow the on-screen instructions closely. Remain as still as possible to minimise movement artefacts. After all selected tasks are complete, proceed to the upload screen."
+            "content": "Each task has a 60 to 180 second continuous EEG block. Follow the fixed session order and the eye-open or eye-closed instruction. Remain as still as possible to minimise movement artefacts."
         },
         "4": {
             "title": "Uploading Results",
@@ -577,7 +577,7 @@
             },
             "taskSelection": {
                 "title": "Step 6 — Task Selection & Recording",
-                "why": "Different cognitive tasks activate distinct brain regions. Choosing the right tasks maps specific mental abilities — focus, memory, creativity, and more — giving you a rich and personalised cognitive profile."
+                "why": "Task-specific EEG features are compared with an eye-state-matched baseline. Behavioural answers and signal quality determine which O*NET ability links may be reported; EEG alone is not a direct ability measure."
             },
             "upload": {
                 "title": "Step 7 — Upload & Analyse",

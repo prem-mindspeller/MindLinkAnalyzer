@@ -10,6 +10,8 @@ venv
 reports/
 new-coverage/
 coverage/
+# Generated DSP comparison artifacts (BrainlinkReact/test-eeg-comparison.*)
+test-results-*.json
 .pytest_cache/
 *.pyc
 __pycache__/

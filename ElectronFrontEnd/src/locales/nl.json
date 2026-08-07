@@ -458,7 +458,7 @@
         },
         "3": {
             "title": "Cognitieve taken",
-            "content": "Elke taak duurt 45 tot 114 seconden. Volg de instructies op het scherm nauwkeurig. Blijf zo stil mogelijk om bewegingsartefacten te minimaliseren."
+            "content": "Elke taak heeft een ononderbroken EEG-blok van 60 tot 180 seconden. Volg de vaste sessievolgorde en de instructie voor ogen open of gesloten. Blijf zo stil mogelijk om bewegingsartefacten te beperken."
         },
         "4": {
             "title": "Resultaten uploaden",
@@ -573,7 +573,7 @@
             },
             "taskSelection": {
                 "title": "Stap 6 — Taakselectie & opname",
-                "why": "Verschillende cognitieve taken activeren specifieke hersengebieden. Door de juiste taken te kiezen, brengt u specifieke mentale vermogens in kaart — focus, geheugen, creativiteit en meer — voor een rijk en gepersonaliseerd cognitief profiel."
+                "why": "Taakspecifieke EEG-kenmerken worden vergeleken met een baseline met dezelfde oogconditie. Gedragsantwoorden en signaalkwaliteit bepalen welke koppelingen met O*NET-vermogens mogen worden gerapporteerd; EEG alleen meet een vermogen niet rechtstreeks."
             },
             "upload": {
                 "title": "Stap 7 — Uploaden & analyseren",

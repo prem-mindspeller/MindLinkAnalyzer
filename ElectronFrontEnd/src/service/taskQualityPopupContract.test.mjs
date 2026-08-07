@@ -10,34 +10,20 @@ const taskSelectionSource = readFileSync(join(srcDir, 'pages', 'TaskSelection.js
 assert.equal(taskSelectionSource.includes('qualityUsableFeatures'), false);
 assert.equal(taskSelectionSource.includes('qualityConfidence'), false);
 assert.equal(taskSelectionSource.includes('qualityRecordingSignal'), false);
-assert.match(taskSelectionSource, /5 to 10 seconds/);
+assert.match(taskSelectionSource, /20 contiguous clean seconds/);
+assert.match(taskSelectionSource, /cannot be stitched together/);
 assert.match(taskSelectionSource, /isRepeatSignalReady/);
 assert.match(taskSelectionSource, /ts-quality-blocking-overlay/);
-assert.match(taskSelectionSource, /qualityBlockingTitle/);
+assert.doesNotMatch(taskSelectionSource, /accept_with_warning|qualityKeepAttempt/);
+assert.match(taskSelectionSource, /completedIds\.includes\(selectedId\)[\s\S]*?taskIsUnlocked\(selectedId\)/);
+assert.match(taskSelectionSource, /Completed · accepted attempt locked/);
+assert.doesNotMatch(taskSelectionSource, /Run this form again/);
 
 const requiredTaskSelectionKeys = [
   'qualityKicker',
   'qualityRepeatTitle',
-  'qualitySavedWarningTitle',
   'qualityCheckErrorTitle',
-  'qualityCheckErrorBody',
-  'qualityRepeatBody',
-  'qualitySavedWarningBody',
   'qualityLivePlot',
-  'qualityStageAdjustTitle',
-  'qualityStageAdjustBody',
-  'qualityStageStabilizeTitle',
-  'qualityStageStabilizeBody',
-  'qualityStageRepeatTitle',
-  'qualityStageReadyBody',
-  'qualityStageWaitingBody',
-  'qualityKeepAttempt',
-  'qualityRepeatButton',
-  'qualityWaitingButton',
-  'qualityBlockingBody',
-  'qualityBlockingTitle',
-  'qualityStabilizingButton',
-  'qualityStageStabilizingBody',
 ];
 
 for (const fileName of readdirSync(join(srcDir, 'locales')).filter(name => name.endsWith('.json'))) {
@@ -45,5 +31,4 @@ for (const fileName of readdirSync(join(srcDir, 'locales')).filter(name => name.
   for (const key of requiredTaskSelectionKeys) {
     assert.ok(locale.taskSelection?.[key], `${fileName} missing taskSelection.${key}`);
   }
-  assert.match(locale.taskSelection.qualityStageStabilizeBody, /5\s*(?:to|-|à|a|bis)\s*10|5.*10/i);
 }

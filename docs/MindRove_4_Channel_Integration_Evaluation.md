@@ -571,8 +571,8 @@ npm run dev
 ```
 
 The frontend calls `GET /ports`, prefers the available MindRove device, and
-connects through the backend. Baseline and task sessions should now store
-four-channel sample objects in session storage.
+connects through the backend. Baseline and task sessions store four-channel
+sample objects in the run-scoped IndexedDB recording store.
 
 ## How To Switch Back To Legacy BrainLink Serial
 
@@ -604,8 +604,9 @@ Use this checklist during review:
 - WebSocket emits `battery` once the MindRove SDK battery row is available.
 - WebSocket emits `raw_multi_batch` samples shaped as FP1/FP2/O1/O2 objects.
 - WebSocket still emits `raw_batch` so the existing waveform renders.
-- Baseline session storage contains four-channel objects, not just numbers.
-- Task session storage contains four-channel objects, not just numbers.
+- IndexedDB baseline records contain four-channel objects, not just numbers;
+  Web Storage retains only the compact baseline manifest.
+- IndexedDB task records contain four-channel objects, not just numbers.
 - `/analyze` accepts those four-channel objects and produces the existing
   feature/report schema.
 - Regression tests pass.

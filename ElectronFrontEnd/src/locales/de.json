@@ -458,7 +458,7 @@
         },
         "3": {
             "title": "Kognitive Aufgaben",
-            "content": "Jede Aufgabe dauert 45 bis 114 Sekunden. Befolgen Sie genau die Anweisungen auf dem Bildschirm. Bleiben Sie möglichst ruhig, um Bewegungsartefakte zu minimieren. Nachdem alle ausgewählten Aufgaben abgeschlossen sind, fahren Sie mit dem Upload-Bildschirm fort."
+            "content": "Jede Aufgabe umfasst einen durchgehenden EEG-Block von 60 bis 180 Sekunden. Befolgen Sie die feste Sitzungsreihenfolge und die Anweisung für offene oder geschlossene Augen. Bleiben Sie möglichst ruhig, um Bewegungsartefakte zu minimieren."
         },
         "4": {
             "title": "Ergebnisse hochladen",
@@ -573,7 +573,7 @@
             },
             "taskSelection": {
                 "title": "Schritt 6 – Aufgabenauswahl und -aufzeichnung",
-                "why": "Verschiedene kognitive Aufgaben aktivieren unterschiedliche Gehirnregionen. Durch die Auswahl der richtigen Aufgaben werden bestimmte geistige Fähigkeiten abgebildet – Konzentration, Gedächtnis, Kreativität und mehr – und Sie erhalten ein umfassendes und personalisiertes kognitives Profil."
+                "why": "Aufgabenspezifische EEG-Merkmale werden mit einer Baseline desselben Augenzustands verglichen. Verhaltensantworten und Signalqualität bestimmen, welche Verknüpfungen zu O*NET-Fähigkeiten berichtet werden dürfen; EEG allein misst keine Fähigkeit direkt."
             },
             "upload": {
                 "title": "Schritt 7 – Hochladen und Analysieren",

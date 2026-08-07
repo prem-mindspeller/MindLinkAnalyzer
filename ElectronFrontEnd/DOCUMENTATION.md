@@ -71,6 +71,10 @@ The application:
 
 > **Note:** The Python backend (`MindlinkBackend.exe`) must be built separately from the `newBackend/` sibling directory. In development mode the frontend expects the executable at `../newBackend/dist/MindlinkBackend/MindlinkBackend.exe` relative to this folder.
 
+> **Spoken stimuli require Windows.** Tasks 1, 2, 4, 7 and 11 deliver their
+> stimuli through the Web Speech API, which has no voices under Electron on
+> Linux. See [Known Limitations](#13-known-limitations).
+
 ---
 
 ## 3. Repository Structure
@@ -524,7 +528,8 @@ wsEegService.js (renderer process)
 React components / useTaskRunner hook
       │ Samples accumulated in task recording phases
       ▼
-sessionStorage  (taskData_<id>, calibrationData_eyes_closed/open)
+IndexedDB  (run-scoped task and EC/EO baseline recordings)
+sessionStorage  (small run ID, completion and baseline manifest only)
       ▼
 analysisService.runAnalysis()  →  POST http://localhost:8000/analyze
       ▼
@@ -541,9 +546,12 @@ analysisService.seedReport()   →  POST https://<region>.mindspeller.com/api/ca
 
 ---
 
-### 7.2 Session Storage Schema
+### 7.2 Recording and Session Storage Schema
 
-All session state lives in `window.sessionStorage`. Keys are cleared on browser/Electron window close.
+Large raw EEG recordings live in IndexedDB under a run-scoped identifier. Only
+small authentication, routing and completion values remain in
+`window.sessionStorage`. Legacy raw Web Storage values are migrated lazily and
+removed only after their durable copy commits.
 
 | Key | Type | Set by | Used by |
 |---|---|---|---|
@@ -554,10 +562,16 @@ All session state lives in `window.sessionStorage`. Keys are cleared on browser/
 | `language` | `'en' \| 'nl'` | `header.jsx` | `i18n.js` |
 | `partnerId` | `string` | `partnerIdComponent` | `seedReport` |
 | `pathwayType` | `string` | `login.jsx` | `TaskSelection.jsx` |
-| `calibrationData_eyes_closed` | `JSON number[]` | `BaselineCalibration1` | `runAnalysis` |
-| `calibrationData_eyes_open` | `JSON number[]` | `BaselineCalibration1` | `runAnalysis` |
+| `recordingStoreSessionId` | `string` | `recordingStore` | Namespaces task and baseline recordings |
+| `baselineCalibration` | compact JSON metadata | `BaselineCalibration1` | Completion/UI compatibility manifest |
+| `calibrationData_eyes_closed/open` | legacy JSON arrays | Older releases | Lazily migrated, then removed |
 | `completedTasks` | `JSON string[]` | `TaskSelection` | `runAnalysis`, `upload` |
-| `taskData_<taskId>` | `JSON number[]` | `TaskSelection` / task hook | `runAnalysis` |
+| `taskData_<taskId>` | legacy JSON arrays | Older releases | Lazily migrated, then removed |
+
+IndexedDB database `mindlink-analyzer-recordings`, object store
+`taskRecordings`, contains both task records and namespaced
+`baseline::eyes_closed` / `baseline::eyes_open` records. Cleanup deletes the
+entire active run namespace, including interrupted recordings.
 
 ---
 
@@ -745,10 +759,38 @@ Component design conventions:
 ## 13. Known Limitations
 
 - **Windows only** — The Python backend is packaged as a `.exe`. macOS/Linux builds are not supported without modifying the `extraResources` path and build target.
+- **Spoken stimuli are silent under Electron on Linux** — Electron does not ship
+  Chromium's speech-dispatcher integration, so the Web Speech API exists but has
+  no voices. Verified on Electron 40.10.6: `window.speechSynthesis` and
+  `SpeechSynthesisUtterance` are present, `getVoices()` returns `0`, and
+  `speak()` fires `onerror` with `synthesis-failed`. This does not depend on the
+  host — a working system speech stack (`speech-dispatcher` + `espeak-ng`, with
+  `spd-say` producing audio) does not change it, and neither does the
+  `--enable-speech-dispatcher` Chromium switch. Windows is unaffected because
+  Chromium uses SAPI there.
+  - *Affected tasks:* 1, 2, 4, 7 (the "Update"/"Switch" cues) and 11 (the
+    passage). Task 3 is tones-only and unaffected.
+  - *Expected signature:* countdown and tone stimuli still play, because those
+    are WebAudio oscillators on a separate code path. Hearing beeps but no voice
+    is this limitation, not a broken audio device.
+  - *No invalid data results.* The failed utterance enters the audio delivery
+    audit, forcing `protocol_complete: false`, so the backend marks the attempt
+    protocol-invalid and unscorable rather than scoring undelivered stimuli.
+  - *Remedy, when required:* the audio profile already supports a
+    `premixed_audio_asset` source mode, and `speak()` resolves assets globally,
+    per form or per stimulus key. Pre-rendered audio files therefore fix Linux
+    through profile data alone, with no task-engine change — the same step the
+    battery needs for calibrated production audio (see
+    `docs/Task_Battery_Optimization_Implementation.md`).
 - **Single language server regions** — Only the English (`en`) region is selectable in the UI; the Dutch region card is visible but locked.
-- **No automated tests** — The `test` script is a placeholder; no unit or integration test suite is currently implemented.
+- **Test script wiring** — Automated `.test.mjs` contract/unit tests exist, but
+  the package-level `npm test` script is still a placeholder; run them with
+  Node's test runner until that script is wired up.
 - **`nodeIntegration: true`** — The renderer has full Node.js access. This is acceptable for a local desktop app with no external content but would be a security concern in a web context.
-- **`sessionStorage` persistence** — All collected EEG data is lost if the Electron window is closed mid-session. There is no local recovery mechanism.
+- **Run recovery after full window close** — Raw EEG is durable in IndexedDB,
+  but the active run identifier is session-scoped. Reloading the current window
+  is supported; recovering a run after fully closing the Electron window is not
+  yet implemented.
 - **`AnalysisResultsPanel` unused** — The component is implemented but not wired into the upload page.
 - **`authService.js` unused** — Imported but not consumed anywhere; kept for future use.
 
@@ -787,6 +829,9 @@ Ensure you are using **Node.js ≥ 18**. Delete `node_modules/` and run `npm ins
 
 ### Analysis returns "No baseline data found"
 
-The baseline calibration step (Step 5) must be completed in the same session before running analysis. `sessionStorage` does not persist across window reloads.
+The required matched baseline must be completed in the active battery run.
+Reloading the same Electron window retains its session identifier and can load
+the durable IndexedDB baseline; fully closing the window retires that active
+run context.
 
 ---

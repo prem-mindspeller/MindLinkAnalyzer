@@ -86,13 +86,22 @@ const LiveEegReading = () => {
         return () => { unsubStatus(); unsubEeg(); };
     }, []);
 
-    // ── Auto-scan on mount (always runs — never skip based on stale cached status) ──
+    // ── On mount: adopt an existing live connection, otherwise scan. ──────────
+    // The Python backend owns the device across navigation. Re-scanning while it
+    // is already connected clobbers the CONNECTED status with SEARCHING, and
+    // because /connect is idempotent it never re-emits 'connected' — leaving the
+    // status stuck on "No Device / Searching" even though data still streams
+    // (e.g. returning here from the baseline screen). Verify the authoritative
+    // backend status first, then only scan when there is no connection to adopt.
     useEffect(() => {
         let cancelled = false;
-        const scan = async () => {
+        const init = async () => {
+            await eegConnectService.fetchStatus();
+            if (cancelled) return;
+            if (eegConnectService.getStatus() === CONNECTION_STATUS.CONNECTED) return;
             await scanAndConnect();
         };
-        scan().catch((error) => {
+        init().catch((error) => {
             if (!cancelled) setConnectError(error?.message || t('errors.connectionFailed'));
         });
         return () => { cancelled = true; };

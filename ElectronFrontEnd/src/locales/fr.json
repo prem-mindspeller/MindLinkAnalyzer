@@ -458,7 +458,7 @@
         },
         "3": {
             "title": "Tâches cognitives",
-            "content": "Chaque tâche s'exécute pendant 45 à 114 secondes. Suivez attentivement les instructions à l’écran. Restez aussi immobile que possible pour minimiser les artefacts de mouvement. Une fois toutes les tâches sélectionnées terminées, passez à l'écran de téléchargement."
+            "content": "Chaque tâche comprend un bloc EEG continu de 60 à 180 secondes. Respectez l’ordre fixe de la session et la consigne yeux ouverts ou fermés. Restez aussi immobile que possible afin de limiter les artefacts de mouvement."
         },
         "4": {
             "title": "Téléchargement des résultats",
@@ -573,7 +573,7 @@
             },
             "taskSelection": {
                 "title": "Étape 6 — Sélection et enregistrement des tâches",
-                "why": "Différentes tâches cognitives activent des régions cérébrales distinctes. Choisir les bonnes tâches permet de cartographier des capacités mentales spécifiques (concentration, mémoire, créativité, etc.), vous offrant ainsi un profil cognitif riche et personnalisé."
+                "why": "Les caractéristiques EEG propres à chaque tâche sont comparées à une référence correspondant à l’état des yeux. Les réponses comportementales et la qualité du signal déterminent quels liens avec les aptitudes O*NET peuvent être rapportés ; l’EEG seul ne mesure pas directement une aptitude."
             },
             "upload": {
                 "title": "Étape 7 — Télécharger et analyser",

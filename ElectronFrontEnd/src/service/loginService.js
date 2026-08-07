@@ -1,5 +1,6 @@
 import i18n from '../i18n';
 import { resolveBookingAccess } from './bookingAccess.mjs';
+import { clearBatteryRunData } from './batteryRunCleanup.mjs';
 
 const API_ENDPOINTS = {
     en: 'https://en.mindspeller.com',
@@ -85,13 +86,23 @@ const getRegion = () => {
     return sessionStorage.getItem('region') || 'en';
 };
 
-const logout = () => {
+const logout = async () => {
     _stopRefreshInterval();
-    sessionStorage.removeItem('jwtToken');
-    sessionStorage.removeItem('jwtRefreshToken');
-    sessionStorage.removeItem('loggedInUser');
-    sessionStorage.removeItem('region');
-    window.dispatchEvent(new Event('app:logout'));
+    let cleanupError = null;
+    try {
+        await clearBatteryRunData(sessionStorage);
+    } catch (error) {
+        cleanupError = error;
+    } finally {
+        // Authentication teardown remains unconditional even if the local
+        // recording database reports a cleanup error.
+        sessionStorage.removeItem('jwtToken');
+        sessionStorage.removeItem('jwtRefreshToken');
+        sessionStorage.removeItem('loggedInUser');
+        sessionStorage.removeItem('region');
+        window.dispatchEvent(new Event('app:logout'));
+    }
+    if (cleanupError) throw cleanupError;
 };
 
 let _refreshTimer = null;
@@ -113,7 +124,7 @@ const _refreshToken = async () => {
         });
 
         if (response.status === 401) {
-            logout();
+            await logout();
             return;
         }
 

@@ -86,13 +86,16 @@ const UploadPage = () => {
     };
 
     const handleFinish = async () => {
-        const completedIds = JSON.parse(sessionStorage.getItem('completedTasks') || '[]');
-        for (const id of completedIds) {
-            sessionStorage.removeItem(`taskData_${id}`);
+        try {
+            await wsEegService.disconnect();
+        } catch (error) {
+            console.error('EEG disconnect failed while finishing.', error);
         }
-        sessionStorage.removeItem('completedTasks');
-        await wsEegService.disconnect();
-        loginService.logout();
+        try {
+            await loginService.logout();
+        } catch (error) {
+            console.error('Battery-run cleanup failed while finishing.', error);
+        }
         const { shell } = window.require('electron');
         shell.openExternal('https://www.mindspeller.com');
         navigate('/');

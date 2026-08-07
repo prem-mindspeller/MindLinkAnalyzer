@@ -83,7 +83,19 @@ from mindrove_device import (
     MINDROVE_SDK_AVAILABLE,
     MindRoveDevice,
 )
-from neuroprofile_traceability import build_neuroprofile_export
+from neuroprofile_traceability import (
+    PROTOCOL_PROFILE_COMPONENTS,
+    PROTOCOL_PROFILE_CONTRACT_VERSION,
+    TASK_BASELINE_CONDITIONS,
+    TASK_RECORDING_DURATIONS_SECONDS,
+    build_neuroprofile_export,
+    normalize_protocol_profile,
+    normalize_protocol_validation_status,
+    protocol_profile_reference,
+    resolve_canonical_task,
+    task_baseline_condition,
+    theoretical_abilities_for_task,
+)
 
 # ─── Known BrainLink hardware identifiers ────────────────────────────────────
 KNOWN_HWIDS  = ["5C361634682F", "5C3616327E59", "5C3616346938", "5C3616346838", "5C36163468D3", "5C3616327C21", "5C36163468D3", "90E2FC2C5F37", '90E2FC2C627C','90E2FC2C6378','90E2FC2C5E7D','90E2FC2C5FAA','90E2FC2C614B']
@@ -99,6 +111,9 @@ _status:        str                        = "disconnected"
 _battery_level: Optional[int]             = None    # last known battery % from 0x85 packet
 _EEG_LOGS_ENABLED = os.getenv("EEG_DEBUG_LOGS", "1").strip().lower() not in ("0", "false", "no", "off")
 _EEG_ANALYSIS_VERBOSE = os.getenv("EEG_ANALYSIS_VERBOSE", "0").strip().lower() in ("1", "true", "yes", "on")
+# "Worn" = enough electrodes carry real signal (per-channel variance inside a
+# wide plausible band). A dead/loose electrode falls outside the band and drops
+# the active-row count. Noise (artifact vs clean) is judged separately.
 _MINDROVE_WORN_MIN_ACTIVE_ROWS = max(1, int(os.getenv("MINDROVE_WORN_MIN_ACTIVE_EEG_ROWS", "4") or "4"))
 _MINDROVE_WORN_MIN_EEG_STD = float(os.getenv("MINDROVE_WORN_MIN_EEG_STD", "0.5") or "0.5")
 _MINDROVE_WORN_MAX_EEG_STD = float(os.getenv("MINDROVE_WORN_MAX_EEG_STD", "50000.0") or "50000.0")
@@ -160,6 +175,12 @@ def _raw_sample_shape(samples: List) -> str:
 
 
 def _mindrove_contact_state_from_samples(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Contact (worn) state from a short multi-channel window.
+
+    A channel counts as active when its variance falls inside a wide plausible
+    band; the headset reads as "worn" only when enough channels are active. The
+    artifact/noise verdict is judged separately from the filtered aggregate.
+    """
     if not samples or not _NP_AVAILABLE:
         return {
             "worn": False,
@@ -199,6 +220,7 @@ def _mindrove_contact_state_from_samples(samples: List[Dict[str, Any]]) -> Dict[
 
 
 class _MindRoveContactDebouncer:
+    """Debounces the worn/not-worn contact verdict (slow to trust, quick to drop)."""
     def __init__(self, good_required: int = 3, bad_required: int = 1):
         self.good_required = max(1, int(good_required))
         self.bad_required = max(1, int(bad_required))
@@ -227,6 +249,7 @@ class _MindRoveContactDebouncer:
 
 
 class _MindRoveSignalDebouncer:
+    """Debounces the artifact/noise verdict for a worn signal (quick good, slow bad)."""
     def __init__(self, good_required: int = 1, bad_required: int = 2):
         self.good_required = max(1, int(good_required))
         self.bad_required = max(1, int(bad_required))
@@ -250,7 +273,8 @@ class _MindRoveSignalDebouncer:
         smoothed["good"] = self._current_good
         smoothed["poor_signal"] = (
             0 if self._current_good
-            else int(state.get("poor_signal", 80) or 80) if self._bad_count >= self.bad_required
+            else int(state.get("poor_signal", 80) or 80)
+            if self._bad_count >= self.bad_required
             else 80
         )
         if self._current_good != bool(state.get("good")):
@@ -323,8 +347,10 @@ def _mindrove_reader_worker() -> None:
     device: Optional[MindRoveDevice] = None
     raw_batch: List[int] = []
     raw_multi_batch: List[Dict[str, int]] = []
-    quality_buffer = deque(maxlen=_RAW_WINDOW)
+    raw_multi_next_sample_index = 0
+    quality_buffer = deque(maxlen=_live_signal_window_samples(_RAW_EEG_FS))
     contact_buffer = deque(maxlen=_RAW_EEG_FS)
+    quality_window = _live_signal_window_samples(_RAW_EEG_FS)
     contact_debouncer = _MindRoveContactDebouncer()
     quality_debouncer = _MindRoveSignalDebouncer()
     contact_state: Dict[str, Any] = {"worn": False, "poor_signal": 200}
@@ -339,16 +365,22 @@ def _mindrove_reader_worker() -> None:
     SILENCE_TIMEOUT = 5.0
 
     def _flush_raw_batches() -> None:
-        nonlocal raw_batch, raw_multi_batch, last_flush
+        nonlocal raw_batch, raw_multi_batch, raw_multi_next_sample_index, last_flush
         if raw_multi_batch:
+            batch_size = len(raw_multi_batch)
             _enqueue({
                 "type": "raw_multi_batch",
                 "samples": list(raw_multi_batch),
+                # WebSocket messages can queue while the renderer is busy.
+                # This acquisition-clock index lets the frontend distinguish a
+                # real missing batch from harmless browser delivery jitter.
+                "streamStartSampleIndex": raw_multi_next_sample_index,
                 "channels": [
                     {"key": key, "label": MINDROVE_CHANNEL_LABELS.get(key, key.upper())}
                     for key in MINDROVE_CHANNEL_ORDER
                 ],
             })
+            raw_multi_next_sample_index += batch_size
             raw_multi_batch.clear()
         if raw_batch:
             _enqueue({"type": "raw_batch", "samples": list(raw_batch)})
@@ -426,6 +458,8 @@ def _mindrove_reader_worker() -> None:
                 if not filtered_values:
                     continue
 
+                # Raw per-channel values feed contact detection; the filtered
+                # aggregate feeds the artifact/noise QC.
                 contact_buffer.append({
                     key: float(sample[key])
                     for key in MINDROVE_CHANNEL_ORDER
@@ -440,6 +474,7 @@ def _mindrove_reader_worker() -> None:
                 _flush_raw_batches()
 
             publish_signal = False
+            # Contact (worn) is judged every second on ~1 s of raw samples.
             if now - last_contact >= 1.0 and len(contact_buffer) >= int(round(float(fs))):
                 contact_state = contact_debouncer.update(
                     _mindrove_contact_state_from_samples(list(contact_buffer))
@@ -447,6 +482,7 @@ def _mindrove_reader_worker() -> None:
                 last_contact = now
                 publish_signal = True
 
+            # Noise quality is judged over a longer (5 s) window, only while worn.
             if now - last_quality >= _LIVE_SIGNAL_WINDOW_SECONDS and len(quality_buffer) >= quality_window:
                 if contact_state.get("worn"):
                     qc_reason = _raw_window_qc(list(quality_buffer), fs=fs)
@@ -825,6 +861,10 @@ def connect(body: Dict) -> Dict:
         and _status in ("connecting", "connected")
     ):
         _eeg_log("Connect", f"idempotent target={connection_target} status={_status}")
+        # Re-broadcast the live status so a client that just set a local
+        # "searching" state (e.g. a re-scan) recovers to it, instead of waiting
+        # for a status change that never comes on an already-open connection.
+        _enqueue({"type": "status", "value": _status})
         return {"success": True, "status": _status, "alreadyConnected": True}
 
     # Disconnect existing connection first
@@ -888,9 +928,13 @@ _BANDS = ["delta", "theta", "lowAlpha", "highAlpha", "lowBeta", "highBeta", "low
 _RAW_EEG_FS      = 500    # MindRove default sample rate (Hz)
 _LEGACY_RAW_EEG_FS = 512  # BrainLink scalar fallback sample rate (Hz)
 _RAW_WINDOW_SECONDS = 2.0
-_LIVE_SIGNAL_WINDOW_SECONDS = 5.0
+# The live "Signal: Good/Noisy" indicator averages over a longer window than the
+# 2 s analysis window so the displayed status does not flicker on brief noise.
+_LIVE_SIGNAL_WINDOW_SECONDS = float(os.getenv("MINDROVE_LIVE_SIGNAL_WINDOW_SECONDS", "5.0") or "5.0")
+_RAW_WINDOW_OVERLAP = 0.50
 _RAW_WINDOW      = round(_RAW_WINDOW_SECONDS * _RAW_EEG_FS)
-_RAW_STEP        = _RAW_WINDOW
+_RAW_STEP        = round(_RAW_WINDOW * (1.0 - _RAW_WINDOW_OVERLAP))
+_MIN_CONTIGUOUS_CLEAN_SECONDS = 20.0
 _MT_TAPERS       = 3      # DPSS multitaper count (matches legacy mt_tapers=3)
 _MT_NW           = 2.5    # time-bandwidth product (matches legacy NW=2.5)
 _INFERENTIAL_ABS_TOL = 1e-12
@@ -906,11 +950,64 @@ def _raw_window_samples(fs: int = _RAW_EEG_FS) -> int:
 
 
 def _live_signal_window_samples(fs: int = _RAW_EEG_FS) -> int:
-    return max(1, int(round(_LIVE_SIGNAL_WINDOW_SECONDS * float(fs))))
+    try:
+        return max(1, int(round(_LIVE_SIGNAL_WINDOW_SECONDS * float(fs))))
+    except Exception:
+        return round(_LIVE_SIGNAL_WINDOW_SECONDS * _RAW_EEG_FS)
 
 
 def _raw_step_samples(fs: int = _RAW_EEG_FS) -> int:
-    return _raw_window_samples(fs)
+    return max(1, int(round(_raw_window_samples(fs) * (1.0 - _RAW_WINDOW_OVERLAP))))
+
+
+def _empty_window_qc() -> Dict[str, Any]:
+    return {
+        "kept": 0,
+        "rejected": 0,
+        "not_worn": 0,
+        "artifact": 0,
+        "flatline": 0,
+        "total_windows": 0,
+        "max_contiguous_clean_windows": 0,
+        "_current_contiguous_clean_windows": 0,
+    }
+
+
+def _record_window_qc(counters: Dict[str, Any], clean: bool, reason: Optional[str] = None) -> None:
+    counters["total_windows"] += 1
+    if clean:
+        counters["kept"] += 1
+        counters["_current_contiguous_clean_windows"] += 1
+        counters["max_contiguous_clean_windows"] = max(
+            counters["max_contiguous_clean_windows"],
+            counters["_current_contiguous_clean_windows"],
+        )
+        return
+
+    counters["rejected"] += 1
+    counters["_current_contiguous_clean_windows"] = 0
+    normalized_reason = reason if reason in {"not_worn", "artifact", "flatline"} else "artifact"
+    counters[normalized_reason] += 1
+
+
+def _finalize_window_qc(
+    counters: Dict[str, Any],
+    *,
+    window_seconds: float = _RAW_WINDOW_SECONDS,
+    step_seconds: Optional[float] = None,
+) -> Dict[str, Any]:
+    result = dict(counters)
+    result.pop("_current_contiguous_clean_windows", None)
+    step = float(step_seconds if step_seconds is not None else window_seconds * (1.0 - _RAW_WINDOW_OVERLAP))
+    run = int(result.get("max_contiguous_clean_windows", 0) or 0)
+    clean_seconds = 0.0 if run <= 0 else float(window_seconds + (run - 1) * step)
+    result["window_seconds"] = float(window_seconds)
+    result["window_overlap"] = float(_RAW_WINDOW_OVERLAP)
+    result["step_seconds"] = step
+    result["max_contiguous_clean_seconds"] = round(clean_seconds, 3)
+    result["minimum_contiguous_clean_seconds"] = _MIN_CONTIGUOUS_CLEAN_SECONDS
+    result["meets_contiguous_clean_minimum"] = clean_seconds >= _MIN_CONTIGUOUS_CLEAN_SECONDS
+    return result
 
 
 _MONTAGE_REGION_CHANNELS: Dict[str, tuple] = {
@@ -929,25 +1026,22 @@ _MONTAGE_CHANNEL_DISPLAY = {
 _MIN_PRIMARY_REGION_AGREEMENT = float(os.getenv("MINDROVE_MIN_PRIMARY_REGION_AGREEMENT", "0.15") or "0.15")
 
 _OCCIPITAL_PRIMARY_TASKS = {
-    "visual_imagery",
-    "color_perception",
-    "num_form",
-    "order_surprise",
+    "visuospatial_transformation_orientation",
+    "rapid_visual_comparison",
+    "pattern_closure_visual_noise",
 }
 _FRONTAL_PRIMARY_TASKS = {
-    "attention_focus",
-    "focused_attention",
-    "focus",
-    "mental_math",
-    "mental_arithmetic",
-    "working_memory",
-    "language_processing",
-    "cognitive_load",
+    "adaptive_numerical_reasoning",
+    "working_memory_manipulation",
+    "auditory_target_counting",
+    "semantic_induction_category_switching",
+    "divergent_ideation",
+    "dual_task_rule_switching",
+    "speech_in_noise_comprehension",
 }
 _MIXED_REGION_TASKS = {
-    "emotion_face",
-    "reappraisal",
-    "curiosity",
+    "rule_based_anomaly_detection",
+    "written_comprehension_synthesis",
 }
 
 
@@ -1337,11 +1431,21 @@ def _sample_channel_map(sample: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _is_multichannel_raw_sample(sample: Any) -> bool:
+def _has_multichannel_raw_shape(sample: Any) -> bool:
     channel_map = _sample_channel_map(sample)
     if not channel_map:
         return False
     return all(key in channel_map for key in MINDROVE_CHANNEL_ORDER)
+
+
+def _is_multichannel_raw_sample(sample: Any) -> bool:
+    if not _has_multichannel_raw_shape(sample):
+        return False
+    channel_map = _sample_channel_map(sample) or {}
+    try:
+        return all(math.isfinite(float(channel_map[key])) for key in MINDROVE_CHANNEL_ORDER)
+    except (TypeError, ValueError, OverflowError):
+        return False
 
 
 def _raw_sample_kind_counts(samples: List) -> Dict[str, int]:
@@ -1374,8 +1478,166 @@ def _scalar_raw_subset(samples: List) -> List:
 def _feature_dict_subset(samples: List) -> List[Dict]:
     return [
         sample for sample in samples or []
-        if isinstance(sample, dict) and not _is_multichannel_raw_sample(sample)
+        if isinstance(sample, dict) and not _has_multichannel_raw_shape(sample)
     ]
+
+
+def _contiguous_sample_runs(samples: List, predicate) -> List[List[Any]]:
+    """Return consecutive runs without stitching across other sample types."""
+    return [run for _, run in _contiguous_sample_runs_with_offsets(samples, predicate)]
+
+
+def _contiguous_sample_runs_with_offsets(samples: List, predicate) -> List[Tuple[int, List[Any]]]:
+    """Return ``(start_index, run)`` pairs without crossing invalid sample gaps."""
+    runs: List[Tuple[int, List[Any]]] = []
+    current: List[Any] = []
+    current_start = 0
+    for index, sample in enumerate(samples or []):
+        if predicate(sample):
+            if not current:
+                current_start = index
+            current.append(sample)
+        elif current:
+            runs.append((current_start, current))
+            current = []
+    if current:
+        runs.append((current_start, current))
+    return runs
+
+
+def _coerce_sample_index(value: Any) -> Optional[int]:
+    """Parse a finite, integer-valued sample index without silently truncating."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or not number.is_integer():
+        return None
+    return int(number)
+
+
+def _transport_segments_from_metadata(
+    metadata: Any,
+    sample_count: int,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Validate transport-run boundaries and return safe, non-overlapping slices.
+
+    Segment ends are exclusive and refer to positions in the submitted sample
+    array.  Adjacent segments deliberately remain separate: a transport restart
+    at the same array boundary must not create a synthetic continuous EEG run.
+    Requests made before this sidecar existed retain the historical whole-array
+    behaviour.
+    """
+    safe_count = max(0, int(sample_count or 0))
+    metadata_dict = metadata if isinstance(metadata, dict) else {}
+    recording = metadata_dict.get("recording")
+    recording_dict = recording if isinstance(recording, dict) else {}
+    raw_segments = recording_dict.get("transport_segments")
+    if raw_segments is None:
+        raw_segments = metadata_dict.get("transport_segments")
+
+    provided = raw_segments is not None
+    input_segments = raw_segments if isinstance(raw_segments, list) else []
+    candidates: List[Tuple[int, int, int, bool, Optional[float], Optional[float]]] = []
+    rejected = 0
+    adjusted = 0
+
+    for input_index, segment in enumerate(input_segments):
+        if not isinstance(segment, dict):
+            rejected += 1
+            continue
+        start = _coerce_sample_index(segment.get("start_sample_index"))
+        end = _coerce_sample_index(segment.get("end_sample_index_exclusive"))
+        if start is None or end is None or end <= start:
+            rejected += 1
+            continue
+        bounded_start = max(0, min(safe_count, start))
+        bounded_end = max(0, min(safe_count, end))
+        was_adjusted = bounded_start != start or bounded_end != end
+        if bounded_end <= bounded_start:
+            rejected += 1
+            continue
+        elapsed_values: List[Optional[float]] = []
+        for elapsed_key in ("start_elapsed_ms", "end_elapsed_ms"):
+            try:
+                elapsed_value = float(segment.get(elapsed_key))
+            except (TypeError, ValueError):
+                elapsed_value = None
+            if elapsed_value is not None and (
+                not math.isfinite(elapsed_value) or elapsed_value < 0.0
+            ):
+                elapsed_value = None
+            elapsed_values.append(elapsed_value)
+        candidates.append((
+            bounded_start,
+            bounded_end,
+            input_index,
+            was_adjusted,
+            elapsed_values[0],
+            elapsed_values[1],
+        ))
+
+    candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+    normalized: List[Dict[str, Any]] = []
+    previous_end = 0
+    for start, end, _input_index, was_adjusted, start_elapsed_ms, end_elapsed_ms in candidates:
+        if normalized and start < previous_end:
+            start = previous_end
+            was_adjusted = True
+        if end <= start:
+            rejected += 1
+            continue
+        if was_adjusted:
+            adjusted += 1
+        normalized_segment: Dict[str, Any] = {
+            "segment_id": len(normalized),
+            "start_sample_index": start,
+            "end_sample_index_exclusive": end,
+        }
+        if start_elapsed_ms is not None:
+            normalized_segment["start_elapsed_ms"] = start_elapsed_ms
+        if end_elapsed_ms is not None:
+            normalized_segment["end_elapsed_ms"] = end_elapsed_ms
+        normalized.append(normalized_segment)
+        previous_end = end
+
+    fallback = False
+    if not normalized and safe_count > 0 and not provided:
+        normalized = [{
+            "segment_id": 0,
+            "start_sample_index": 0,
+            "end_sample_index_exclusive": safe_count,
+        }]
+
+    return normalized, {
+        "provided": bool(provided),
+        "input_segment_count": len(input_segments),
+        "analyzed_segment_count": len(normalized),
+        "rejected_segment_count": int(rejected),
+        "adjusted_segment_count": int(adjusted),
+        "fallback_to_whole_array": bool(fallback),
+        "metadata_invalidated_recording": bool(provided and safe_count > 0 and not normalized),
+        "segments": [dict(segment) for segment in normalized],
+    }
+
+
+def _annotate_feature_window(
+    row: Dict[str, float],
+    *,
+    segment_id: str,
+    start_sample_index: int,
+    end_sample_index_exclusive: int,
+    start_seconds: float,
+    end_seconds: float,
+) -> None:
+    """Attach transport/timing fields; underscore fields never enter inference."""
+    row["_transport_segment_id"] = segment_id
+    row["_window_start_sample_index"] = int(start_sample_index)
+    row["_window_end_sample_index_exclusive"] = int(end_sample_index_exclusive)
+    row["_window_start_seconds"] = float(start_seconds)
+    row["_window_end_seconds"] = float(end_seconds)
 
 
 def _log_mixed_sample_use(component: str, samples: List, using: str, *, task_id: str = "") -> None:
@@ -1424,7 +1686,8 @@ def _coerce_multichannel_raw_samples(samples: List) -> Optional[Any]:
 
 
 def _montage_profile_for_task(task_id: str = "") -> Dict[str, Any]:
-    tid = (task_id or "").lower()
+    raw_tid = (task_id or "").lower()
+    tid = resolve_canonical_task(raw_tid) or raw_tid
     if tid in _OCCIPITAL_PRIMARY_TASKS:
         return {
             "primary_region": "occipital",
@@ -1733,13 +1996,15 @@ def _multichannel_window_to_features(
     if missing_reason is not None:
         return None, "artifact", reasons_by_channel
     agreement_reason, affected_channels, agreements = _low_primary_region_agreement(window, channel_rows, task_id)
-    if agreement_reason is not None:
-        for key in affected_channels:
-            reasons_by_channel[key] = "artifact"
-        return None, "artifact", reasons_by_channel
     if channel_rows:
         row = _task_weighted_montage_features(channel_rows, task_id)
         _add_agreement_metadata(row, channel_rows, agreements, task_id)
+        # Low agreement between two otherwise valid regional channels lowers
+        # spatial confidence, but does not prove that the time-domain recording
+        # is noisy or discontinuous.  Hard-rejecting it split valid recordings
+        # into sub-20-second fragments, particularly in frontal Task 2 data.
+        row["_primary_region_agreement_low"] = float(agreement_reason is not None)
+        row["_low_agreement_channel_count"] = float(len(affected_channels))
         return row, None, reasons_by_channel
 
     rejected_reasons = [
@@ -1997,20 +2262,21 @@ def _multichannel_to_feature_rows(
     apply_qc: bool = False,
     task_id: str = "",
     return_montage: bool = False,
+    source_start_sample_index: int = 0,
+    transport_segment_id: str = "0",
 ) -> tuple:
-    counters = {
-        "kept": 0,
-        "rejected": 0,
-        "not_worn": 0,
-        "artifact": 0,
-        "flatline": 0,
-    }
+    counters = _empty_window_qc()
 
     arr = _coerce_multichannel_raw_samples(samples)
     window_n = _raw_window_samples(fs)
     step_n = _raw_step_samples(fs)
     montage_summary = _empty_montage_summary(task_id) if return_montage else None
     if arr is None or len(arr) < window_n:
+        counters = _finalize_window_qc(
+            counters,
+            window_seconds=window_n / float(fs),
+            step_seconds=step_n / float(fs),
+        )
         if return_montage:
             return [], counters, _finalize_montage_summary(montage_summary)
         return [], counters
@@ -2028,12 +2294,26 @@ def _multichannel_to_feature_rows(
             channel_rows, _ = _montage_channel_rows_for_window(window, fs, apply_qc)
             _update_montage_summary(montage_summary, window, channel_rows, reasons_by_channel)
         if row:
+            absolute_start = int(source_start_sample_index) + start
+            absolute_end = absolute_start + window_n
+            _annotate_feature_window(
+                row,
+                segment_id=str(transport_segment_id),
+                start_sample_index=absolute_start,
+                end_sample_index_exclusive=absolute_end,
+                start_seconds=absolute_start / float(fs),
+                end_seconds=absolute_end / float(fs),
+            )
             rows.append(row)
-            counters["kept"] += 1
+            _record_window_qc(counters, True)
         else:
-            reason = reason if reason in counters else "artifact"
-            counters["rejected"] += 1
-            counters[reason] += 1
+            _record_window_qc(counters, False, reason)
+
+    counters = _finalize_window_qc(
+        counters,
+        window_seconds=window_n / float(fs),
+        step_seconds=step_n / float(fs),
+    )
 
     if return_montage:
         return rows, counters, _finalize_montage_summary(montage_summary)
@@ -2046,39 +2326,86 @@ def _raw_to_feature_windows(raw_samples: List, fs: int = _RAW_EEG_FS) -> List[Di
     return [_raw_window_to_features(window, fs) for window in _iter_raw_windows(raw_samples, fs)]
 
 
-def _baseline_feature_rows(samples: List, task_id: str = "", return_montage: bool = False) -> tuple:
-    counters = {
-        "kept": 0,
-        "rejected": 0,
-        "not_worn": 0,
-        "artifact": 0,
-        "flatline": 0,
-    }
+def _baseline_feature_rows(
+    samples: List,
+    task_id: str = "",
+    return_montage: bool = False,
+    fs: Optional[int] = None,
+    source_start_sample_index: int = 0,
+    transport_segment_id: str = "0",
+) -> tuple:
+    counters = _empty_window_qc()
     if not samples:
+        counters = _finalize_window_qc(counters)
         if return_montage:
             return [], counters, {}
         return [], counters
     multichannel_samples = _multichannel_raw_subset(samples)
     if multichannel_samples:
         _log_mixed_sample_use("Analyze", samples, "multichannel", task_id=task_id)
-        return _multichannel_to_feature_rows(
-            multichannel_samples,
-            apply_qc=True,
-            task_id=task_id,
-            return_montage=return_montage,
-        )
+        rows: List[Dict[str, float]] = []
+        run_qc: List[Dict[str, Any]] = []
+        run_montages: List[Dict[str, Any]] = []
+        for run_index, (run_start, run) in enumerate(
+            _contiguous_sample_runs_with_offsets(samples, _is_multichannel_raw_sample)
+        ):
+            run_rows, qc, montage = _multichannel_to_feature_rows(
+                run,
+                fs=int(fs or _RAW_EEG_FS),
+                apply_qc=True,
+                task_id=task_id,
+                return_montage=True,
+                source_start_sample_index=int(source_start_sample_index) + run_start,
+                transport_segment_id=f"{transport_segment_id}:{run_index}",
+            )
+            rows.extend(run_rows)
+            run_qc.append(qc)
+            if montage:
+                run_montages.append(montage)
+        counters = _merge_qc_counters(*run_qc)
+        if return_montage:
+            return rows, counters, _merge_montage_summaries(run_montages)
+        return rows, counters
     scalar_samples = _scalar_raw_subset(samples)
     if scalar_samples:
         _log_mixed_sample_use("Analyze", samples, "scalar", task_id=task_id)
         rows: List[Dict[str, float]] = []
-        for window in _iter_raw_windows(scalar_samples, fs=_LEGACY_RAW_EEG_FS):
-            reason = _raw_window_qc(window, fs=_LEGACY_RAW_EEG_FS)
-            if reason is None:
-                rows.append(_raw_window_to_features(window, fs=_LEGACY_RAW_EEG_FS))
-                counters["kept"] += 1
-            else:
-                counters["rejected"] += 1
-                counters[reason] += 1
+        scalar_fs = int(fs or _LEGACY_RAW_EEG_FS)
+        run_qc: List[Dict[str, Any]] = []
+        for run_index, (run_start, run) in enumerate(_contiguous_sample_runs_with_offsets(
+            samples,
+            lambda sample: isinstance(sample, (int, float)),
+        )):
+            current_qc = _empty_window_qc()
+            window_n = _raw_window_samples(scalar_fs)
+            step_n = _raw_step_samples(scalar_fs)
+            for window_index, window in enumerate(_iter_raw_windows(run, fs=scalar_fs)):
+                reason = _raw_window_qc(window, fs=scalar_fs)
+                if reason is None:
+                    row = _raw_window_to_features(window, fs=scalar_fs)
+                    absolute_start = (
+                        int(source_start_sample_index)
+                        + run_start
+                        + window_index * step_n
+                    )
+                    _annotate_feature_window(
+                        row,
+                        segment_id=f"{transport_segment_id}:{run_index}",
+                        start_sample_index=absolute_start,
+                        end_sample_index_exclusive=absolute_start + window_n,
+                        start_seconds=absolute_start / float(scalar_fs),
+                        end_seconds=(absolute_start + window_n) / float(scalar_fs),
+                    )
+                    rows.append(row)
+                    _record_window_qc(current_qc, True)
+                else:
+                    _record_window_qc(current_qc, False, reason)
+            run_qc.append(_finalize_window_qc(
+                current_qc,
+                window_seconds=_raw_window_samples(scalar_fs) / float(scalar_fs),
+                step_seconds=_raw_step_samples(scalar_fs) / float(scalar_fs),
+            ))
+        counters = _merge_qc_counters(*run_qc)
         if return_montage:
             return rows, counters, {}
         return rows, counters
@@ -2086,25 +2413,144 @@ def _baseline_feature_rows(samples: List, task_id: str = "", return_montage: boo
     feature_samples = _feature_dict_subset(samples)
     if feature_samples:
         _log_mixed_sample_use("Analyze", samples, "feature_dict", task_id=task_id)
-    rows = _extract_features(feature_samples or samples)
-    counters["kept"] = len(rows)
+        rows: List[Dict[str, float]] = []
+        run_qc: List[Dict[str, Any]] = []
+        for run_index, (run_start, run) in enumerate(_contiguous_sample_runs_with_offsets(
+            samples,
+            lambda sample: (
+                isinstance(sample, dict)
+                and not _is_multichannel_raw_sample(sample)
+            ),
+        )):
+            current_rows = _extract_features(run)
+            for row_index, row in enumerate(current_rows):
+                absolute_index = int(source_start_sample_index) + run_start + row_index
+                start_seconds = absolute_index * _WINDOW_STEP_SEC
+                _annotate_feature_window(
+                    row,
+                    segment_id=f"{transport_segment_id}:{run_index}",
+                    start_sample_index=absolute_index,
+                    end_sample_index_exclusive=absolute_index + 1,
+                    start_seconds=start_seconds,
+                    end_seconds=start_seconds + _WINDOW_DURATION_SEC,
+                )
+            rows.extend(current_rows)
+            current_qc = _empty_window_qc()
+            for _ in current_rows:
+                _record_window_qc(current_qc, True)
+            run_qc.append(_finalize_window_qc(current_qc))
+        counters = _merge_qc_counters(*run_qc)
+    else:
+        rows = _extract_features(samples)
+        for row_index, row in enumerate(rows):
+            absolute_index = int(source_start_sample_index) + row_index
+            start_seconds = absolute_index * _WINDOW_STEP_SEC
+            _annotate_feature_window(
+                row,
+                segment_id=str(transport_segment_id),
+                start_sample_index=absolute_index,
+                end_sample_index_exclusive=absolute_index + 1,
+                start_seconds=start_seconds,
+                end_seconds=start_seconds + _WINDOW_DURATION_SEC,
+            )
+            _record_window_qc(counters, True)
+        counters = _finalize_window_qc(counters)
     if return_montage:
         return rows, counters, {}
     return rows, counters
 
 
-def _merge_qc_counters(*counters_list: Dict[str, int]) -> Dict[str, int]:
-    merged = {
-        "kept": 0,
-        "rejected": 0,
-        "not_worn": 0,
-        "artifact": 0,
-        "flatline": 0,
-    }
+def _merge_qc_counters(*counters_list: Dict[str, Any]) -> Dict[str, Any]:
+    merged = _empty_window_qc()
+    merged.pop("_current_contiguous_clean_windows", None)
     for counters in counters_list:
-        for key in merged:
+        for key in ("kept", "rejected", "not_worn", "artifact", "flatline", "total_windows"):
             merged[key] += int((counters or {}).get(key, 0))
+        merged["max_contiguous_clean_windows"] = max(
+            int(merged.get("max_contiguous_clean_windows", 0)),
+            int((counters or {}).get("max_contiguous_clean_windows", 0)),
+        )
+    max_seconds = max(
+        (float((counters or {}).get("max_contiguous_clean_seconds", 0.0)) for counters in counters_list),
+        default=0.0,
+    )
+    merged.update({
+        "window_seconds": _RAW_WINDOW_SECONDS,
+        "window_overlap": _RAW_WINDOW_OVERLAP,
+        "step_seconds": _RAW_WINDOW_SECONDS * (1.0 - _RAW_WINDOW_OVERLAP),
+        "max_contiguous_clean_seconds": round(max_seconds, 3),
+        "minimum_contiguous_clean_seconds": _MIN_CONTIGUOUS_CLEAN_SECONDS,
+        "meets_contiguous_clean_minimum": max_seconds >= _MIN_CONTIGUOUS_CLEAN_SECONDS,
+    })
     return merged
+
+
+def _feature_rows_for_transport_segments(
+    samples: List,
+    metadata: Any = None,
+    *,
+    task_id: str = "",
+    fs: Optional[int] = None,
+) -> Tuple[List[Dict[str, float]], Dict[str, Any], Dict[str, Any]]:
+    """Extract clean windows per declared transport run without gap stitching."""
+    segments, segmentation = _transport_segments_from_metadata(metadata, len(samples or []))
+    all_rows: List[Dict[str, float]] = []
+    segment_qc: List[Dict[str, Any]] = []
+    segment_montages: List[Dict[str, Any]] = []
+    segment_results: List[Dict[str, Any]] = []
+
+    for segment in segments:
+        segment_id = int(segment["segment_id"])
+        start = int(segment["start_sample_index"])
+        end = int(segment["end_sample_index_exclusive"])
+        rows, qc, montage = _baseline_feature_rows(
+            list((samples or [])[start:end]),
+            task_id=task_id,
+            return_montage=True,
+            fs=fs,
+            source_start_sample_index=start,
+            transport_segment_id=str(segment_id),
+        )
+        # The submitted sample array is compacted, while a declared transport
+        # segment may start later on the real recording clock after a dropout.
+        # Shift the already annotated windows onto that clock so phase summaries
+        # cannot move post-gap samples into an earlier phase.
+        declared_start_ms = segment.get("start_elapsed_ms")
+        if declared_start_ms is not None:
+            segment_samples = list((samples or [])[start:end])
+            raw_like = bool(
+                _multichannel_raw_subset(segment_samples)
+                or _scalar_raw_subset(segment_samples)
+            )
+            default_start_seconds = (
+                start / float(fs or (_RAW_EEG_FS if raw_like else _LEGACY_RAW_EEG_FS))
+                if raw_like
+                else start * _WINDOW_STEP_SEC
+            )
+            timing_shift_seconds = float(declared_start_ms) / 1000.0 - default_start_seconds
+            for row in rows:
+                row["_window_start_seconds"] = (
+                    float(row.get("_window_start_seconds", 0.0)) + timing_shift_seconds
+                )
+                row["_window_end_seconds"] = (
+                    float(row.get("_window_end_seconds", 0.0)) + timing_shift_seconds
+                )
+        all_rows.extend(rows)
+        segment_qc.append(qc)
+        if montage:
+            segment_montages.append(montage)
+        segment_results.append({
+            **segment,
+            "sample_count": end - start,
+            "clean_window_count": len(rows),
+            "max_contiguous_clean_seconds": float(qc.get("max_contiguous_clean_seconds", 0.0)),
+        })
+
+    merged_qc = _merge_qc_counters(*segment_qc)
+    segmentation["segments"] = segment_results
+    merged_qc["transport_segmentation"] = segmentation
+    montage_summary = _merge_montage_summaries(segment_montages)
+    return all_rows, merged_qc, montage_summary
 
 
 def _baseline_feature_rows_from_phases(
@@ -2119,13 +2565,7 @@ def _baseline_feature_rows_from_phases(
         return_montage=True,
     )
     eo_rows: List[Dict[str, float]] = []
-    eo_qc = {
-        "kept": 0,
-        "rejected": 0,
-        "not_worn": 0,
-        "artifact": 0,
-        "flatline": 0,
-    }
+    eo_qc = _finalize_window_qc(_empty_window_qc())
     eo_montage: Dict[str, Any] = {}
     if eo_samples:
         eo_rows, eo_qc, eo_montage = _baseline_feature_rows(
@@ -2186,12 +2626,12 @@ _N_PERM             = 1000
 _MIN_PERCENT_CHANGE      = 10.0  # raw-power features
 _MIN_PERCENT_CHANGE_REL  =  5.0  # relative/ratio features (bounded 0-1, smaller natural range)
 
-# Block aggregation constants (mirrors legacy default block_seconds=8.0)
-# Window duration = window_samples / fs = 1000 / 500 = 2.0s (raw EEG path)
-# windows_per_block = 8.0 / 2.0 = 4 windows -> 8 seconds of EEG per block
+# Block aggregation constants. Feature windows are 2 s with a 1 s step (50%
+# overlap); block sizing therefore uses the step rather than window duration.
 _BLOCK_SECONDS       = 8.0
 _WINDOW_DURATION_SEC = _RAW_WINDOW / _RAW_EEG_FS   # 2.0 s
-_WINDOWS_PER_BLOCK   = max(1, round(_BLOCK_SECONDS / _WINDOW_DURATION_SEC))  # 4
+_WINDOW_STEP_SEC     = _RAW_STEP / _RAW_EEG_FS     # 1.0 s
+_WINDOWS_PER_BLOCK   = max(1, round(_BLOCK_SECONDS / _WINDOW_STEP_SEC))  # 8
 
 # Derived band definitions: (name, [source_tgam_keys], fraction_of_source, center_hz)
 # theta1/theta2 are approximated as 50% of theta.
@@ -2588,40 +3028,36 @@ def _sum_p_perm(task_rows: List[Dict], baseline_rows: List[Dict], label: str = "
 
 
 def _expected_direction(task_name: str, feature: str) -> Optional[str]:
-    """Port of EnhancedBrainLinkAnalyzerWindow._expected_direction.
-    Returns 'up', 'down', or None (no expectation for this task/feature pair).
+    """Return only protocol-supported directional candidates.
+
+    The optimization document often says *modulation* without fixing a
+    direction. Those pairs intentionally return ``None`` instead of inheriting
+    hypotheses from the retired battery.
     """
-    t = (task_name or "").lower()
+    raw_task = (task_name or "").lower()
+    t = resolve_canonical_task(raw_task) or raw_task
     f = feature.lower()
-    if t == "mental_math":
-        if f.startswith("alpha_"):                                  return "down"
-        if f.startswith("beta_") or "beta_alpha_ratio" in f:       return "up"
-        if f.startswith("gamma_"):                                  return "up"
-        if f == "alpha_theta_ratio":                                return "down"
-    elif t == "visual_imagery":
-        if f.startswith("alpha_"):                                  return "up"
-        if f == "alpha_theta_ratio":                                return "up"
-        if "beta_alpha_ratio" in f:                                 return "down"
-    elif t == "working_memory":
-        if f.startswith("theta_"):                                  return "up"
-        if f.startswith("alpha_"):                                  return "down"
-        if "beta_alpha_ratio" in f or f.startswith("beta_"):       return "up"
-        if f.startswith("gamma_"):                                  return "up"
-    elif t == "attention_focus":
-        if f.startswith("alpha_"):                                  return "down"
-        if f.startswith("beta_") or "beta_alpha_ratio" in f:       return "up"
-        if f.startswith("theta_"):                                  return "down"
-    elif t == "language_processing":
-        if f.startswith("beta_") or "beta_alpha_ratio" in f:       return "up"
-        if f.startswith("alpha_"):                                  return "down"
-        if f.startswith("gamma_"):                                  return "up"
-    elif t == "motor_imagery":
-        if f.startswith("alpha_"):                                  return "down"
-        if "beta_alpha_ratio" in f or f.startswith("beta_"):       return "up"
-    elif t == "cognitive_load":
-        if f.startswith("theta_"):                                  return "up"
-        if f.startswith("alpha_"):                                  return "down"
-        if f.startswith("beta_") or "beta_alpha_ratio" in f:       return "up"
+    theta_up_tasks = {
+        "adaptive_numerical_reasoning",
+        "working_memory_manipulation",
+        "semantic_induction_category_switching",
+        "dual_task_rule_switching",
+        "rule_based_anomaly_detection",
+        "rapid_visual_comparison",
+        "pattern_closure_visual_noise",
+        "written_comprehension_synthesis",
+    }
+    occipital_alpha_suppression_tasks = {
+        "visuospatial_transformation_orientation",
+        "rule_based_anomaly_detection",
+        "rapid_visual_comparison",
+        "pattern_closure_visual_noise",
+        "written_comprehension_synthesis",
+    }
+    if t in theta_up_tasks and f.startswith("theta_"):
+        return "up"
+    if t in occipital_alpha_suppression_tasks and f.startswith("alpha_"):
+        return "down"
     return None
 
 
@@ -2631,17 +3067,9 @@ def _evaluate_expectation_alignment(task_name: str, feat_data: Dict[str, Any]) -
     Requires feat_data entries to already contain 'significant_change', 'effect_size_d',
     'percent_change', 'delta', 'decision_flags' (call after the FDR / significance pass).
     """
-    t = (task_name or "").lower()
-    task_thr: Dict[str, Dict[str, float]] = {
-        "mental_math":         {"alpha": 0.25, "beta": 0.35, "gamma": 0.30, "theta": 0.30, "pct": 5.0},
-        "attention_focus":     {"alpha": 0.25, "beta": 0.35, "gamma": 0.30, "theta": 0.30, "pct": 5.0},
-        "visual_imagery":      {"alpha": 0.30, "beta": 0.30, "gamma": 0.30, "theta": 0.30, "pct": 8.0},
-        "working_memory":      {"alpha": 0.25, "beta": 0.35, "gamma": 0.30, "theta": 0.30, "pct": 5.0},
-        "cognitive_load":      {"alpha": 0.25, "beta": 0.30, "gamma": 0.30, "theta": 0.30, "pct": 5.0},
-        "motor_imagery":       {"alpha": 0.25, "beta": 0.30, "gamma": 0.30, "theta": 0.30, "pct": 5.0},
-        "language_processing": {"alpha": 0.25, "beta": 0.35, "gamma": 0.30, "theta": 0.30, "pct": 5.0},
-    }
-    thr = task_thr.get(t, {"alpha": 0.25, "beta": 0.30, "gamma": 0.30, "theta": 0.30, "pct": 5.0})
+    raw_task = (task_name or "").lower()
+    t = resolve_canonical_task(raw_task) or raw_task
+    thr = {"alpha": 0.25, "beta": 0.35, "gamma": 0.30, "theta": 0.30, "pct": 5.0}
 
     passed_features: List[Dict] = []
     key_dir_counts = {"with": 0, "against": 0}
@@ -2686,40 +3114,27 @@ def _evaluate_expectation_alignment(task_name: str, feat_data: Dict[str, Any]) -
 
     main_pass = False
     notes: List[str] = []
-    try:
-        if t == "mental_math":
-            a_dn = _fp("alpha_relative", "down")
-            b_up = _fp("beta_relative",  "up")
-            r_up = _fp("beta_alpha_ratio", "up")
-            g_up = _fp("gamma_relative", "up")
-            if a_dn and (b_up or r_up) and g_up:
-                main_pass = True; notes.append("All key features (α↓, β/ratio↑, γ↑) passed")
-            elif a_dn and (b_up or r_up):
-                main_pass = True; notes.append("Core features (α↓, β/ratio↑) passed")
-            else:
-                notes.append("Missing core mental_math features")
-        elif t == "attention_focus":
-            if _fp("alpha_relative", "down") and (_fp("beta_relative", "up") or _fp("beta_alpha_ratio", "up")):
-                main_pass = True; notes.append("Core features (α↓, β/ratio↑) passed")
-            else:
-                notes.append("Missing core attention_focus features")
-        elif t == "visual_imagery":
-            main_pass = _fp("alpha_relative", "up") or _fp("alpha_theta_ratio", "up")
-            notes.append("Visual imagery: alpha/ratio signature")
-        elif t == "working_memory":
-            main_pass = _fps("theta_", "up") and (_fp("alpha_relative", "down") or _fp("beta_alpha_ratio", "up"))
-            notes.append("Working memory: theta + alpha/ratio")
-        elif t == "cognitive_load":
-            main_pass = _fps("theta_", "up") and _fp("alpha_relative", "down")
-            notes.append("Cognitive load: theta↑ + alpha↓")
-        elif t == "motor_imagery":
-            main_pass = _fp("alpha_relative", "down") or _fp("beta_relative", "up") or _fp("beta_alpha_ratio", "up")
-            notes.append("Motor imagery: alpha↓ or beta↑")
-        elif t == "language_processing":
-            main_pass = _fp("alpha_relative", "down") and _fp("beta_alpha_ratio", "up")
-            notes.append("Language: alpha↓ + ratio↑")
-    except Exception as exc:
-        notes.append(f"Grading error: {exc}")
+    key_features_map: Dict[str, List[str]] = {
+        "adaptive_numerical_reasoning": ["theta_relative"],
+        "working_memory_manipulation": ["theta_relative"],
+        "semantic_induction_category_switching": ["theta_relative"],
+        "visuospatial_transformation_orientation": ["alpha_relative", "theta_relative"],
+        "dual_task_rule_switching": ["theta_relative"],
+        "rule_based_anomaly_detection": ["theta_relative", "alpha_relative"],
+        "rapid_visual_comparison": ["alpha_relative", "theta_relative"],
+        "pattern_closure_visual_noise": ["alpha_relative", "theta_relative"],
+        "written_comprehension_synthesis": ["alpha_relative", "theta_relative"],
+    }
+    key_features = key_features_map.get(t, [])
+    if key_features:
+        passed_names = {item["feature"] for item in passed_features}
+        required = min(2, len(key_features))
+        main_pass = sum(1 for name in key_features if name in passed_names) >= required
+        notes.append(
+            f"Continuous task-context signature: {sum(1 for name in key_features if name in passed_names)}/{len(key_features)} key features."
+        )
+    else:
+        notes.append("No fixed directional signature; report modulation descriptively.")
 
     n_pass = len(passed_features)
     grade  = "D"
@@ -2736,16 +3151,7 @@ def _evaluate_expectation_alignment(task_name: str, feat_data: Dict[str, Any]) -
     )[:3]
 
     # ── Insufficient-metrics check (port of legacy key-feature check) ──────────
-    _key_features_map: Dict[str, List[str]] = {
-        "mental_math":         ["alpha_relative", "beta_relative", "beta_alpha_ratio", "gamma_relative"],
-        "attention_focus":     ["alpha_relative", "beta_relative", "beta_alpha_ratio"],
-        "visual_imagery":      ["alpha_relative", "alpha_theta_ratio"],
-        "working_memory":      ["theta_relative", "alpha_relative", "beta_alpha_ratio"],
-        "cognitive_load":      ["theta_relative", "alpha_relative"],
-        "motor_imagery":       ["alpha_relative", "beta_relative", "beta_alpha_ratio"],
-        "language_processing": ["alpha_relative", "beta_alpha_ratio"],
-    }
-    key_feats = _key_features_map.get(t, [])
+    key_feats = key_features_map.get(t, [])
     missing_metrics: List[str] = []
     for kf in key_feats:
         entry = feat_data.get(kf, {})
@@ -2792,12 +3198,341 @@ def _select_inference_feature_names(feature_names: List[str]) -> List[str]:
     name_set = set(names)
     selected: List[str] = []
     for name in names:
-        if name.endswith("_power_raw") and f"{name[:-10]}_power" in name_set:
+        if "_peak_" in str(name).lower():
             continue
-        if name.endswith("_peak_amp") and f"{name[:-9]}_power" in name_set:
+        if name.endswith("_power_raw") and f"{name[:-10]}_power" in name_set:
             continue
         selected.append(name)
     return selected
+
+
+_CONTINUOUS_BANDS = ("delta", "theta", "alpha", "beta", "gamma")
+_CONTINUOUS_RATIOS = (
+    "alpha_theta_ratio",
+    "beta_alpha_ratio",
+    "beta2_beta1_ratio",
+    "theta2_theta1_ratio",
+)
+
+
+def _continuous_feature_names(rows: List[Dict[str, Any]]) -> List[str]:
+    """Return the compact, non-peak spectral set used for temporal summaries."""
+    available = set().union(*(row.keys() for row in rows)) if rows else set()
+    selected = [
+        f"{band}_{suffix}"
+        for band in _CONTINUOUS_BANDS
+        for suffix in ("power", "relative", "entropy")
+        if f"{band}_{suffix}" in available
+    ]
+    selected.extend(name for name in _CONTINUOUS_RATIOS if name in available)
+    if rows and all(float(row.get("_gamma_evaluated", 1.0) or 0.0) <= 0.0 for row in rows):
+        selected = [name for name in selected if not name.startswith("gamma_")]
+    return selected
+
+
+def _finite_number(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _window_times(row: Dict[str, Any], fallback_index: int) -> Tuple[float, float]:
+    start = _finite_number(row.get("_window_start_seconds"))
+    end = _finite_number(row.get("_window_end_seconds"))
+    if start is None:
+        start = float(fallback_index) * _WINDOW_STEP_SEC
+    if end is None or end <= start:
+        end = start + _WINDOW_DURATION_SEC
+    return start, end
+
+
+def _descriptive_feature_summary(
+    rows: List[Dict[str, Any]],
+    feature_names: Optional[List[str]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    selected = feature_names if feature_names is not None else _continuous_feature_names(rows)
+    summaries: Dict[str, Dict[str, Any]] = {}
+    for feature_name in selected:
+        timed_values: List[Tuple[float, float]] = []
+        for fallback_index, row in enumerate(rows):
+            value = _finite_number(row.get(feature_name))
+            if value is None:
+                continue
+            start, end = _window_times(row, fallback_index)
+            timed_values.append(((start + end) / 2.0, value))
+        if not timed_values:
+            continue
+        values = [item[1] for item in timed_values]
+        mean_value = sum(values) / len(values)
+        variance = sum((value - mean_value) ** 2 for value in values) / len(values)
+        slope_per_minute: Optional[float] = None
+        if len(timed_values) >= 2:
+            mean_time = sum(item[0] for item in timed_values) / len(timed_values)
+            denominator = sum((item[0] - mean_time) ** 2 for item in timed_values)
+            if denominator > 1e-12:
+                slope_per_second = sum(
+                    (item[0] - mean_time) * (item[1] - mean_value)
+                    for item in timed_values
+                ) / denominator
+                slope_per_minute = slope_per_second * 60.0
+        summaries[feature_name] = {
+            "n_windows": len(values),
+            "mean": round(mean_value, 8),
+            "std": round(math.sqrt(max(0.0, variance)), 8),
+            "slope_per_minute": (
+                round(slope_per_minute, 8) if slope_per_minute is not None else None
+            ),
+        }
+    return summaries
+
+
+def _max_contiguous_row_seconds(rows: List[Dict[str, Any]]) -> float:
+    """Measure clean coverage while respecting both QC gaps and transport runs."""
+    if not rows:
+        return 0.0
+    indexed_rows = list(enumerate(rows))
+    indexed_rows.sort(key=lambda item: _window_times(item[1], item[0])[0])
+    max_duration = 0.0
+    run_start: Optional[float] = None
+    previous_start: Optional[float] = None
+    run_end: Optional[float] = None
+    previous_segment: Any = None
+    tolerance = max(1e-6, _WINDOW_STEP_SEC * 0.05)
+
+    for fallback_index, row in indexed_rows:
+        start, end = _window_times(row, fallback_index)
+        segment = row.get("_transport_segment_id", "legacy")
+        continues = (
+            run_start is not None
+            and segment == previous_segment
+            and previous_start is not None
+            and start >= previous_start
+            and (start - previous_start) <= (_WINDOW_STEP_SEC + tolerance)
+        )
+        if not continues:
+            if run_start is not None and run_end is not None:
+                max_duration = max(max_duration, run_end - run_start)
+            run_start = start
+            run_end = end
+        else:
+            run_end = max(float(run_end or end), end)
+        previous_start = start
+        previous_segment = segment
+
+    if run_start is not None and run_end is not None:
+        max_duration = max(max_duration, run_end - run_start)
+    return max(0.0, max_duration)
+
+
+def _phase_definitions(task_metadata: Any) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
+    metadata = task_metadata if isinstance(task_metadata, dict) else {}
+    raw_phases = metadata.get("phases")
+    if not isinstance(raw_phases, list):
+        return [], []
+    eligible: List[Dict[str, Any]] = []
+    ignored: List[Dict[str, str]] = []
+    for index, raw_phase in enumerate(raw_phases):
+        phase = raw_phase if isinstance(raw_phase, dict) else {}
+        phase_id = str(phase.get("phase_id", phase.get("id", f"phase_{index + 1}")))
+        start_ms = _finite_number(phase.get("start_elapsed_ms"))
+        end_ms = _finite_number(phase.get("end_elapsed_ms"))
+        start_seconds = (
+            start_ms / 1000.0 if start_ms is not None
+            else _finite_number(phase.get("start_seconds", phase.get("start")))
+        )
+        end_seconds = (
+            end_ms / 1000.0 if end_ms is not None
+            else _finite_number(phase.get("end_seconds", phase.get("end")))
+        )
+        planned_ms = _finite_number(phase.get("planned_duration_ms"))
+        planned_seconds = (
+            planned_ms / 1000.0 if planned_ms is not None
+            else _finite_number(phase.get("planned_duration_seconds", phase.get("duration")))
+        )
+        if planned_seconds is None and start_seconds is not None and end_seconds is not None:
+            planned_seconds = end_seconds - start_seconds
+        if (
+            start_seconds is None
+            or end_seconds is None
+            or planned_seconds is None
+            or end_seconds <= start_seconds
+        ):
+            ignored.append({"phase_id": phase_id, "reason": "invalid_phase_timing"})
+            continue
+        if planned_seconds < _MIN_CONTIGUOUS_CLEAN_SECONDS:
+            ignored.append({"phase_id": phase_id, "reason": "planned_duration_below_20_seconds"})
+            continue
+        if (end_seconds - start_seconds) < _MIN_CONTIGUOUS_CLEAN_SECONDS:
+            ignored.append({"phase_id": phase_id, "reason": "phase_interval_below_20_seconds"})
+            continue
+        eligible.append({
+            "phase_id": phase_id,
+            "label": str(phase.get("label", phase_id)),
+            "start_seconds": float(start_seconds),
+            "end_seconds": float(end_seconds),
+            "planned_duration_seconds": float(planned_seconds),
+        })
+    eligible.sort(key=lambda item: (item["start_seconds"], item["end_seconds"]))
+    return eligible, ignored
+
+
+def _continuous_time_series_summary(
+    rows: List[Dict[str, Any]],
+    task_metadata: Any,
+) -> Dict[str, Any]:
+    """Build descriptive task-time and conservatively gated phase summaries."""
+    selected_features = _continuous_feature_names(rows)
+    starts_and_ends = [_window_times(row, index) for index, row in enumerate(rows)]
+    phase_definitions, ignored_phases = _phase_definitions(task_metadata)
+    phase_summaries: List[Dict[str, Any]] = []
+
+    for phase in phase_definitions:
+        phase_rows = []
+        for fallback_index, row in enumerate(rows):
+            start, end = _window_times(row, fallback_index)
+            if start >= phase["start_seconds"] - 1e-9 and end <= phase["end_seconds"] + 1e-9:
+                phase_rows.append(row)
+        max_clean_seconds = _max_contiguous_row_seconds(phase_rows)
+        phase_scorable = max_clean_seconds >= _MIN_CONTIGUOUS_CLEAN_SECONDS
+        phase_summaries.append({
+            **phase,
+            "n_clean_windows": len(phase_rows),
+            "max_contiguous_clean_seconds": round(max_clean_seconds, 3),
+            "meets_contiguous_clean_minimum": phase_scorable,
+            "features": (
+                _descriptive_feature_summary(phase_rows, selected_features)
+                if phase_scorable else {}
+            ),
+        })
+
+    comparison: Dict[str, Any]
+    if len(phase_summaries) < 2:
+        comparison = {
+            "status": "withheld",
+            "reason": "fewer_than_two_eligible_planned_phases",
+            "compared_phase_ids": [phase["phase_id"] for phase in phase_summaries],
+            "features": {},
+        }
+    elif not all(phase["meets_contiguous_clean_minimum"] for phase in phase_summaries):
+        comparison = {
+            "status": "withheld",
+            "reason": "one_or_more_phases_have_less_than_20_contiguous_clean_seconds",
+            "compared_phase_ids": [phase["phase_id"] for phase in phase_summaries],
+            "features": {},
+        }
+    else:
+        first_phase = phase_summaries[0]
+        last_phase = phase_summaries[-1]
+        differences: Dict[str, Dict[str, float]] = {}
+        for feature_name in selected_features:
+            first_feature = first_phase["features"].get(feature_name)
+            last_feature = last_phase["features"].get(feature_name)
+            if not first_feature or not last_feature:
+                continue
+            first_mean = float(first_feature["mean"])
+            last_mean = float(last_feature["mean"])
+            differences[feature_name] = {
+                "last_minus_first": round(last_mean - first_mean, 8),
+                "symmetric_percent_change": round(
+                    _symmetric_percent_change(last_mean, first_mean), 6
+                ),
+            }
+        comparison = {
+            "status": "available",
+            "reason": None,
+            "compared_phase_ids": [phase["phase_id"] for phase in phase_summaries],
+            "contrast": f"{last_phase['phase_id']}_minus_{first_phase['phase_id']}",
+            "features": differences,
+        }
+
+    duration_span = (
+        max(end for _, end in starts_and_ends) - min(start for start, _ in starts_and_ends)
+        if starts_and_ends else 0.0
+    )
+    return {
+        "status": "descriptive_only",
+        "method": {
+            "window_seconds": _RAW_WINDOW_SECONDS,
+            "window_overlap": _RAW_WINDOW_OVERLAP,
+            "window_step_seconds": _WINDOW_STEP_SEC,
+            "time_axis": "recording_elapsed_transport_aware",
+            "event_locked_analysis": False,
+            "erp_analysis": False,
+            "peak_metrics_included": False,
+        },
+        "n_clean_windows": len(rows),
+        "duration_span_seconds": round(max(0.0, duration_span), 3),
+        "selected_features": selected_features,
+        "features": _descriptive_feature_summary(rows, selected_features),
+        "phases": phase_summaries,
+        "ignored_phases": ignored_phases,
+        "phase_comparison": comparison,
+    }
+
+
+def _continuous_reference_comparison(
+    target_rows: List[Dict[str, Any]],
+    reference_rows_by_task: Dict[str, List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """Describe Task 7 against its Task 2/3 single-task references.
+
+    This is deliberately not a behavioural cost score or a new inferential
+    gate. It preserves the protocol's three-reference context while validated
+    dual-task/switch-cost definitions remain unavailable.
+    """
+    required = [
+        "working_memory_manipulation",
+        "auditory_target_counting",
+    ]
+    missing = [task_id for task_id in required if not reference_rows_by_task.get(task_id)]
+    if not target_rows or missing:
+        return {
+            "status": "withheld",
+            "reason": "missing_scorable_single_task_reference",
+            "missing_reference_task_ids": missing,
+            "method": "descriptive_non_event_locked",
+            "comparisons": {},
+        }
+
+    target_features = set(_continuous_feature_names(target_rows))
+    comparisons: Dict[str, Any] = {}
+    for reference_task_id in required:
+        reference_rows = reference_rows_by_task[reference_task_id]
+        feature_names = sorted(
+            target_features.intersection(_continuous_feature_names(reference_rows))
+        )
+        target_summary = _descriptive_feature_summary(target_rows, feature_names)
+        reference_summary = _descriptive_feature_summary(reference_rows, feature_names)
+        feature_differences: Dict[str, Dict[str, float]] = {}
+        for feature_name in feature_names:
+            target_feature = target_summary.get(feature_name)
+            reference_feature = reference_summary.get(feature_name)
+            if not target_feature or not reference_feature:
+                continue
+            target_mean = float(target_feature["mean"])
+            reference_mean = float(reference_feature["mean"])
+            feature_differences[feature_name] = {
+                "dual_minus_reference": round(target_mean - reference_mean, 8),
+                "symmetric_percent_change": round(
+                    _symmetric_percent_change(target_mean, reference_mean), 6
+                ),
+            }
+        comparisons[reference_task_id] = {
+            "target_clean_window_count": len(target_rows),
+            "reference_clean_window_count": len(reference_rows),
+            "features": feature_differences,
+        }
+
+    return {
+        "status": "available",
+        "reason": None,
+        "missing_reference_task_ids": [],
+        "method": "descriptive_non_event_locked",
+        "behavioral_cost_threshold_available": False,
+        "comparisons": comparisons,
+    }
 
 
 def _is_gamma_feature(name: str) -> bool:
@@ -2822,23 +3557,67 @@ def _build_blocks(rows: List[Dict], windows_per_block: int = _WINDOWS_PER_BLOCK)
     Args:
         rows:              List of per-window feature dicts.
         windows_per_block: How many consecutive windows to average into one block.
-                           Default _WINDOWS_PER_BLOCK = 4 (= 8 s at 2.0 s/window).
+                           Default _WINDOWS_PER_BLOCK = 8 (= 8 s between the
+                           starts of adjacent 50%-overlapped windows).
 
     Returns:
         List of per-block mean dicts.  Length ≈ len(rows) // windows_per_block.
     """
     if not rows or windows_per_block < 1:
         return rows
-    fnames = list(rows[0].keys())
+    fnames = _select_inference_feature_names(list(rows[0].keys()))
+    internal_summary_names = [
+        name for name in rows[0].keys()
+        if str(name).startswith("_")
+        and name not in {
+            "_transport_segment_id",
+            "_window_start_sample_index",
+            "_window_end_sample_index_exclusive",
+            "_window_start_seconds",
+            "_window_end_seconds",
+        }
+        and _finite_number(rows[0].get(name)) is not None
+    ]
+    aggregate_names = fnames + internal_summary_names
+    runs: List[List[Dict]] = []
+    current_run: List[Dict] = []
+    current_segment: Any = None
+    previous_start_seconds: Optional[float] = None
+    timing_tolerance = max(1e-6, _WINDOW_STEP_SEC * 0.05)
+    for row in rows:
+        segment = row.get("_transport_segment_id", "legacy")
+        current_start_seconds = _finite_number(row.get("_window_start_seconds"))
+        has_timing_gap = (
+            current_run
+            and previous_start_seconds is not None
+            and current_start_seconds is not None
+            and abs(
+                (current_start_seconds - previous_start_seconds) - _WINDOW_STEP_SEC
+            ) > timing_tolerance
+        )
+        if current_run and (segment != current_segment or has_timing_gap):
+            runs.append(current_run)
+            current_run = []
+        current_segment = segment
+        current_run.append(row)
+        previous_start_seconds = current_start_seconds
+    if current_run:
+        runs.append(current_run)
+
     blocks: List[Dict] = []
-    for start in range(0, len(rows) - windows_per_block + 1, windows_per_block):
-        chunk = rows[start: start + windows_per_block]
-        block: Dict[str, float] = {}
-        for f in fnames:
-            vals = [float(r.get(f, 0.0)) for r in chunk]
-            block[f] = sum(vals) / len(vals)
-        blocks.append(block)
-    return blocks if blocks else rows   # fallback: return raw if too short for even one block
+    for run in runs:
+        for start in range(0, len(run) - windows_per_block + 1, windows_per_block):
+            chunk = run[start: start + windows_per_block]
+            block: Dict[str, float] = {}
+            for f in aggregate_names:
+                vals = [float(r.get(f, 0.0)) for r in chunk]
+                block[f] = sum(vals) / len(vals)
+            blocks.append(block)
+    if blocks:
+        return blocks
+    # No transport run was long enough to aggregate. Raw windows remain
+    # independent rows; they are not concatenated into a synthetic block.
+    return rows
 
 def _correlation_guard_factor(all_rows: List[Dict], features: List[str]) -> float:
     """Port of EnhancedBrainLinkAnalyzerWindow._correlation_guard_factor.
@@ -2878,7 +3657,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
     Full per-task analysis mirroring EnhancedFeatureAnalysisEngine output.
     Returns (summary_dict, analysis_per_feature_dict).
 
-    windows_per_block controls block aggregation (default 4 = 8 s at 2.0 s/window).
+    windows_per_block controls block aggregation (default 8 at a 1 s step).
     Pass windows_per_block=1 to disable blocking (individual windows, NOT recommended
     for overlapping EEG windows — produces spuriously low p-values).
     """
@@ -3196,7 +3975,7 @@ def _analyze_task_vs_baseline(task_rows: List[Dict], baseline_rows: List[Dict],
             "preset": "default",
         },
         "ess": {
-            "block_seconds":      windows_per_block * _WINDOW_DURATION_SEC,
+            "block_seconds":      windows_per_block * _WINDOW_STEP_SEC,
             "windows_per_block":  windows_per_block,
             "baseline_blocks":    ess_base,
             "task_blocks":        ess_task,
@@ -3266,6 +4045,490 @@ def _holm_bonferroni(p_items: List[tuple], alpha: float = _ALPHA) -> Dict[str, A
     }
 
 
+def _normalize_eye_state(value: Any) -> Optional[str]:
+    token = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if token in {"eyes_closed", "closed", "ec"}:
+        return "eyes_closed"
+    if token in {"eyes_open", "open", "eo"}:
+        return "eyes_open"
+    return None
+
+
+def _task_sidecar_value(
+    mapping: Any,
+    raw_task_id: str,
+    canonical_task_id: str,
+) -> Any:
+    if not isinstance(mapping, dict):
+        return None
+    if canonical_task_id in mapping:
+        return mapping[canonical_task_id]
+    if raw_task_id in mapping:
+        return mapping[raw_task_id]
+    for candidate, value in mapping.items():
+        if resolve_canonical_task(str(candidate)) == canonical_task_id:
+            return value
+    return None
+
+
+def _task_sample_rate(task_metadata: Dict[str, Any], multichannel: bool) -> int:
+    default = _RAW_EEG_FS if multichannel else _LEGACY_RAW_EEG_FS
+    raw_value = task_metadata.get("sample_rate_hz", task_metadata.get("sample_rate"))
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+    return value if 32 <= value <= 4096 else default
+
+
+def _metadata_clean_interval_ceiling(task_metadata: Dict[str, Any]) -> Optional[float]:
+    """Return an external clean-duration ceiling, never an upward override."""
+    candidates: List[float] = []
+    for key in ("max_contiguous_clean_seconds", "clean_contiguous_seconds"):
+        try:
+            value = float(task_metadata.get(key))
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(value) and value >= 0.0:
+            candidates.append(value)
+
+    intervals = task_metadata.get("clean_intervals")
+    interval_durations: List[float] = []
+    if isinstance(intervals, list):
+        for interval in intervals:
+            if isinstance(interval, dict):
+                start = interval.get("start_seconds", interval.get("start"))
+                end = interval.get("end_seconds", interval.get("end"))
+            elif isinstance(interval, (list, tuple)) and len(interval) >= 2:
+                start, end = interval[0], interval[1]
+            else:
+                continue
+            try:
+                duration = float(end) - float(start)
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(duration) and duration >= 0.0:
+                interval_durations.append(duration)
+    if interval_durations:
+        candidates.append(max(interval_durations))
+    return min(candidates) if candidates else None
+
+
+def _apply_metadata_qc_constraints(
+    task_qc: Dict[str, Any],
+    task_metadata: Dict[str, Any],
+) -> Dict[str, Any]:
+    constrained = dict(task_qc)
+    computed = float(constrained.get("max_contiguous_clean_seconds", 0.0) or 0.0)
+    external_ceiling = _metadata_clean_interval_ceiling(task_metadata)
+    effective = min(computed, external_ceiling) if external_ceiling is not None else computed
+    constrained["computed_max_contiguous_clean_seconds"] = round(computed, 3)
+    constrained["metadata_max_contiguous_clean_seconds"] = (
+        round(external_ceiling, 3) if external_ceiling is not None else None
+    )
+    constrained["max_contiguous_clean_seconds"] = round(effective, 3)
+    constrained["meets_contiguous_clean_minimum"] = effective >= _MIN_CONTIGUOUS_CLEAN_SECONDS
+    return constrained
+
+
+_CONTINUOUS_TASK_CONTRACT_VERSION = "mindspeller_continuous_task_result_v1"
+_AUDIO_MODALITY_REQUIREMENTS: Dict[str, Set[str]] = {
+    "adaptive_numerical_reasoning": {"speech"},
+    "working_memory_manipulation": {"speech"},
+    "auditory_target_counting": {"tone"},
+    "semantic_induction_category_switching": {"speech"},
+    "dual_task_rule_switching": {"speech", "tone"},
+    "speech_in_noise_comprehension": {"speech", "noise"},
+}
+
+_PROFILE_COMPONENT_METADATA_FIELDS = {
+    "stimuli": "stimulus_pack_version",
+    "audio": "audio_pack_version",
+    "rubrics": "rubric_set_version",
+    "thresholds": "threshold_set_version",
+}
+
+
+def _valid_nonnegative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _declared_duration_milliseconds(task_metadata: Dict[str, Any]) -> Optional[float]:
+    raw_milliseconds = task_metadata.get("planned_recording_duration_ms")
+    if raw_milliseconds is not None:
+        if isinstance(raw_milliseconds, bool):
+            return None
+        try:
+            value = float(raw_milliseconds)
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) and value > 0 else None
+
+    raw_seconds = task_metadata.get("planned_recording_duration_seconds")
+    if raw_seconds is None:
+        return None
+    if isinstance(raw_seconds, bool):
+        return None
+    try:
+        value = float(raw_seconds) * 1000.0
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def _protocol_profile_ref_invalid_reasons(
+    reference: Any,
+    protocol_profile: Dict[str, Any],
+    *,
+    prefix: str,
+    canonical_task_id: Optional[str] = None,
+) -> List[str]:
+    if reference is None:
+        return []
+    if not isinstance(reference, dict):
+        return [f"{prefix}_must_be_an_object"]
+
+    reasons: List[str] = []
+    identity_fields = ("contract_version", "profile_id", "profile_version")
+    for field in identity_fields:
+        declared = reference.get(field)
+        if not isinstance(declared, str) or not declared.strip():
+            reasons.append(f"{prefix}_{field}_missing_or_invalid")
+        elif declared.strip() != protocol_profile.get(field):
+            reasons.append(f"{prefix}_{field}_mismatch")
+
+    declared_status = reference.get("validation_status")
+    if declared_status is not None:
+        normalized_status = normalize_protocol_validation_status(declared_status)
+        if normalized_status is None:
+            reasons.append(f"{prefix}_validation_status_invalid")
+        elif normalized_status != protocol_profile.get("validation_status"):
+            reasons.append(f"{prefix}_validation_status_mismatch")
+
+    raw_component_versions = reference.get("component_versions")
+    if raw_component_versions is not None and not isinstance(raw_component_versions, dict):
+        reasons.append(f"{prefix}_component_versions_invalid")
+        raw_component_versions = {}
+    if isinstance(raw_component_versions, dict):
+        profile_components = protocol_profile.get("components", {})
+        for component_name in PROTOCOL_PROFILE_COMPONENTS:
+            declared_version = raw_component_versions.get(component_name)
+            if declared_version is None:
+                reasons.append(f"{prefix}_{component_name}_version_missing")
+                continue
+            expected_version = (
+                profile_components.get(component_name, {}).get("version")
+                if isinstance(profile_components.get(component_name), dict)
+                else None
+            )
+            if declared_version != expected_version:
+                reasons.append(f"{prefix}_{component_name}_version_mismatch")
+
+    raw_component_refs = reference.get(
+        "components", reference.get("component_refs")
+    )
+    if raw_component_refs is not None and not isinstance(raw_component_refs, dict):
+        reasons.append(f"{prefix}_components_invalid")
+        raw_component_refs = {}
+    if isinstance(raw_component_refs, dict):
+        profile_components = protocol_profile.get("components", {})
+        for component_name in PROTOCOL_PROFILE_COMPONENTS:
+            declared_component = raw_component_refs.get(component_name)
+            expected_component = profile_components.get(component_name)
+            if not isinstance(declared_component, dict):
+                reasons.append(f"{prefix}_{component_name}_ref_missing_or_invalid")
+                continue
+            if not isinstance(expected_component, dict):
+                reasons.append(f"{prefix}_{component_name}_profile_component_missing")
+                continue
+            for field in ("id", "version"):
+                if declared_component.get(field) != expected_component.get(field):
+                    reasons.append(f"{prefix}_{component_name}_{field}_mismatch")
+            declared_component_status = declared_component.get("validation_status")
+            if declared_component_status is not None:
+                if (
+                    normalize_protocol_validation_status(declared_component_status)
+                    != expected_component.get("validation_status")
+                ):
+                    reasons.append(
+                        f"{prefix}_{component_name}_validation_status_mismatch"
+                    )
+
+    if (
+        canonical_task_id is not None
+        and raw_component_versions is None
+        and raw_component_refs is None
+    ):
+        reasons.append(f"{prefix}_component_provenance_missing")
+
+    if canonical_task_id is not None:
+        declared_task_ids = [
+            reference[field]
+            for field in ("canonical_task_id", "task_id")
+            if field in reference
+        ]
+        if any(
+            resolve_canonical_task(str(declared_task_id)) != canonical_task_id
+            for declared_task_id in declared_task_ids
+        ):
+            reasons.append(f"{prefix}_canonical_task_id_mismatch")
+        declared_durations = [
+            reference[field]
+            for field in (
+                "expected_recording_duration_seconds",
+                "duration_seconds",
+            )
+            if field in reference
+        ]
+        expected_duration = protocol_profile.get(
+            "task_durations_seconds", {}
+        ).get(canonical_task_id)
+        for declared_duration in declared_durations:
+            if isinstance(declared_duration, bool):
+                reasons.append(f"{prefix}_expected_duration_invalid")
+            else:
+                try:
+                    duration_value = float(declared_duration)
+                except (TypeError, ValueError):
+                    reasons.append(f"{prefix}_expected_duration_invalid")
+                else:
+                    if (
+                        not math.isfinite(duration_value)
+                        or duration_value != expected_duration
+                    ):
+                        reasons.append(f"{prefix}_expected_duration_mismatch")
+    return reasons
+
+
+def _task_protocol_profile_invalid_reasons(
+    task_id: str,
+    task_metadata: Dict[str, Any],
+    behavioral_evidence: Any,
+    protocol_profile: Dict[str, Any],
+) -> List[str]:
+    """Validate task duration and resource/scoring provenance against a profile."""
+    reference = task_metadata.get("protocol_profile_ref")
+    if (
+        task_metadata.get("contract_version") == _CONTINUOUS_TASK_CONTRACT_VERSION
+        and reference is None
+    ):
+        reasons = ["task_protocol_profile_ref_missing"]
+    else:
+        reasons = []
+    reasons = _protocol_profile_ref_invalid_reasons(
+        reference,
+        protocol_profile,
+        prefix="task_protocol_profile_ref",
+        canonical_task_id=task_id,
+    ) + reasons
+
+    profile_components = protocol_profile.get("components", {})
+    for component_name, metadata_field in _PROFILE_COMPONENT_METADATA_FIELDS.items():
+        declared_version = task_metadata.get(metadata_field)
+        if declared_version is None:
+            continue
+        expected_component = profile_components.get(component_name)
+        expected_version = (
+            expected_component.get("version")
+            if isinstance(expected_component, dict)
+            else None
+        )
+        if declared_version != expected_version:
+            reasons.append(f"task_{component_name}_version_mismatch")
+
+    declared_status = task_metadata.get("protocol_validation_status")
+    if declared_status is not None:
+        normalized_status = normalize_protocol_validation_status(declared_status)
+        if normalized_status is None:
+            reasons.append("task_protocol_validation_status_invalid")
+        elif normalized_status != protocol_profile.get("validation_status"):
+            reasons.append("task_protocol_validation_status_mismatch")
+
+    duration_was_declared = any(
+        field in task_metadata
+        for field in (
+            "planned_recording_duration_ms",
+            "planned_recording_duration_seconds",
+        )
+    )
+    declared_duration_ms = _declared_duration_milliseconds(task_metadata)
+    expected_duration_seconds = protocol_profile.get(
+        "task_durations_seconds", {}
+    ).get(task_id)
+    if duration_was_declared and declared_duration_ms is None:
+        reasons.append("task_planned_recording_duration_invalid")
+    elif (
+        declared_duration_ms is not None
+        and isinstance(expected_duration_seconds, int)
+        and not math.isclose(
+            declared_duration_ms,
+            expected_duration_seconds * 1000.0,
+            rel_tol=0.0,
+            abs_tol=0.5,
+        )
+    ):
+        reasons.append("task_planned_recording_duration_profile_mismatch")
+
+    if isinstance(behavioral_evidence, dict):
+        reasons.extend(
+            _protocol_profile_ref_invalid_reasons(
+                behavioral_evidence.get("protocol_profile_ref"),
+                protocol_profile,
+                prefix="behavioral_protocol_profile_ref",
+                canonical_task_id=task_id,
+            )
+        )
+        for component_name in ("rubrics", "thresholds"):
+            metadata_field = _PROFILE_COMPONENT_METADATA_FIELDS[component_name]
+            declared_version = behavioral_evidence.get(metadata_field)
+            if declared_version is None:
+                continue
+            expected_component = profile_components.get(component_name)
+            expected_version = (
+                expected_component.get("version")
+                if isinstance(expected_component, dict)
+                else None
+            )
+            if declared_version != expected_version:
+                reasons.append(f"behavioral_{component_name}_version_mismatch")
+
+        scoring_configuration = behavioral_evidence.get(
+            "configuration", behavioral_evidence.get("scoring_configuration")
+        )
+        if scoring_configuration is not None and not isinstance(
+            scoring_configuration, dict
+        ):
+            reasons.append("behavioral_scoring_configuration_invalid")
+        elif isinstance(scoring_configuration, dict):
+            for field in ("profile_id", "profile_version"):
+                declared_value = scoring_configuration.get(field)
+                if declared_value != protocol_profile.get(field):
+                    reasons.append(f"behavioral_scoring_{field}_mismatch")
+            configured_status = normalize_protocol_validation_status(
+                scoring_configuration.get("validation_status")
+            )
+            if configured_status != protocol_profile.get("validation_status"):
+                reasons.append("behavioral_scoring_validation_status_mismatch")
+            for component_name, id_field, version_field in (
+                ("rubrics", "rubric_set_id", "rubric_set_version"),
+                ("thresholds", "threshold_set_id", "threshold_set_version"),
+            ):
+                expected_component = profile_components.get(component_name)
+                if not isinstance(expected_component, dict):
+                    reasons.append(
+                        f"behavioral_scoring_{component_name}_profile_component_missing"
+                    )
+                    continue
+                if scoring_configuration.get(id_field) != expected_component.get("id"):
+                    reasons.append(f"behavioral_scoring_{component_name}_id_mismatch")
+                if (
+                    scoring_configuration.get(version_field)
+                    != expected_component.get("version")
+                ):
+                    reasons.append(
+                        f"behavioral_scoring_{component_name}_version_mismatch"
+                    )
+
+    return list(dict.fromkeys(reasons))
+
+
+def _task_audio_protocol_invalid_reasons(
+    task_id: str,
+    task_metadata: Dict[str, Any],
+) -> List[str]:
+    """Validate delivery metadata independently of the renderer's top-level flag."""
+    recording = task_metadata.get("recording")
+    audio_delivery = (
+        recording.get("audio_delivery")
+        if isinstance(recording, dict)
+        else None
+    )
+
+    # Preserve explicit invalidation for legacy callers while requiring the
+    # complete audit contract only for optimized-battery recordings.
+    if task_metadata.get("contract_version") != _CONTINUOUS_TASK_CONTRACT_VERSION:
+        if task_metadata.get("protocol_valid") is not False:
+            return []
+        if isinstance(audio_delivery, dict) and audio_delivery.get("protocol_complete") is False:
+            return ["task_audio_delivery_incomplete"]
+        return ["task_metadata_protocol_invalid"]
+
+    reasons: List[str] = []
+    if task_metadata.get("protocol_valid") is not True:
+        reasons.append("task_protocol_validation_missing_or_invalid")
+    if not isinstance(audio_delivery, dict):
+        reasons.append("task_audio_delivery_audit_missing")
+        return reasons
+
+    count_fields = (
+        "expected_speech_count",
+        "scheduled_speech_count",
+        "started_speech_count",
+        "ended_speech_count",
+        "expected_tone_count",
+        "scheduled_tone_count",
+        "started_tone_count",
+        "ended_tone_count",
+    )
+    if not all(_valid_nonnegative_int(audio_delivery.get(field)) for field in count_fields):
+        reasons.append("task_audio_delivery_audit_invalid")
+    else:
+        started_speech = audio_delivery["started_speech_count"]
+        ended_speech = audio_delivery["ended_speech_count"]
+        # A spoken stimulus that starts in the block's final seconds may not fire
+        # its end event before the block finalizes and audio is cancelled; its
+        # audio still played. The renderer discloses these in speech_end_waived_keys.
+        # Count them as delivered so the audit is not failed for an unobservable
+        # end event. The cap at started_speech keeps the waiver from ever excusing
+        # a stimulus that never started.
+        waived_keys = audio_delivery.get("speech_end_waived_keys")
+        waived_count = len(waived_keys) if isinstance(waived_keys, list) else 0
+        effective_ended_speech = min(started_speech, ended_speech + waived_count)
+        speech_counts = [
+            audio_delivery["expected_speech_count"],
+            audio_delivery["scheduled_speech_count"],
+            started_speech,
+            effective_ended_speech,
+        ]
+        tone_counts = [
+            audio_delivery[field]
+            for field in (
+                "expected_tone_count",
+                "scheduled_tone_count",
+                "started_tone_count",
+                "ended_tone_count",
+            )
+        ]
+        if len(set(speech_counts)) != 1 or len(set(tone_counts)) != 1:
+            reasons.append("task_audio_delivery_incomplete")
+
+        required = _AUDIO_MODALITY_REQUIREMENTS.get(task_id, set())
+        if "speech" in required and speech_counts[0] <= 0:
+            reasons.append("task_required_speech_audit_missing")
+        if "tone" in required and tone_counts[0] <= 0:
+            reasons.append("task_required_tone_audit_missing")
+
+    incomplete_lists = (
+        audio_delivery.get("incomplete_speech_keys"),
+        audio_delivery.get("incomplete_tone_keys"),
+        audio_delivery.get("failed_audio_keys"),
+    )
+    if any(not isinstance(values, list) or values for values in incomplete_lists):
+        reasons.append("task_audio_delivery_incomplete")
+    if audio_delivery.get("protocol_complete") is not True:
+        reasons.append("task_audio_delivery_incomplete")
+
+    required = _AUDIO_MODALITY_REQUIREMENTS.get(task_id, set())
+    noise_required = audio_delivery.get("background_noise_required")
+    noise_started = audio_delivery.get("background_noise_started")
+    if not isinstance(noise_required, bool) or not isinstance(noise_started, bool):
+        reasons.append("task_audio_delivery_audit_invalid")
+    elif "noise" in required and not (noise_required and noise_started):
+        reasons.append("task_required_noise_audit_missing")
+
+    return list(dict.fromkeys(reasons))
+
+
 @app.post("/analyze")
 def analyze(body: Dict) -> Dict:
     """
@@ -3273,15 +4536,55 @@ def analyze(body: Dict) -> Dict:
 
     Request:
       { "baseline": { "eyes_closed": [...], "eyes_open": [...] },
+        "baseline_metadata": {
+          "eyes_closed": {"transport_segments": [...]},
+          "eyes_open": {"transport_segments": [...]}
+        },
         "tasks":    { "<task_id>": [...], ... },
+        "task_metadata": {
+          "<task_id>": {"recording": {"transport_segments": [...]}, ...}
+        },
+        "protocol_profile": {
+          "contract_version": "mindspeller_protocol_profile_v1",
+          "profile_id": "...", "profile_version": "...",
+          "validation_status": "candidate|pilot|validated",
+          "components": {"stimuli": {...}, "audio": {...},
+                         "rubrics": {...}, "thresholds": {...}},
+          "task_durations_seconds": {"<canonical_task_id>": 90, ...}
+        },
+        "behavioral_evidence": { "<task_id>": {"status": "passed"}, ... },
         "block_seconds": 8.0   # optional; default 8.0 s per block
       }
 
     Response mirrors EnhancedFeatureAnalysisEngine.multi_task_results structure.
     """
     request_start = time.monotonic()
-    baseline_raw: Dict[str, List] = body.get("baseline", {})
-    tasks_raw:    Dict[str, List] = body.get("tasks",    {})
+    baseline_raw: Dict[str, List] = body.get("baseline", {}) if isinstance(body.get("baseline", {}), dict) else {}
+    baseline_metadata_raw = (
+        body.get("baseline_metadata", {})
+        if isinstance(body.get("baseline_metadata", {}), dict)
+        else {}
+    )
+    tasks_raw:    Dict[str, List] = body.get("tasks", {}) if isinstance(body.get("tasks", {}), dict) else {}
+    task_metadata_raw = body.get("task_metadata", {})
+    behavioral_evidence_raw = body.get("behavioral_evidence", {})
+    protocol_profile, protocol_profile_errors = normalize_protocol_profile(
+        body.get("protocol_profile"),
+        declaration_source=(
+            "analysis_request" if "protocol_profile" in body
+            else "backend_candidate_default"
+        ),
+    )
+    if protocol_profile_errors:
+        return {
+            "error": "Invalid protocol_profile",
+            "protocol_profile": protocol_profile,
+            "protocol_profile_validation": {
+                "valid": False,
+                "errors": protocol_profile_errors,
+                "normative_interpretation_allowed": False,
+            },
+        }
 
     # Optional block_seconds override (default _BLOCK_SECONDS = 8.0)
     req_block_sec    = body.get("block_seconds", _BLOCK_SECONDS)
@@ -3289,25 +4592,60 @@ def analyze(body: Dict) -> Dict:
         req_block_sec = max(0.5, float(req_block_sec))
     except (TypeError, ValueError):
         req_block_sec = _BLOCK_SECONDS
-    win_per_block = max(1, round(req_block_sec / _WINDOW_DURATION_SEC))
+    win_per_block = max(1, round(req_block_sec / _WINDOW_STEP_SEC))
 
-    # Eyes-closed only for baseline (mirrors legacy: EC only, EO retained for reference)
-    ec_samples: List = list(baseline_raw.get("eyes_closed", []) or [])
-    eo_samples: List = list(baseline_raw.get("eyes_open",   []) or [])
-    if not ec_samples:
-        # Fall back to all baseline data if EC key absent
-        for samples in baseline_raw.values():
-            ec_samples.extend(samples if isinstance(samples, list) else [])
+    ec_value = baseline_raw.get("eyes_closed", baseline_raw.get("ec", []))
+    eo_value = baseline_raw.get("eyes_open", baseline_raw.get("eo", []))
+    ec_samples: List = list(ec_value or []) if isinstance(ec_value, list) else []
+    eo_samples: List = list(eo_value or []) if isinstance(eo_value, list) else []
+    ec_metadata_value = baseline_metadata_raw.get(
+        "eyes_closed", baseline_metadata_raw.get("ec", {})
+    )
+    eo_metadata_value = baseline_metadata_raw.get(
+        "eyes_open", baseline_metadata_raw.get("eo", {})
+    )
+    ec_metadata = dict(ec_metadata_value) if isinstance(ec_metadata_value, dict) else {}
+    eo_metadata = dict(eo_metadata_value) if isinstance(eo_metadata_value, dict) else {}
 
-    if not ec_samples:
+    if not ec_samples and not eo_samples:
         return {"error": "No baseline data provided"}
+
+    normalized_tasks: List[Dict[str, Any]] = []
+    seen_canonical: Set[str] = set()
+    for raw_task_id, raw_samples in tasks_raw.items():
+        raw_label = str(raw_task_id)
+        canonical_task_id = resolve_canonical_task(raw_label) or raw_label.strip().lower()
+        if canonical_task_id in seen_canonical:
+            return {
+                "error": (
+                    f"Multiple task labels resolve to '{canonical_task_id}'. "
+                    "Submit one uninterrupted block per canonical task."
+                )
+            }
+        seen_canonical.add(canonical_task_id)
+        metadata_value = _task_sidecar_value(task_metadata_raw, raw_label, canonical_task_id)
+        metadata = dict(metadata_value) if isinstance(metadata_value, dict) else {}
+        behavioral_evidence = _task_sidecar_value(
+            behavioral_evidence_raw, raw_label, canonical_task_id
+        )
+        if behavioral_evidence is None:
+            behavioral_evidence = metadata.get("behavioral_evidence")
+        normalized_tasks.append({
+            "canonical_task_id": canonical_task_id,
+            "raw_task_id": raw_label,
+            "samples": list(raw_samples or []) if isinstance(raw_samples, list) else [],
+            "task_metadata": metadata,
+            "behavioral_evidence": behavioral_evidence,
+            "recognized": canonical_task_id in TASK_BASELINE_CONDITIONS,
+        })
 
     # Record raw counts before conversion (for report header)
     ec_raw_count = len(ec_samples)
     eo_raw_count = len(eo_samples)
     task_counts = {
         str(task_id): len(samples if isinstance(samples, list) else [])
-        for task_id, samples in tasks_raw.items()
+        for task in normalized_tasks
+        for task_id, samples in [(task["canonical_task_id"], task["samples"])]
     }
     _eeg_log(
         "Analyze",
@@ -3315,86 +4653,214 @@ def analyze(body: Dict) -> Dict:
         f"eo_shape={_raw_sample_shape(eo_samples)} tasks={task_counts}",
     )
 
-    # Convert raw EEG directly to enhanced-style feature rows and apply
-    # eyes-closed baseline QC before baseline statistics are finalized.
-    baseline_rows, baseline_qc, baseline_montage = _baseline_feature_rows_from_phases(
+    ec_multichannel = bool(_multichannel_raw_subset(ec_samples))
+    eo_multichannel = bool(_multichannel_raw_subset(eo_samples))
+    ec_rows, ec_qc, ec_montage = _feature_rows_for_transport_segments(
         ec_samples,
-        eo_samples,
-        return_montage=True,
+        ec_metadata,
+        fs=_task_sample_rate(ec_metadata, multichannel=ec_multichannel),
     )
-    eo_rows = _samples_to_feature_rows(eo_samples)
+    eo_rows, eo_qc, eo_montage = _feature_rows_for_transport_segments(
+        eo_samples,
+        eo_metadata,
+        fs=_task_sample_rate(eo_metadata, multichannel=eo_multichannel),
+    )
+    baseline_qc = _merge_qc_counters(ec_qc, eo_qc)
+    baseline_rows = list(ec_rows) + list(eo_rows)
+    baseline_montage = _merge_montage_summaries(
+        [item for item in (ec_montage, eo_montage) if item]
+    )
     _eeg_log(
         "Analyze",
         f"baseline_features rows={len(baseline_rows)} qc={baseline_qc} "
-        f"eo_rows={len(eo_rows)} montage={bool(baseline_montage)}",
+        f"ec_rows={len(ec_rows)} eo_rows={len(eo_rows)} montage={bool(baseline_montage)}",
     )
-
-    if not baseline_rows:
-        _eeg_log("Analyze", f"failed no usable baseline after qc={baseline_qc}")
-        return {"error": "No usable baseline data after quality control"}
 
     per_task:      Dict[str, Any] = {}
     per_task_rows: Dict[str, List[Dict]] = {}
     all_task_rows: List[Dict]     = []
     montage_summaries: List[Dict[str, Any]] = [baseline_montage] if baseline_montage else []
+    # A session-level baseline condition is one recording shared by every task
+    # that matches its eye state. Analyse it once per condition so the pooled
+    # comparison cannot count the same baseline windows once per task.
+    matched_baseline_cache: Dict[str, Tuple[List[Dict], Dict[str, Any], Dict[str, Any]]] = {}
+    scored_baseline_conditions: List[str] = []
 
-    for task_id, samples in tasks_raw.items():
+    for task in normalized_tasks:
+        task_id = task["canonical_task_id"]
+        raw_task_id = task["raw_task_id"]
+        samples = task["samples"]
+        task_metadata = task["task_metadata"]
+        behavioral_evidence = task["behavioral_evidence"]
+        expected_baseline = task_baseline_condition(task_id)
+        reported_eye_state = _normalize_eye_state(task_metadata.get("eye_state"))
+
+        multichannel = bool(_multichannel_raw_subset(samples))
+        task_fs = _task_sample_rate(task_metadata, multichannel=multichannel)
+        task_rows, task_qc, task_montage = _feature_rows_for_transport_segments(
+            samples,
+            task_metadata,
+            task_id=task_id,
+            fs=task_fs,
+        )
+        task_qc = _apply_metadata_qc_constraints(task_qc, task_metadata)
+
+        baseline_samples_for_task = (
+            ec_samples if expected_baseline == "eyes_closed"
+            else eo_samples if expected_baseline == "eyes_open"
+            else []
+        )
+        comparison_baseline_metadata = (
+            ec_metadata if expected_baseline == "eyes_closed"
+            else eo_metadata if expected_baseline == "eyes_open"
+            else {}
+        )
+        comparison_baseline_multichannel = bool(
+            _multichannel_raw_subset(baseline_samples_for_task)
+        )
+        # Keyed by condition and montage profile: the region weighting depends on
+        # the task, so tasks with different primary regions need their own rows.
+        baseline_cache_key = (
+            f"{expected_baseline}|{_montage_profile_for_task(task_id).get('primary_region', '')}"
+        )
+        if baseline_cache_key not in matched_baseline_cache:
+            matched_baseline_cache[baseline_cache_key] = _feature_rows_for_transport_segments(
+                baseline_samples_for_task,
+                comparison_baseline_metadata,
+                task_id=task_id,
+                fs=_task_sample_rate(
+                    comparison_baseline_metadata,
+                    multichannel=comparison_baseline_multichannel,
+                ),
+            )
+        comparison_baseline_rows, task_baseline_qc, task_baseline_montage = (
+            matched_baseline_cache[baseline_cache_key]
+        )
+
+        invalid_reasons: List[str] = []
+        if not task["recognized"]:
+            invalid_reasons.append("unrecognized_non_core_task")
         if not samples:
-            continue
-        samples = list(samples)
-        task_montage: Dict[str, Any] = {}
-        comparison_baseline_rows = baseline_rows
-        multichannel_samples = _multichannel_raw_subset(samples)
-        if multichannel_samples:
-            _log_mixed_sample_use("AnalyzeTask", samples, "multichannel", task_id=task_id)
-            task_rows, _, task_montage = _multichannel_to_feature_rows(
-                multichannel_samples,
-                apply_qc=True,
-                task_id=task_id,
-                return_montage=True,
+            invalid_reasons.append("no_task_samples")
+        if not task_qc.get("meets_contiguous_clean_minimum"):
+            invalid_reasons.append("task_has_less_than_20_contiguous_clean_seconds")
+        if not baseline_samples_for_task:
+            invalid_reasons.append(f"missing_{expected_baseline or 'matched'}_baseline")
+        elif not task_baseline_qc.get("meets_contiguous_clean_minimum"):
+            invalid_reasons.append(
+                f"{expected_baseline}_baseline_has_less_than_20_contiguous_clean_seconds"
             )
-            task_baseline_rows, _, task_baseline_montage = _baseline_feature_rows_from_phases(
-                ec_samples,
-                eo_samples,
-                task_id=task_id,
-                return_montage=True,
+        invalid_reasons.extend(
+            _task_audio_protocol_invalid_reasons(task_id, task_metadata)
+        )
+        invalid_reasons.extend(
+            _task_protocol_profile_invalid_reasons(
+                task_id,
+                task_metadata,
+                behavioral_evidence,
+                protocol_profile,
             )
-            comparison_baseline_rows = task_baseline_rows or baseline_rows
-            if task_montage:
-                montage_summaries.append(task_montage)
-            if task_baseline_montage:
-                montage_summaries.append(task_baseline_montage)
-        else:
-            task_rows = _samples_to_feature_rows(samples, task_id=task_id)
+        )
+        if reported_eye_state and expected_baseline and reported_eye_state != expected_baseline:
+            invalid_reasons.append("task_eye_state_mismatch")
+
+        scorable = not invalid_reasons
+        if task_montage:
+            montage_summaries.append(task_montage)
+        if task_baseline_montage and not any(
+            summary is task_baseline_montage for summary in montage_summaries
+        ):
+            montage_summaries.append(task_baseline_montage)
         _eeg_log(
             "AnalyzeTask",
-            f"task={task_id} raw={len(samples)} shape={_raw_sample_shape(samples)} "
+            f"task={task_id} raw_label={raw_task_id} raw={len(samples)} shape={_raw_sample_shape(samples)} "
             f"feature_rows={len(task_rows)} baseline_rows={len(comparison_baseline_rows)} "
-            f"montage={bool(task_montage)}",
+            f"baseline={expected_baseline} scorable={scorable} montage={bool(task_montage)}",
         )
-        per_task_rows[task_id] = task_rows
-        summary, analysis = _analyze_task_vs_baseline(
-            task_rows, comparison_baseline_rows, task_id, win_per_block
-        )
+        if scorable:
+            summary, analysis = _analyze_task_vs_baseline(
+                task_rows, comparison_baseline_rows, task_id, win_per_block
+            )
+            summary["validity"] = {"scorable": True, "invalid_reasons": []}
+            per_task_rows[task_id] = task_rows
+            all_task_rows.extend(task_rows)
+            if baseline_cache_key not in scored_baseline_conditions:
+                scored_baseline_conditions.append(baseline_cache_key)
+            continuous_time_series = _continuous_time_series_summary(
+                task_rows, task_metadata
+            )
+        else:
+            summary, analysis = (
+                {
+                    "validity": {
+                        "scorable": False,
+                        "invalid_reasons": invalid_reasons,
+                    }
+                },
+                {},
+            )
+            continuous_time_series = None
         per_task[task_id] = {
             "summary":      summary,
             "analysis":     analysis,
             "sample_count": len(task_rows),
+            "raw_sample_count": len(samples),
+            "canonical_task_id": task_id,
+            "raw_task_labels": [raw_task_id],
+            "baseline_condition": expected_baseline,
+            "baseline_qc": task_baseline_qc,
+            "task_qc": task_qc,
+            "scorable": scorable,
+            "invalid_reasons": invalid_reasons,
+            "task_metadata": task_metadata,
+            "protocol_profile": protocol_profile_reference(
+                protocol_profile, task_id
+            ),
+            "behavioral_evidence": behavioral_evidence,
+            "theoretical_onet_ability_candidates": theoretical_abilities_for_task(task_id),
         }
+        if continuous_time_series is not None:
+            per_task[task_id]["continuous_time_series"] = continuous_time_series
         if task_montage:
             per_task[task_id]["montage_evidence"] = task_montage
-        all_task_rows.extend(task_rows)
+
+    dual_task_id = "dual_task_rule_switching"
+    if dual_task_id in per_task:
+        per_task[dual_task_id]["single_task_reference_comparison"] = (
+            _continuous_reference_comparison(
+                per_task_rows.get(dual_task_id, []),
+                {
+                    "working_memory_manipulation": per_task_rows.get(
+                        "working_memory_manipulation", []
+                    ),
+                    "auditory_target_counting": per_task_rows.get(
+                        "auditory_target_counting", []
+                    ),
+                },
+            )
+        )
+
+    # Each matched baseline condition contributes its windows exactly once, so
+    # pooling many eyes-closed tasks cannot restate one baseline as independent
+    # observations and shrink the combined p-values.
+    all_matched_baseline_rows: List[Dict] = []
+    for cache_key in scored_baseline_conditions:
+        all_matched_baseline_rows.extend(matched_baseline_cache[cache_key][0])
 
     # ── Combined (all tasks pooled vs baseline) ───────────────────────────────
     comb_summary, comb_analysis = ({}, {})
-    if all_task_rows:
+    if all_task_rows and all_matched_baseline_rows:
         comb_summary, comb_analysis = _analyze_task_vs_baseline(
-            all_task_rows, baseline_rows, windows_per_block=win_per_block
+            all_task_rows, all_matched_baseline_rows, windows_per_block=win_per_block
         )
 
     # ── Across-task omnibus (Kruskal-Wallis per feature + BH FDR) ─────────────
-    n_sessions = len(per_task)
-    fnames     = list(baseline_rows[0].keys()) if baseline_rows else []
+    n_sessions = len(per_task_rows)
+    inference_baseline_rows = all_matched_baseline_rows or baseline_rows
+    fnames = (
+        _select_inference_feature_names(list(inference_baseline_rows[0].keys()))
+        if inference_baseline_rows else []
+    )
 
     # Gather per-feature value groups across tasks
     task_feat_groups: Dict[str, List[List[float]]] = {f: [] for f in fnames}
@@ -3427,6 +4893,8 @@ def analyze(body: Dict) -> Dict:
     for i, fname in enumerate(fnames):
         ranking = []
         for tid, result in per_task.items():
+            if not result.get("scorable"):
+                continue
             d_abs = abs((result.get("analysis") or {}).get(fname, {}).get("effect_size_d") or 0)
             ranking.append({"task": tid, "median_effect": round(d_abs, 4)})
         ranking.sort(key=lambda r: r["median_effect"], reverse=True)
@@ -3446,6 +4914,7 @@ def analyze(body: Dict) -> Dict:
     task_p_items = [
         (task_id, ((result.get("summary") or {}).get("fisher") or {}).get("km_p"))
         for task_id, result in per_task.items()
+        if result.get("scorable")
     ]
     cross_task_correction = _holm_bonferroni(task_p_items, _ALPHA)
 
@@ -3464,11 +4933,40 @@ def analyze(body: Dict) -> Dict:
         },
         "baseline_kept":              baseline_qc["kept"],
         "ec_samples_raw":             ec_raw_count,
+        "eo_samples_raw":             eo_raw_count,
         "baseline_rejected":          baseline_qc["rejected"],
         "baseline_rejected_not_worn": baseline_qc["not_worn"],
         "baseline_rejected_artifact": baseline_qc["artifact"],
         "baseline_rejected_flatline": baseline_qc["flatline"],
         "eo_windows":                 len(eo_rows),
+        "baseline_qc_by_condition": {
+            "eyes_closed": ec_qc,
+            "eyes_open": eo_qc,
+        },
+        "baseline_metadata": {
+            "eyes_closed": ec_metadata,
+            "eyes_open": eo_metadata,
+        },
+        "task_metadata": {
+            task_id: result.get("task_metadata", {})
+            for task_id, result in per_task.items()
+        },
+        "behavioral_evidence": {
+            task_id: result.get("behavioral_evidence")
+            for task_id, result in per_task.items()
+        },
+        "protocol_profile": protocol_profile,
+        "protocol_profile_validation": {
+            "valid": True,
+            "errors": [],
+            "normative_interpretation_allowed": bool(
+                protocol_profile.get("normative_interpretation_allowed")
+            ),
+        },
+        "invalid_tasks": [
+            task_id for task_id, result in per_task.items()
+            if not result.get("scorable")
+        ],
         "config": {
             "mode":                "aggregate_only",
             "alpha":               _ALPHA,
@@ -3478,6 +4976,17 @@ def analyze(body: Dict) -> Dict:
             "n_perm":              _N_PERM,
             "effect_measure":      "delta",
             "discretization_bins": 5,
+            "window_seconds":      _RAW_WINDOW_SECONDS,
+            "window_overlap":      _RAW_WINDOW_OVERLAP,
+            "window_step_seconds": _WINDOW_STEP_SEC,
+            "minimum_contiguous_clean_seconds": _MIN_CONTIGUOUS_CLEAN_SECONDS,
+            "baseline_matching":   "task_eye_state",
+            "transport_segmentation": "optional_zero_based_end_exclusive",
+            "continuous_time_series": "descriptive_non_event_locked",
+            "protocol_profile_contract_version": PROTOCOL_PROFILE_CONTRACT_VERSION,
+            "task_recording_durations_seconds": dict(
+                TASK_RECORDING_DURATIONS_SECONDS
+            ),
         },
     }
 
