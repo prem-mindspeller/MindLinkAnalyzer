@@ -7,11 +7,11 @@ import {
   isBaselinePhaseComplete,
   mergeCompletedBaselinePhase,
   resolveBaselineEntry,
-} from './baselineSessionFlow.mjs';
+} from '../src/service/baselineSessionFlow.mjs';
 import {
   loadBaselineRecording,
   saveBaselineRecording,
-} from './recordingStore.mjs';
+} from '../src/service/recordingStore.mjs';
 
 function createStorage(initial = {}) {
   const values = new Map(Object.entries(initial));

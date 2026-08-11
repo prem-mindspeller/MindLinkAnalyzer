@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   createFourChannelBatchCollector,
   isFourChannelSample,
-} from './continuousRecording.mjs';
+} from '../src/service/continuousRecording.mjs';
 
 const sample = (value) => ({ fp1: value, fp2: value, o1: value, o2: value });
 

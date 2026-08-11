@@ -4,8 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const serviceDir = dirname(fileURLToPath(import.meta.url));
-const srcDir = join(serviceDir, '..');
+const srcDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
 
 test('task and baseline record only explicit four-channel batches', () => {
   const sources = [

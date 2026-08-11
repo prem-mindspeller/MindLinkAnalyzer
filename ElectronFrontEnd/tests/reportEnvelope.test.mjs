@@ -4,7 +4,7 @@ import { gunzipSync } from 'node:zlib';
 import {
   createCompressedReportEnvelope,
   uint8ArrayToBase64,
-} from './reportEnvelope.mjs';
+} from '../src/service/reportEnvelope.mjs';
 
 const reportText = JSON.stringify({
   feature_report_version: 'mindspeller_eeg_feature_report_v2',

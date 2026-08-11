@@ -8,8 +8,8 @@ import {
   scoringRubricFor,
   taskFormForSession,
   taskTimingFor,
-} from './optimizedBatteryConfig.mjs';
-import { scoreOptimizedTask } from './optimizedTaskScoring.mjs';
+} from '../src/components/tasks/optimizedBatteryConfig.mjs';
+import { scoreOptimizedTask } from '../src/components/tasks/optimizedTaskScoring.mjs';
 
 const form = (taskId) => taskFormForSession(taskId, 'session_1');
 

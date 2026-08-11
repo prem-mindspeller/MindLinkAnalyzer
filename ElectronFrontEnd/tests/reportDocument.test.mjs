@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { buildNeuroprofileReportDocument } from './reportDocument.mjs';
+import { buildNeuroprofileReportDocument } from '../src/service/reportDocument.mjs';
 
 const sample = {
   neuroprofile_feature_export: {

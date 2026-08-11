@@ -3,8 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const serviceDir = dirname(fileURLToPath(import.meta.url));
-const srcDir = join(serviceDir, '..');
+const srcDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
 const taskSelectionSource = readFileSync(join(srcDir, 'pages', 'TaskSelection.jsx'), 'utf8');
 
 assert.equal(taskSelectionSource.includes('qualityUsableFeatures'), false);

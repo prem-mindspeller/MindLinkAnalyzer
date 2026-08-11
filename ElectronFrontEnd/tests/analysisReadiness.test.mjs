@@ -5,7 +5,7 @@ import {
   missingExpectedTaskIds,
   missingOrEmptyTaskRecordings,
   requiredBaselineConditionsForSession,
-} from './analysisReadiness.mjs';
+} from '../src/service/analysisReadiness.mjs';
 
 const sessionOne = expectedTaskIdsForSession('session_1');
 const sessionTwo = expectedTaskIdsForSession('session_2');

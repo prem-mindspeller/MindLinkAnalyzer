@@ -11,8 +11,8 @@ import {
   RECORDING_STORE_SESSION_KEY,
   saveBaselineRecording,
   saveTaskRecording,
-} from './recordingStore.mjs';
-import { commitTaskAttempt } from './taskQualityGate.mjs';
+} from '../src/service/recordingStore.mjs';
+import { commitTaskAttempt } from '../src/service/taskQualityGate.mjs';
 
 function createStorage(initial = {}, { maxValueLength = Infinity } = {}) {
   const data = new Map(Object.entries(initial));

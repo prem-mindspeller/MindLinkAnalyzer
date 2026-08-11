@@ -8,8 +8,8 @@ import {
   isRepeatSignalReady,
   loadTaskAttempt,
   resolveTaskQualityOutcome,
-} from './taskQualityGate.mjs';
-import { PROTOCOL_PROFILE_METADATA } from '../components/tasks/optimizedBatteryProfile.mjs';
+} from '../src/service/taskQualityGate.mjs';
+import { PROTOCOL_PROFILE_METADATA } from '../src/components/tasks/optimizedBatteryProfile.mjs';
 
 function createStorage(initial = {}) {
   const data = new Map(Object.entries(initial));

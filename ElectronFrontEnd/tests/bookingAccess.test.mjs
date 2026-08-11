@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { resolveBookingAccess } from './bookingAccess.mjs';
+import { resolveBookingAccess } from '../src/service/bookingAccess.mjs';
 
 assert.deepEqual(resolveBookingAccess({ partner_bookings: [{}] }), {
     bookingCount: 1,

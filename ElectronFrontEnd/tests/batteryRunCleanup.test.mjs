@@ -6,14 +6,14 @@ import { fileURLToPath } from 'node:url';
 import {
   BATTERY_RUN_STORAGE_KEYS,
   clearBatteryRunData,
-} from './batteryRunCleanup.mjs';
+} from '../src/service/batteryRunCleanup.mjs';
 import {
   loadBaselineRecording,
   loadTaskRecording,
   RECORDING_STORE_SESSION_KEY,
   saveBaselineRecording,
   saveTaskRecording,
-} from './recordingStore.mjs';
+} from '../src/service/recordingStore.mjs';
 
 function createStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
@@ -103,8 +103,8 @@ assert.equal(storage.getItem(RECORDING_STORE_SESSION_KEY), null);
 assert.equal(storage.getItem('completedTasks'), null);
 
 // Both user-facing exit paths must await the one centralized cleanup owner.
-const serviceDir = dirname(fileURLToPath(import.meta.url));
-const srcDir = join(serviceDir, '..');
+const srcDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
+const serviceDir = join(srcDir, 'service');
 const loginServiceSource = readFileSync(join(serviceDir, 'loginService.js'), 'utf8');
 const headerSource = readFileSync(join(srcDir, 'components', 'header.jsx'), 'utf8');
 const uploadSource = readFileSync(join(srcDir, 'pages', 'upload.jsx'), 'utf8');

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const serviceDir = dirname(fileURLToPath(import.meta.url));
+const serviceDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'service');
 const analysisSource = readFileSync(join(serviceDir, 'analysisService.js'), 'utf8');
 const qualitySource = readFileSync(join(serviceDir, 'taskQualityGate.mjs'), 'utf8');
 

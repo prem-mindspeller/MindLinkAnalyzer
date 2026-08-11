@@ -25,7 +25,7 @@ import {
   taskTimingFor,
   visualComparisonFrame,
   visualRouteState,
-} from './optimizedBatteryConfig.mjs';
+} from '../src/components/tasks/optimizedBatteryConfig.mjs';
 
 const makeStorage = (entries = {}) => ({ getItem: (key) => entries[key] ?? null });
 

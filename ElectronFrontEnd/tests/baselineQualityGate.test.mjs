@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { evaluateBaselineSignalStats } from './baselineQualityGate.mjs';
+import { evaluateBaselineSignalStats } from '../src/service/baselineQualityGate.mjs';
 
 {
   const result = evaluateBaselineSignalStats({
