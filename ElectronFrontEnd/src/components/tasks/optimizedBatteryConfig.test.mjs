@@ -7,6 +7,7 @@ import {
   BATTERY_VERSION,
   EYES_OPEN_BASELINE_CHECKPOINT,
   FORM_REGISTRY_FOR_TESTS,
+  inTaskAudioLocalization,
   PROTOCOL_PROFILE_METADATA,
   SESSION_SEQUENCES,
   TASK_DEFINITIONS,
@@ -21,6 +22,7 @@ import {
   taskDefinitionForProfile,
   taskIdsForSession,
   taskIntroduction,
+  taskRequiresAudio,
   taskPresentationFor,
   taskTimingFor,
   visualComparisonFrame,
@@ -31,7 +33,7 @@ const makeStorage = (entries = {}) => ({ getItem: (key) => entries[key] ?? null 
 
 test('battery exposes twelve unique canonical tasks numbered 1 through 12', () => {
   const definitions = Object.entries(TASK_DEFINITIONS);
-  assert.equal(BATTERY_VERSION, 'task_battery_optimization_2.0.0-candidate.1');
+  assert.equal(BATTERY_VERSION, 'task_battery_optimization_2.0.0-candidate.2');
   assert.equal(definitions.length, 12);
   assert.deepEqual(definitions.map(([, task]) => task.number).sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   assert.equal(new Set(definitions.map(([id]) => id)).size, 12);
@@ -187,6 +189,22 @@ test('pre-recording instructions do not leak Task-2 encoding and fully state Tas
   );
 });
 
+test('pre-recording instructions use localized keys while retaining form values', () => {
+  const numerical = FORM_REGISTRY_FOR_TESTS[TASK_IDS.NUMERICAL][0];
+  const localized = taskIntroduction(TASK_IDS.NUMERICAL, numerical, (key, options) => {
+    if (key.includes('.words.')) return options.defaultValue;
+    if (key.endsWith('.common.block')) return `${key}:${options.duration}`;
+    if (key.endsWith('.common.eyes')) return `${key}:${options.eyeState}`;
+    return `${key}:${options.startValue}`;
+  });
+  assert.equal(
+    localized[0],
+    `optimizedBattery.instructions.${TASK_IDS.NUMERICAL}:${numerical.startValue}`,
+  );
+  assert.equal(localized.at(-3), `optimizedBattery.instructions.common.block:${TASK_DEFINITIONS[TASK_IDS.NUMERICAL].duration}`);
+  assert.equal(localized.at(-2), 'optimizedBattery.instructions.common.eyes:closed');
+});
+
 test('every visuospatial turn changes position and orientation without leaving the grid', () => {
   for (const form of FORM_REGISTRY_FOR_TESTS[TASK_IDS.VISUOSPATIAL]) {
     let previous = { ...form.start };
@@ -310,6 +328,71 @@ test('profile and stimulus-pack overrides are consumed without task-engine branc
     },
   };
   assert.equal(taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', stimulusPack).id, 'normalized_num_a');
+});
+
+test('Task 11 selects a matching candidate language stimulus and integrity-tracked narration asset', () => {
+  const english = taskFormForSession(TASK_IDS.SPEECH_NOISE, 'session_3', undefined, 'en');
+  const dutch = taskFormForSession(TASK_IDS.SPEECH_NOISE, 'session_3', undefined, 'nl-BE');
+  const japanese = taskFormForSession(TASK_IDS.SPEECH_NOISE, 'session_3', undefined, 'ja');
+
+  assert.equal(english.id, 'speech_a');
+  assert.equal(dutch.id, english.id);
+  assert.equal(dutch.language, 'nl');
+  assert.equal(dutch.language_pack_status, 'candidate_translation');
+  assert.notEqual(dutch.passage, english.passage);
+  assert.equal(dutch.mainIdeaOptions.includes(dutch.mainIdea), true);
+  assert.match(dutch.audioAssetUri, /speech-in-noise/);
+  assert.match(dutch.audioAssetSha256, /^[a-f0-9]{64}$/);
+  assert.equal(dutch.audioAssetPlaybackRate, 0.8);
+  assert.equal(dutch.audioAssetTaskDurationSeconds, 165);
+  assert.equal(dutch.audioAssetExpectedDeliverySeconds, 157);
+  assert.equal(japanese.language, 'ja');
+  assert.equal(japanese.mainIdeaOptions.includes(japanese.mainIdea), true);
+});
+
+test('Dutch in-task cues preserve the underlying task schedule and flag remaining audio translations', () => {
+  const englishNumerical = taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', undefined, 'en');
+  const dutchNumerical = taskFormForSession(TASK_IDS.NUMERICAL, 'session_1', undefined, 'nl-BE');
+  assert.equal(dutchNumerical.spokenEvents[0].at, englishNumerical.spokenEvents[0].at);
+  assert.equal(dutchNumerical.spokenEvents[0].text, `Begin met ${dutchNumerical.startValue}.`);
+  assert.match(dutchNumerical.spokenEvents[1].text, /Tel .* erbij op|Trek .* eraf|Vermenigvuldig|Deel/);
+
+  const dutchMemory = taskFormForSession(TASK_IDS.WORKING_MEMORY, 'session_1', undefined, 'nl');
+  assert.match(dutchMemory.spokenEvents[0].text, /^Onthoud deze reeks:/);
+  assert.match(dutchMemory.spokenEvents[1].text, /Houd|Schuif|Draai|Vervang/);
+
+  const dutchDual = taskFormForSession(TASK_IDS.DUAL_TASK, 'session_1', undefined, 'nl');
+  assert.deepEqual(
+    dutchDual.spokenEvents.filter((event) => event.at === TASK_DEFINITIONS[TASK_IDS.DUAL_TASK].phases[1].start).map((event) => event.text),
+    ['Wissel nu.'],
+  );
+
+  assert.deepEqual(inTaskAudioLocalization(TASK_IDS.NUMERICAL, dutchNumerical, 'nl'), {
+    language: 'nl',
+    status: 'candidate_translation',
+    hasDutchSpokenCueTranslation: true,
+    pending: false,
+  });
+  assert.equal(
+    inTaskAudioLocalization(TASK_IDS.SEMANTIC, taskFormForSession(TASK_IDS.SEMANTIC, 'session_1'), 'nl').pending,
+    true,
+  );
+  assert.equal(
+    inTaskAudioLocalization(TASK_IDS.SPEECH_NOISE, taskFormForSession(TASK_IDS.SPEECH_NOISE, 'session_3', undefined, 'fr'), 'fr').pending,
+    false,
+  );
+});
+
+test('audio-required task list marker follows the configured form schedules', () => {
+  const audioTasks = Object.values(TASK_IDS).filter((taskId) => taskRequiresAudio(taskId, 'session_3'));
+  assert.deepEqual(audioTasks, [
+    TASK_IDS.NUMERICAL,
+    TASK_IDS.WORKING_MEMORY,
+    TASK_IDS.AUDITORY_COUNT,
+    TASK_IDS.SEMANTIC,
+    TASK_IDS.DUAL_TASK,
+    TASK_IDS.SPEECH_NOISE,
+  ]);
 });
 
 // Page 47 durations, the eyes-open/closed slide, and each task's

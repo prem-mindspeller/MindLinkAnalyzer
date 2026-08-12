@@ -596,5 +596,39 @@
         "seedingFailedStatus": "Caricamento non riuscito ({{status}}): {{message}}",
         "unexpectedError": "Errore imprevisto: {{status}}",
         "connectionFailed": "Connessione non riuscita."
+    },
+    "optimizedBattery": {
+        "listen": "Ascolta le istruzioni",
+        "speechInNoise": { "paraphrase": "Fornisci una breve parafrasi del brano." },
+        "words": {
+            "eyes": { "open": "aperti", "closed": "chiusi" },
+            "operations": { "add": "aggiungi", "subtract": "sottrai" },
+            "directions": { "north": "nord", "east": "est", "south": "sud", "west": "ovest" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "Inizia da {{startValue}}; segui mentalmente ogni operazione pronunciata e indica solo il valore finale.",
+            "working_memory_manipulation": "La sequenza iniziale viene presentata solo dopo l'avvio della registrazione EEG. Memorizzala, segui ogni aggiornamento pronunciato e riporta solo l'ordine finale.",
+            "auditory_target_counting": "Conta mentalmente ogni tono acuto e ignora i toni bassi. Riporta un solo conteggio alla fine.",
+            "semantic_induction_category_switching": "Individua il principio organizzatore del primo flusso di parole e il nuovo principio dopo il passaggio continuo.",
+            "visuospatial_transformation_orientation": "Inizia alla riga {{row}}, colonna {{column}}, rivolto verso {{orientation}}. Ogni svolta visualizzata cambia sia la direzione sia la posizione nella griglia. Le righe vanno dall'alto in basso e le colonne da sinistra a destra.",
+            "divergent_ideation": {
+                "prompt": "Prompt in inglese: {{prompt}}",
+                "response": "Genera idee mentalmente; in seguito inserirai ogni idea su una riga separata."
+            },
+            "dual_task_rule_switching": "Inizia da {{startValue}}. Prima del cambio, {{beforeOperation}} {{beforeDelta}} a ogni segnale inglese Update. Dopo Switch, {{afterOperation}} {{afterDelta}} a ogni segnale Update. Conta i toni acuti per tutta la prova.",
+            "rule_based_anomaly_detection": {
+                "rule": "Ogni codice deve contenere esattamente una lettera, un trattino e due cifre in questo stesso ordine.",
+                "response": "Conta mentalmente le anomalie e ricorda i loro tipi; non fare clic durante il flusso."
+            },
+            "rapid_visual_comparison": "Mantieni lo sguardo al centro mentre entrambe le stringhe di codice si aggiornano in sincronia. Premi DETECT una volta quando compare una discrepanza graduale, poi resta immobile fino alla fine del blocco.",
+            "pattern_closure_visual_noise": "Un bersaglio frammentato emergerà gradualmente da un denso rumore visivo. Premi RECOGNIZED una volta quando capisci cos'è, poi resta immobile fino alla fine del blocco.",
+            "speech_in_noise_comprehension": "Ascolta l'intero brano in inglese con rumore di fondo moderato. Rispondi solo dopo che l'audio e la registrazione EEG si sono fermati.",
+            "written_comprehension_synthesis": "Leggi ogni sezione in inglese presentata al centro. Poi pianifica mentalmente una sintesi concisa; potrai digitare solo dopo la fine dell'EEG.",
+            "common": {
+                "block": "Questo è un blocco di registrazione EEG ininterrotto di {{duration}} secondi.",
+                "eyes": "Tieni gli occhi {{eyeState}} e riduci al minimo battiti di ciglia, tensione della mandibola e movimenti.",
+                "response": "Non parlare né digitare finché la registrazione non è terminata e non appare il modulo di risposta."
+            }
+        }
     }
 }

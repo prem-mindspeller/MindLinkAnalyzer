@@ -596,5 +596,39 @@
         "seedingFailedStatus": "Upload fehlgeschlagen ({{status}}): {{message}}",
         "unexpectedError": "Unerwarteter Fehler: {{status}}",
         "connectionFailed": "Verbindung fehlgeschlagen."
+    },
+    "optimizedBattery": {
+        "listen": "Anweisungen anhören",
+        "speechInNoise": { "paraphrase": "Geben Sie eine kurze Paraphrase des Textes." },
+        "words": {
+            "eyes": { "open": "offen", "closed": "geschlossen" },
+            "operations": { "add": "addieren Sie", "subtract": "subtrahieren Sie" },
+            "directions": { "north": "Norden", "east": "Osten", "south": "Süden", "west": "Westen" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "Beginnen Sie bei {{startValue}}; folgen Sie jeder gesprochenen Rechenoperation still und geben Sie nur den Endwert an.",
+            "working_memory_manipulation": "Die Anfangssequenz wird erst nach Beginn der EEG-Aufzeichnung gezeigt. Prägen Sie sie sich ein, verfolgen Sie jede gesprochene Änderung und geben Sie nur die endgültige Reihenfolge an.",
+            "auditory_target_counting": "Zählen Sie jeden hohen Ton still und ignorieren Sie die tiefen Töne. Geben Sie anschließend eine Anzahl an.",
+            "semantic_induction_category_switching": "Leiten Sie das Ordnungsprinzip des ersten Wortstroms und das neue Prinzip nach dem nahtlosen Wechsel ab.",
+            "visuospatial_transformation_orientation": "Beginnen Sie in Zeile {{row}}, Spalte {{column}}, ausgerichtet nach {{orientation}}. Jede angezeigte Drehung verändert Richtung und Position im Raster. Zeilen verlaufen von oben nach unten, Spalten von links nach rechts.",
+            "divergent_ideation": {
+                "prompt": "Englische Aufgabe: {{prompt}}",
+                "response": "Entwickeln Sie Ideen still; anschließend erfassen Sie jede Idee in einer eigenen Zeile."
+            },
+            "dual_task_rule_switching": "Beginnen Sie bei {{startValue}}. Vor dem Wechsel: {{beforeOperation}} {{beforeDelta}} bei jedem englischen Update-Signal. Nach Switch: {{afterOperation}} {{afterDelta}} bei jedem Update-Signal. Zählen Sie die hohen Töne durchgehend.",
+            "rule_based_anomaly_detection": {
+                "rule": "Jeder Code muss genau einen Buchstaben, einen Bindestrich und zwei Ziffern in genau dieser Reihenfolge enthalten.",
+                "response": "Zählen Sie Anomalien still und merken Sie sich ihre Typen; klicken Sie während des Stroms nicht."
+            },
+            "rapid_visual_comparison": "Halten Sie den Blick zentral, während beide Zeichenfolgen synchron wechseln. Drücken Sie DETECT einmal, sobald eine allmähliche Abweichung erscheint, und bleiben Sie dann bis zum Ende des Zeitblocks still.",
+            "pattern_closure_visual_noise": "Ein fragmentiertes Ziel erscheint allmählich aus dichtem visuellem Rauschen. Drücken Sie RECOGNIZED einmal, wenn Sie es erkennen, und bleiben Sie dann bis zum Ende des Zeitblocks still.",
+            "speech_in_noise_comprehension": "Hören Sie die gesamte englische Passage bei mäßigem Hintergrundrauschen. Antworten Sie erst, wenn Ton und EEG-Aufzeichnung beendet sind.",
+            "written_comprehension_synthesis": "Lesen Sie jeden zentral angezeigten englischen Abschnitt. Planen Sie danach still eine kurze Zusammenfassung; Tippen beginnt erst nach Ende der EEG-Aufzeichnung.",
+            "common": {
+                "block": "Dies ist ein ununterbrochener EEG-Aufzeichnungsblock von {{duration}} Sekunden.",
+                "eyes": "Halten Sie Ihre Augen {{eyeState}} und minimieren Sie Blinzeln, Kieferspannung und Bewegung.",
+                "response": "Sprechen oder tippen Sie nicht, bevor die Aufzeichnung beendet ist und das Antwortformular erscheint."
+            }
+        }
     }
 }

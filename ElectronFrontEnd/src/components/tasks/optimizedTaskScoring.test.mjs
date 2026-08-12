@@ -126,6 +126,17 @@ test('speech key-detail matching rejects stopword-only answers and keeps uncalib
   assert.equal(discriminativeDetail.ability_validation['Auditory Attention'], 'pending_review');
 });
 
+test('speech-in-noise answer scoring preserves non-Latin selected-language text', () => {
+  const japanese = taskFormForSession(TASK_IDS.SPEECH_NOISE, 'session_3', undefined, 'ja');
+  const result = scoreOptimizedTask(TASK_IDS.SPEECH_NOISE, japanese, {
+    mainIdea: japanese.mainIdea,
+    keyDetail: japanese.keyDetail,
+    paraphrase: '要約です。',
+  });
+  assert.equal(result.metrics.main_idea_correct, true);
+  assert.equal(result.metrics.key_detail_correct, true);
+});
+
 test('free-text constructs remain pending review', () => {
   const ideation = form(TASK_IDS.IDEATION);
   const ideas = scoreOptimizedTask(TASK_IDS.IDEATION, ideation, { ideas: 'door stop\nplant marker\npaper weight' });

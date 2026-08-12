@@ -600,5 +600,98 @@
         "seedingFailedStatus": "Upload failed ({{status}}): {{message}}",
         "unexpectedError": "Unexpected error: {{status}}",
         "connectionFailed": "Connection failed."
+    },
+    "optimizedBattery": {
+        "listen": "Listen to instructions",
+        "audioTranslationPending": "Some in-task audio is currently English. We are working on translations for your selected language.",
+        "taskNames": {
+            "adaptive_numerical_reasoning": "Adaptive Numerical Reasoning",
+            "working_memory_manipulation": "Working-Memory Manipulation",
+            "auditory_target_counting": "Auditory Target Counting",
+            "semantic_induction_category_switching": "Semantic Induction and Category Switching",
+            "visuospatial_transformation_orientation": "Visuospatial Transformation and Orientation",
+            "divergent_ideation": "Divergent Ideation",
+            "dual_task_rule_switching": "Dual-Task Performance and Rule Switching",
+            "rule_based_anomaly_detection": "Rule-Based Anomaly Detection",
+            "rapid_visual_comparison": "Rapid Visual Comparison",
+            "pattern_closure_visual_noise": "Pattern Closure under Visual Noise",
+            "speech_in_noise_comprehension": "Speech-in-Noise Comprehension",
+            "written_comprehension_synthesis": "Written Comprehension and Concise Synthesis"
+        },
+        "phaseLabels": {
+            "adaptive_numerical_reasoning": { "lower_load": "Slower single operations", "higher_load": "Faster mixed operations" },
+            "working_memory_manipulation": { "maintenance": "Maintenance-dominant", "manipulation": "Manipulation-dominant" },
+            "auditory_target_counting": { "early": "Early monitoring", "middle": "Middle monitoring", "late": "Late monitoring" },
+            "semantic_induction_category_switching": { "rule_one": "First organising principle", "rule_two": "Second organising principle" },
+            "visuospatial_transformation_orientation": { "lower_density": "Lower transformation density", "higher_density": "Higher transformation density" },
+            "divergent_ideation": { "early": "Early ideation", "middle": "Middle ideation", "late": "Late ideation" },
+            "dual_task_rule_switching": { "before_switch": "Before rule switch", "after_switch": "After rule switch" },
+            "rule_based_anomaly_detection": { "lower_density": "Lower anomaly density", "higher_density": "Higher anomaly density" },
+            "rapid_visual_comparison": { "pre_response": "Continuous comparison" },
+            "pattern_closure_visual_noise": { "pre_response": "Progressive visual closure" },
+            "speech_in_noise_comprehension": { "listening": "Continuous listening" },
+            "written_comprehension_synthesis": { "paced_reading": "Paced central reading", "silent_synthesis": "Silent synthesis" }
+        },
+        "runner": {
+            "candidateKicker": "Candidate/pilot · Task {{number}} · {{formId}}",
+            "eyesBadge": "Eyes {{eyeState}}",
+            "durationBadge": "⏱ {{duration}}s EEG",
+            "stimulusLanguage": "Stimulus: {{language}}",
+            "guardrail": "EEG features are task-contextual candidate evidence. Behavioral validity and signal quality are checked separately.",
+            "getReady": "Get ready · Eyes {{eyeState}}",
+            "countdownCaption": "The uninterrupted scoring block begins after the final beep.",
+            "continuousEeg": "● Continuous EEG",
+            "eyesClosed": "Eyes closed",
+            "eyesClosedCue": "Listen and continue silently. Do not answer yet.",
+            "sessionBlock": "Continuous task block · Session {{session}}",
+            "routeGridAria": "Five by five route grid",
+            "routeHint": "Track position and direction. Turns become denser after the phase boundary.",
+            "anomalyHint": "Count silently · no response during recording",
+            "responseRegistered": "RESPONSE REGISTERED · REMAIN STILL",
+            "detectMismatch": "DETECT MISMATCH",
+            "recognized": "RECOGNIZED",
+            "searching": "SEARCH…",
+            "silentSynthesis": "Silent synthesis",
+            "writtenHint": "Keep your eyes open. Organize the main idea and supporting details in your mind. Do not type yet.",
+            "savingTitle": "Checking and saving the continuous recording…",
+            "savingHint": "Do not close the application.",
+            "responseKicker": "EEG scoring stopped · behavioral response",
+            "responseHint": "You may now speak, type, or move to enter the requested answer. This output is not included in EEG scoring."
+        },
+        "responses": {
+            "select": "Select…", "yes": "Yes", "no": "No", "finalValue": "What was the final value?", "finalSequence": "Enter the final sequence in order (for example 4-7-2-5).", "highToneCount": "How many high target tones did you count?", "firstPrinciple": "First organising principle", "secondPrinciple": "Second organising principle", "ruleSwitchDetected": "Did you notice the rule switch?", "finalColumn": "Final column (1–5)", "finalRow": "Final row (1–5)", "finalOrientation": "Final orientation", "ideas": "Enter one idea per line. Relevance, category diversity, and originality remain pending expert/validated scoring.", "finalNumber": "Final number", "anomalyCount": "How many anomalies did you count?", "anomalyTypes": "Which anomaly types did you notice?", "confidence": "Confidence: {{confidence}}/5", "recognizedTarget": "What target did you recognize?", "mainInterpretation": "Select the main interpretation.", "mainIdea": "Select the main idea.", "summary": "Write a {{minimum}}–{{maximum}} word summary ({{count}} words).", "summaryWarning": "The summary must contain {{minimum}}–{{maximum}} words before it can be saved.", "recognitionTimeout": "No recognition button was pressed during the block; this attempt will fail behavioral validation.", "save": "Save response & check signal"
+        },
+        "anomalyTypes": { "extra_letter": "extra letter", "wrong_order": "wrong order", "missing_separator": "missing separator", "missing_digit": "missing digit", "wrong_separator": "wrong separator" },
+        "speechInNoise": { "paraphrase": "Give one concise paraphrase of the passage." },
+        "words": {
+            "eyes": { "open": "open", "closed": "closed" },
+            "operations": { "add": "add", "subtract": "subtract" },
+            "directions": { "north": "north", "east": "east", "south": "south", "west": "west" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "Start at {{startValue}}; follow every spoken operation silently and give only the final value.",
+            "working_memory_manipulation": "The initial sequence is presented only after EEG scoring starts. Encode it then, maintain every spoken update, and report only the final order.",
+            "auditory_target_counting": "Count every high tone silently and ignore the low tones. Report one count afterward.",
+            "semantic_induction_category_switching": "Infer the organising principle of the first word stream and the new principle after the seamless switch.",
+            "visuospatial_transformation_orientation": "Start at row {{row}}, column {{column}}, facing {{orientation}}. Every displayed turn changes both direction and grid position. Row numbers run top to bottom and columns left to right.",
+            "divergent_ideation": {
+                "prompt": "English prompt: {{prompt}}",
+                "response": "Generate ideas silently; you will capture each idea on a separate line afterward."
+            },
+            "dual_task_rule_switching": "Start at {{startValue}}. Before the switch, {{beforeOperation}} {{beforeDelta}} at every Update cue. After Switch, {{afterOperation}} {{afterDelta}} at every Update cue. Count high tones throughout.",
+            "rule_based_anomaly_detection": {
+                "rule": "Every code must contain exactly one letter, a hyphen, and two digits in that same order.",
+                "response": "Silently count anomalies and remember their types; do not click during the stream."
+            },
+            "rapid_visual_comparison": "Maintain central gaze while both code strings update in synchrony. Press DETECT once, as soon as one gradual mismatch appears, then remain still until the timed block ends.",
+            "pattern_closure_visual_noise": "A fragmented target will emerge gradually from dense visual noise. Press RECOGNIZED once when you know what it is, then remain still until the timed block ends.",
+            "speech_in_noise_comprehension": "Listen to the entire English passage in moderate background noise. Answer only after the sound and EEG scoring stop.",
+            "written_comprehension_synthesis": "Read each centrally paced English section. Then plan a concise synthesis silently; typing begins only after EEG stops.",
+            "common": {
+                "block": "This is one uninterrupted {{duration}}-second EEG scoring block.",
+                "eyes": "Keep your eyes {{eyeState}} and minimise blinking, jaw tension, and movement.",
+                "response": "Do not speak or type until the recording has ended and the response form appears."
+            }
+        }
     }
 }

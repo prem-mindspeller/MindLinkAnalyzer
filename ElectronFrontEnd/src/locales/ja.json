@@ -596,5 +596,39 @@
         "seedingFailedStatus": "??????????????{{status}}?: {{message}}",
         "unexpectedError": "????????: {{status}}",
         "connectionFailed": "??????????"
+    },
+    "optimizedBattery": {
+        "listen": "説明を聞く",
+        "speechInNoise": { "paraphrase": "文章を簡潔に言い換えてください。" },
+        "words": {
+            "eyes": { "open": "開いた状態に", "closed": "閉じた状態に" },
+            "operations": { "add": "加えて", "subtract": "引いて" },
+            "directions": { "north": "北", "east": "東", "south": "南", "west": "西" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "{{startValue}} から始め、読み上げられる各計算を頭の中で行い、最後の値だけを答えてください。",
+            "working_memory_manipulation": "最初の系列は EEG 記録の開始後にのみ提示されます。系列を記憶し、読み上げられる各更新を保ち、最終的な順序だけを報告してください。",
+            "auditory_target_counting": "高い音を頭の中で数え、低い音は無視してください。後で一つの数だけを報告します。",
+            "semantic_induction_category_switching": "最初の単語列の分類原理と、途切れない切り替え後の新しい原理を推測してください。",
+            "visuospatial_transformation_orientation": "{{row}} 行 {{column}} 列、{{orientation}} を向いた状態から始めます。表示される各回転は、グリッド内の方向と位置の両方を変えます。行は上から下、列は左から右です。",
+            "divergent_ideation": {
+                "prompt": "英語の課題: {{prompt}}",
+                "response": "頭の中でアイデアを考え、後で各アイデアを別々の行に記入してください。"
+            },
+            "dual_task_rule_switching": "{{startValue}} から始めます。切り替え前は、英語の Update 合図ごとに {{beforeOperation}} {{beforeDelta}} してください。Switch 後は、Update 合図ごとに {{afterOperation}} {{afterDelta}} してください。高い音を最後まで数えます。",
+            "rule_based_anomaly_detection": {
+                "rule": "各コードには、1 文字、ハイフン、2 桁の数字が必ずこの順で含まれていなければなりません。",
+                "response": "異常を頭の中で数え、その種類を覚えてください。ストリーム中はクリックしないでください。"
+            },
+            "rapid_visual_comparison": "二つのコード文字列が同期して更新される間、視線を中央に保ちます。徐々に違いが現れたら DETECT を一度押し、時間ブロックが終わるまで静止してください。",
+            "pattern_closure_visual_noise": "断片化された対象が濃い視覚ノイズから徐々に現れます。それが何か分かったら RECOGNIZED を一度押し、時間ブロックが終わるまで静止してください。",
+            "speech_in_noise_comprehension": "適度な背景雑音の中で、英語の文章全体を聞いてください。音声と EEG 記録が終わってから回答してください。",
+            "written_comprehension_synthesis": "中央に表示される英語の各セクションを読んでください。その後、簡潔な要約を頭の中で計画します。入力は EEG が終わってから始めてください。",
+            "common": {
+                "block": "これは {{duration}} 秒間、途切れずに EEG を記録するブロックです。",
+                "eyes": "目を {{eyeState}}、まばたき、顎の緊張、動きをできるだけ減らしてください。",
+                "response": "記録が終わり回答フォームが表示されるまで、話したり入力したりしないでください。"
+            }
+        }
     }
 }

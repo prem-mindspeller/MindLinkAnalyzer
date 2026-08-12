@@ -1,0 +1,274 @@
+{
+  "version": "dutch_cue_audio_candidate.2",
+  "provider": "elevenlabs",
+  "model_id": "eleven_multilingual_v2",
+  "voice_id": "SVmtrm5iuquj8zKn5ZMg",
+  "voice_label": "Will - Dutch-accent European narrator",
+  "output_format": "mp3_44100_128",
+  "assets": {
+    "Begin met 18.": {
+      "file": "cue-3469438022a7a8a9.mp3",
+      "sha256": "55d16331fc8fbfe61d03a0ba49d5c298312475427a6be226a5c6b8fa7de7c637",
+      "character_count": 13,
+      "byte_length": 18852
+    },
+    "Tel zeven erbij op.": {
+      "file": "cue-84f188237022800c.mp3",
+      "sha256": "5279d1dcfe8d8ab9c1c18884e75c38b1207ad154664c0e92766235df8a5012d4",
+      "character_count": 19,
+      "byte_length": 23449
+    },
+    "Vermenigvuldig met 2.": {
+      "file": "cue-ae1b1ff8a4f58f2e.mp3",
+      "sha256": "e20583b0b3bbb15d53db97b6864078fd89c96abd534d7b8626107c85029460ee",
+      "character_count": 21,
+      "byte_length": 23449
+    },
+    "Trek zes eraf.": {
+      "file": "cue-6f4235c547b4672d.mp3",
+      "sha256": "fda18268172dc2becabc34a88a7c07f1afb79a2b350493701863679df3fc1716",
+      "character_count": 14,
+      "byte_length": 18016
+    },
+    "Tel vijf erbij op.": {
+      "file": "cue-eaa16beeb9a93a53.mp3",
+      "sha256": "d690daf636282884e590462a051cbcfda59818bbabbab74113bf662436ced40a",
+      "character_count": 18,
+      "byte_length": 20942
+    },
+    "Trek vier eraf.": {
+      "file": "cue-c935981d6cf8d28c.mp3",
+      "sha256": "f924e3e5bbdb487ca0660fc2622dc5a4cabe8fea3f47a0708194f2cbb6e7d1ac",
+      "character_count": 15,
+      "byte_length": 18852
+    },
+    "Tel acht erbij op.": {
+      "file": "cue-9dbcab29fa983b90.mp3",
+      "sha256": "9b7f2cde6c9ddfdc9d154ad656bb7127f043799feef3ba46203272741792ac7f",
+      "character_count": 18,
+      "byte_length": 19688
+    },
+    "Deel door 2.": {
+      "file": "cue-3a06b102f39055c6.mp3",
+      "sha256": "6c0bf22dc374dd65a77b951910a7a560b78ab154b427f67bba92358b4e8aeae4",
+      "character_count": 12,
+      "byte_length": 16762
+    },
+    "Tel dertien erbij op.": {
+      "file": "cue-ba11264f3b09eb11.mp3",
+      "sha256": "4b2e210e49e84855cc025af27887956e4c30ebc6032df258f8af778eacd17ee3",
+      "character_count": 21,
+      "byte_length": 21777
+    },
+    "Trek elf eraf.": {
+      "file": "cue-9f058ce9f6378009.mp3",
+      "sha256": "93a97f4034d314c4878339d3887eab17ed3ef110bb4e288285db81d1cd0f1b50",
+      "character_count": 14,
+      "byte_length": 18852
+    },
+    "Deel door 4.": {
+      "file": "cue-5c678a1f187fecda.mp3",
+      "sha256": "c5d2c8f0ca6c0a2dc26c74a3069d198787b2cb53b597426d34ae9f6f14997468",
+      "character_count": 12,
+      "byte_length": 17598
+    },
+    "Vermenigvuldig met 3.": {
+      "file": "cue-639116a64e81c7bb.mp3",
+      "sha256": "36aaad54738559711bdc9212225a1411bdfb599d779c15c9dd9e5cc8d9f2c9c5",
+      "character_count": 21,
+      "byte_length": 21777
+    },
+    "Trek zeventien eraf.": {
+      "file": "cue-2b63fe3c3b96b5a1.mp3",
+      "sha256": "8fac37c267420083f1ad498899eadb909b785b95dac07abd2d5c1a75709efb64",
+      "character_count": 20,
+      "byte_length": 21777
+    },
+    "Tel negen erbij op.": {
+      "file": "cue-3602187792c1df1a.mp3",
+      "sha256": "61d58fbf40f17269d538d5e12f84f894c8b5d7f685155bece3f6724d0fd2dc7b",
+      "character_count": 19,
+      "byte_length": 22613
+    },
+    "Begin met 24.": {
+      "file": "cue-ad160e410af0988f.mp3",
+      "sha256": "3231e419371b402a685a2e8ef035455d99e4e7bc5020b85f655d855b2b4f25a9",
+      "character_count": 13,
+      "byte_length": 24285
+    },
+    "Trek vijf eraf.": {
+      "file": "cue-c1d9090d45f1453a.mp3",
+      "sha256": "4a5c4bb846d34177cce0b34e19e27aae06ff198417bedba58af5be84ea9cbf76",
+      "character_count": 15,
+      "byte_length": 20524
+    },
+    "Trek negen eraf.": {
+      "file": "cue-f1383dfc388c6051.mp3",
+      "sha256": "71bb8ee07b24337c708c25d89baabb80221cb2c458c9b340ee0bafffafa45391",
+      "character_count": 16,
+      "byte_length": 20942
+    },
+    "Tel vijftien erbij op.": {
+      "file": "cue-269e8326da7cf5e5.mp3",
+      "sha256": "478bef00f2e99d37477a7997651970aa416bd42ab703e54fe194eb0dec9b8264",
+      "character_count": 22,
+      "byte_length": 23449
+    },
+    "Trek achttien eraf.": {
+      "file": "cue-b3a124387f271b44.mp3",
+      "sha256": "7488eba75b4183f78ae0d658402b61997cc4cc16a6267b7c016747186f053cec",
+      "character_count": 19,
+      "byte_length": 20524
+    },
+    "Deel door 3.": {
+      "file": "cue-e60ef12e2a0b82a3.mp3",
+      "sha256": "706717f6d72c0e17e77160d595a8ef64d3fb8d8b55e748942f9fa1684b150c98",
+      "character_count": 12,
+      "byte_length": 17598
+    },
+    "Tel elf erbij op.": {
+      "file": "cue-e1745cf1b9d12817.mp3",
+      "sha256": "39fb773df1ba13eb1c64e574b47a2682ba575a95afb036a741bcb3651592b4ad",
+      "character_count": 17,
+      "byte_length": 20524
+    },
+    "Trek zeven eraf.": {
+      "file": "cue-ade7bf7d32ebb456.mp3",
+      "sha256": "b199b3a738e0eb127c369af047e8751c13a98464d898f9dc98e31200f0b21237",
+      "character_count": 16,
+      "byte_length": 20524
+    },
+    "Begin met 15.": {
+      "file": "cue-7fcb237b10b724f5.mp3",
+      "sha256": "98623b39069d66ced2e9cc6c6b06f1b4577c53ae28af4fa4797c46822a8fb6b8",
+      "character_count": 13,
+      "byte_length": 20524
+    },
+    "Trek acht eraf.": {
+      "file": "cue-6ec64bd726128a28.mp3",
+      "sha256": "b3b518f124f0629970d3ab2e071fdeaf2f72323e6364c069b566166e31c0a848",
+      "character_count": 15,
+      "byte_length": 20524
+    },
+    "Tel zes erbij op.": {
+      "file": "cue-3379ad440c9550ff.mp3",
+      "sha256": "1811cf5550191fcc3aebc544bf9971b67547eecc7e834b41a04bacca53c0e50f",
+      "character_count": 17,
+      "byte_length": 20524
+    },
+    "Trek veertien eraf.": {
+      "file": "cue-a83f985a51d17f3f.mp3",
+      "sha256": "b3a83e02c706982ef67b8fec346be950c7e9dcacb9c8d57005b12cf4de7b1dc3",
+      "character_count": 19,
+      "byte_length": 20524
+    },
+    "Tel zestien erbij op.": {
+      "file": "cue-3bf67b78ce4f02aa.mp3",
+      "sha256": "86c761f6e34762de79b791810209d7f6106f7f158deff42f5864799c513aa2a9",
+      "character_count": 21,
+      "byte_length": 24285
+    },
+    "Trek twintig eraf.": {
+      "file": "cue-d2c09bfaa4707021.mp3",
+      "sha256": "95d4fe765cfc0bd54c577bfa9fb9e2030ca377dc87bc5f348ad9cc222c1beceb",
+      "character_count": 18,
+      "byte_length": 19688
+    },
+    "Tel zeventien erbij op.": {
+      "file": "cue-60afad5ede537bbe.mp3",
+      "sha256": "e1ea4fdf12ed18d341b20da5fd4a8772050dc74beb76f0d70742c6049e2e48a0",
+      "character_count": 23,
+      "byte_length": 22613
+    },
+    "Onthoud deze reeks: vier, zeven, twee, vijf.": {
+      "file": "cue-caae636221bc679e.mp3",
+      "sha256": "c3c470f0939cf0ca6f9896afbcfc4ed42c0aec09ed197d6070139118a1dd1252",
+      "character_count": 44,
+      "byte_length": 37660
+    },
+    "Houd de volgorde hetzelfde.": {
+      "file": "cue-7cc6c454581bf306.mp3",
+      "sha256": "d259d462b93da1be1bb61b3a9a8463e5cf7db02b44fc2b220cabccc44aca0b40",
+      "character_count": 27,
+      "byte_length": 25539
+    },
+    "Schuif elk getal één plaats naar links.": {
+      "file": "cue-f7bc975813e4e554.mp3",
+      "sha256": "bbb7ffb94923bae2b535c1c7b276387e5197a68fc7b75008ed449cd700a3dd65",
+      "character_count": 39,
+      "byte_length": 34316
+    },
+    "Draai de volgorde om.": {
+      "file": "cue-e760affa10249742.mp3",
+      "sha256": "436764769dc45d348a2b4cae39ae1a0aabe71e317b4f2c04aca380b38c7b342c",
+      "character_count": 21,
+      "byte_length": 21777
+    },
+    "Vervang het tweede getal door negen.": {
+      "file": "cue-6458857bf80be383.mp3",
+      "sha256": "e223262091586518c00a668bfda3223bdac62d1e342e34989bb31563ce289a97",
+      "character_count": 36,
+      "byte_length": 31391
+    },
+    "Schuif elk getal één plaats naar rechts.": {
+      "file": "cue-2eb8c939ad5fe249.mp3",
+      "sha256": "33ae8aa7066083e482337f7e8d9785b66178ecc7bf6546c7d3784fc31a666fba",
+      "character_count": 40,
+      "byte_length": 33898
+    },
+    "Vervang het vierde getal door zes.": {
+      "file": "cue-db6ffab16c4eae59.mp3",
+      "sha256": "ac9aa2fcb5301e537d07017b708fa557485f827ef3f888a18412161ede2f1987",
+      "character_count": 34,
+      "byte_length": 29301
+    },
+    "Onthoud deze reeks: zes, een, acht, drie.": {
+      "file": "cue-657d9f7206d4ed0f.mp3",
+      "sha256": "f2e5800657fab9a5654f6cdb5d267718fe2021ce5153ffb51f95d22e46a333cc",
+      "character_count": 41,
+      "byte_length": 40586
+    },
+    "Vervang het derde getal door vier.": {
+      "file": "cue-285bc33e23f0ec30.mp3",
+      "sha256": "191d86a8eb6e85c8b3196d85155f4d49035f29d55baeb071c748026e4c1174a6",
+      "character_count": 34,
+      "byte_length": 30973
+    },
+    "Vervang het eerste getal door zeven.": {
+      "file": "cue-5a9ca3b478bfb329.mp3",
+      "sha256": "5a77d2803fbcdf59f664bb2619d7a6614dd61bd88cea55747f7b669809c45025",
+      "character_count": 36,
+      "byte_length": 31391
+    },
+    "Onthoud deze reeks: negen, twee, vijf, zeven.": {
+      "file": "cue-d3363c9f2cfc2503.mp3",
+      "sha256": "1f555e6a558b2bc829dcc8678bb81576c9d8a93049e26a7b825bc516479d4e5a",
+      "character_count": 45,
+      "byte_length": 38914
+    },
+    "Vervang het tweede getal door zes.": {
+      "file": "cue-4515d8897bd586c7.mp3",
+      "sha256": "749916461c8ae55650faebe35c34ced7dc85e9851f5b4307808fdd66bf4afdcf",
+      "character_count": 34,
+      "byte_length": 31391
+    },
+    "Vervang het vierde getal door een.": {
+      "file": "cue-a925fdc8bde874b4.mp3",
+      "sha256": "743f652f55d522a2347b35aa23b74be6b76de9dc3d4dc037d08545f800342197",
+      "character_count": 34,
+      "byte_length": 30137
+    },
+    "Werk je totaal bij.": {
+      "file": "cue-11c862fbf1eaef16.mp3",
+      "sha256": "6fb32a5acef7c70ba48a592c917d3c2dc3a125169bfc66eeb857d4a2d95f7c58",
+      "character_count": 19,
+      "byte_length": 20942
+    },
+    "Wissel nu.": {
+      "file": "cue-323c85a0ca2f3e74.mp3",
+      "sha256": "873364f559b8a1b25bad8a31db9b63996f2c943fcae9003e856f02eeefe5e2e8",
+      "character_count": 10,
+      "byte_length": 15926
+    }
+  }
+}

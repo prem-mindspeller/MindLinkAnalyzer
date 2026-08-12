@@ -1,0 +1,101 @@
+{
+  "version": "speech_in_noise_audio_candidate.1",
+  "provider": "elevenlabs",
+  "model_id": "eleven_multilingual_v2",
+  "voice_id": "SVmtrm5iuquj8zKn5ZMg",
+  "output_format": "mp3_44100_128",
+  "noise_delivery": "seeded_web_audio_nominal_snr_8db",
+  "acoustically_calibrated": false,
+  "assets": {
+    "en": {
+      "form_id": "speech_a",
+      "path": "en/speech_a.mp3",
+      "sha256": "7d2c83f09b0029449ce68917ae4beb919489e03f8907a0d4f5df45108a170d71",
+      "character_count": 1902,
+      "byte_length": 1655998,
+      "estimated_duration_ms": 103500,
+      "language_pack_status": "candidate_source_english"
+    },
+    "nl": {
+      "form_id": "speech_a",
+      "path": "nl/speech_a.mp3",
+      "sha256": "ce0c61eac5a58af4d779a9f9b27909bc9ad2584bb992565f4939ec305bd1deb0",
+      "character_count": 2108,
+      "byte_length": 2000396,
+      "estimated_duration_ms": 125025,
+      "language_pack_status": "candidate_translation"
+    },
+    "de": {
+      "form_id": "speech_a",
+      "path": "de/speech_a.mp3",
+      "sha256": "958f7ad4214966c1e74cedc06674cbc3877c603e6cf1b79a12704e65dd5dbf97",
+      "character_count": 2153,
+      "byte_length": 2155041,
+      "estimated_duration_ms": 134690,
+      "language_pack_status": "candidate_translation"
+    },
+    "fr": {
+      "form_id": "speech_a",
+      "path": "fr/speech_a.mp3",
+      "sha256": "fa8fb6ca231c94c5b47684e5a910c31c585434a95ac5fff367854b033ce11f1b",
+      "character_count": 2228,
+      "byte_length": 1946479,
+      "estimated_duration_ms": 121655,
+      "language_pack_status": "candidate_translation"
+    },
+    "es": {
+      "form_id": "speech_a",
+      "path": "es/speech_a.mp3",
+      "sha256": "0e12c08cb0c95423ba35c47f94852a92985824839f4df19294c1ba543a3e21cd",
+      "character_count": 2176,
+      "byte_length": 2150026,
+      "estimated_duration_ms": 134377,
+      "language_pack_status": "candidate_translation"
+    },
+    "it": {
+      "form_id": "speech_a",
+      "path": "it/speech_a.mp3",
+      "sha256": "c3f87a483062c4e7ddb322ff644f3a74fa2d2a4c8f7f9d1e67afb8dc633ee073",
+      "character_count": 2113,
+      "byte_length": 2142502,
+      "estimated_duration_ms": 133906,
+      "language_pack_status": "candidate_translation"
+    },
+    "pt": {
+      "form_id": "speech_a",
+      "path": "pt/speech_a.mp3",
+      "sha256": "ddb3ebf141a0fafc92b57f3dc1a0bc615200baa362e21c62d6945e7df56bc714",
+      "character_count": 2080,
+      "byte_length": 2037177,
+      "estimated_duration_ms": 127324,
+      "language_pack_status": "candidate_translation"
+    },
+    "hi": {
+      "form_id": "speech_a",
+      "path": "hi/speech_a.mp3",
+      "sha256": "a8d3edd76bedf3a3215ccae3f908fba7915f112ae24c87251c71900a69306c0a",
+      "character_count": 1801,
+      "byte_length": 2164236,
+      "estimated_duration_ms": 135265,
+      "language_pack_status": "candidate_translation"
+    },
+    "ar": {
+      "form_id": "speech_a",
+      "path": "ar/speech_a.mp3",
+      "sha256": "8ca5068827eff8f277047f52fc3acbca51049a7b245b3306e91bf91913e21c94",
+      "character_count": 1591,
+      "byte_length": 1968631,
+      "estimated_duration_ms": 123039,
+      "language_pack_status": "candidate_translation"
+    },
+    "ja": {
+      "form_id": "speech_a",
+      "path": "ja/speech_a.mp3",
+      "sha256": "30775723441944636c646b9abb1ce6e7b8612200b772a3066c876f169c0900f3",
+      "character_count": 759,
+      "byte_length": 2077301,
+      "estimated_duration_ms": 129831,
+      "language_pack_status": "candidate_translation"
+    }
+  }
+}

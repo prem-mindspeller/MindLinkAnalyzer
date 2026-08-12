@@ -596,5 +596,39 @@
         "seedingFailedStatus": "?chec du t?l?versement ({{status}}) : {{message}}",
         "unexpectedError": "Erreur inattendue : {{status}}",
         "connectionFailed": "?chec de la connexion."
+    },
+    "optimizedBattery": {
+        "listen": "Écouter les consignes",
+        "speechInNoise": { "paraphrase": "Donnez une brève paraphrase du passage." },
+        "words": {
+            "eyes": { "open": "ouverts", "closed": "fermés" },
+            "operations": { "add": "ajoutez", "subtract": "soustrayez" },
+            "directions": { "north": "le nord", "east": "l'est", "south": "le sud", "west": "l'ouest" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "Commencez à {{startValue}} ; suivez mentalement chaque opération énoncée et donnez uniquement la valeur finale.",
+            "working_memory_manipulation": "La séquence initiale n'est présentée qu'après le début de l'enregistrement EEG. Mémorisez-la, suivez chaque mise à jour énoncée et indiquez uniquement l'ordre final.",
+            "auditory_target_counting": "Comptez mentalement chaque son aigu et ignorez les sons graves. Donnez ensuite un seul décompte.",
+            "semantic_induction_category_switching": "Déduisez le principe d'organisation du premier flux de mots et le nouveau principe après le changement continu.",
+            "visuospatial_transformation_orientation": "Commencez à la ligne {{row}}, colonne {{column}}, orienté vers {{orientation}}. Chaque virage affiché change à la fois la direction et la position dans la grille. Les lignes vont de haut en bas et les colonnes de gauche à droite.",
+            "divergent_ideation": {
+                "prompt": "Consigne en anglais : {{prompt}}",
+                "response": "Générez des idées mentalement ; vous les saisirez ensuite chacune sur une ligne distincte."
+            },
+            "dual_task_rule_switching": "Commencez à {{startValue}}. Avant le changement, {{beforeOperation}} {{beforeDelta}} à chaque signal anglais Update. Après Switch, {{afterOperation}} {{afterDelta}} à chaque signal Update. Comptez les sons aigus tout au long de la tâche.",
+            "rule_based_anomaly_detection": {
+                "rule": "Chaque code doit comporter exactement une lettre, un tiret et deux chiffres dans ce même ordre.",
+                "response": "Comptez mentalement les anomalies et mémorisez leurs types ; ne cliquez pas pendant le flux."
+            },
+            "rapid_visual_comparison": "Gardez le regard au centre pendant que les deux chaînes de code se mettent à jour ensemble. Appuyez une fois sur DETECT dès qu'une différence graduelle apparaît, puis restez immobile jusqu'à la fin du bloc.",
+            "pattern_closure_visual_noise": "Une cible fragmentée apparaîtra progressivement dans un bruit visuel dense. Appuyez une fois sur RECOGNIZED lorsque vous savez ce que c'est, puis restez immobile jusqu'à la fin du bloc.",
+            "speech_in_noise_comprehension": "Écoutez l'intégralité du passage en anglais avec un bruit de fond modéré. Répondez seulement après l'arrêt du son et de l'enregistrement EEG.",
+            "written_comprehension_synthesis": "Lisez chaque section en anglais présentée au centre. Puis préparez mentalement une synthèse concise ; la saisie commence seulement après l'arrêt de l'EEG.",
+            "common": {
+                "block": "Il s'agit d'un bloc d'enregistrement EEG ininterrompu de {{duration}} secondes.",
+                "eyes": "Gardez les yeux {{eyeState}} et réduisez les clignements, la tension de la mâchoire et les mouvements.",
+                "response": "Ne parlez pas et ne tapez pas avant la fin de l'enregistrement et l'apparition du formulaire de réponse."
+            }
+        }
     }
 }

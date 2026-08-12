@@ -596,5 +596,39 @@
         "seedingFailedStatus": "Falha no upload ({{status}}): {{message}}",
         "unexpectedError": "Erro inesperado: {{status}}",
         "connectionFailed": "Falha na conex?o."
+    },
+    "optimizedBattery": {
+        "listen": "Ouvir as instruções",
+        "speechInNoise": { "paraphrase": "Forneça uma paráfrase concisa da passagem." },
+        "words": {
+            "eyes": { "open": "abertos", "closed": "fechados" },
+            "operations": { "add": "adicione", "subtract": "subtraia" },
+            "directions": { "north": "norte", "east": "leste", "south": "sul", "west": "oeste" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "Comece em {{startValue}}; siga mentalmente cada operação falada e indique apenas o valor final.",
+            "working_memory_manipulation": "A sequência inicial é apresentada apenas depois de iniciar o registo EEG. Memorize-a, acompanhe cada atualização falada e indique apenas a ordem final.",
+            "auditory_target_counting": "Conte mentalmente cada tom agudo e ignore os tons graves. Indique uma única contagem depois.",
+            "semantic_induction_category_switching": "Infira o princípio organizador do primeiro fluxo de palavras e o novo princípio após a mudança contínua.",
+            "visuospatial_transformation_orientation": "Comece na linha {{row}}, coluna {{column}}, virado para {{orientation}}. Cada mudança de direção mostrada altera tanto a direção como a posição na grelha. As linhas vão de cima para baixo e as colunas da esquerda para a direita.",
+            "divergent_ideation": {
+                "prompt": "Enunciado em inglês: {{prompt}}",
+                "response": "Gere ideias mentalmente; depois irá registar cada ideia numa linha separada."
+            },
+            "dual_task_rule_switching": "Comece em {{startValue}}. Antes da mudança, {{beforeOperation}} {{beforeDelta}} em cada sinal inglês Update. Depois de Switch, {{afterOperation}} {{afterDelta}} em cada sinal Update. Conte os tons agudos durante toda a tarefa.",
+            "rule_based_anomaly_detection": {
+                "rule": "Cada código deve conter exatamente uma letra, um hífen e dois dígitos nessa mesma ordem.",
+                "response": "Conte as anomalias mentalmente e recorde os seus tipos; não clique durante o fluxo."
+            },
+            "rapid_visual_comparison": "Mantenha o olhar no centro enquanto ambas as cadeias de códigos se atualizam em sincronia. Prima DETECT uma vez quando surgir uma diferença gradual e permaneça imóvel até ao fim do bloco.",
+            "pattern_closure_visual_noise": "Um alvo fragmentado surgirá gradualmente de ruído visual denso. Prima RECOGNIZED uma vez quando souber o que é e permaneça imóvel até ao fim do bloco.",
+            "speech_in_noise_comprehension": "Ouça toda a passagem em inglês com ruído de fundo moderado. Responda apenas depois de o som e o registo EEG terminarem.",
+            "written_comprehension_synthesis": "Leia cada secção em inglês apresentada ao centro. Depois planeie mentalmente uma síntese concisa; a escrita só começa depois de o EEG terminar.",
+            "common": {
+                "block": "Este é um bloco de registo EEG ininterrupto de {{duration}} segundos.",
+                "eyes": "Mantenha os olhos {{eyeState}} e reduza pestanejar, tensão da mandíbula e movimento.",
+                "response": "Não fale nem escreva até que o registo termine e apareça o formulário de resposta."
+            }
+        }
     }
 }

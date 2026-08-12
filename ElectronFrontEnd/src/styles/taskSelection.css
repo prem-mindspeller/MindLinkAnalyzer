@@ -187,6 +187,12 @@
     color: #1f2937;
 }
 
+.ts-task-item-audio {
+    color: #2563eb;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
 .ts-task-item-dur {
     font-size: 0.75rem;
     color: #94a3b8;

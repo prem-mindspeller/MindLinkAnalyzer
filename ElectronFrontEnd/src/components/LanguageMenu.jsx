@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { hasPendingInTaskAudioTranslation } from './inTaskAudioAvailability.mjs';
 
 const LANGUAGES = [
     { code: 'en', label: 'English' },
@@ -15,10 +16,11 @@ const LANGUAGES = [
 ];
 
 const LanguageMenu = () => {
-    const { i18n } = useTranslation();
+    const { i18n, t } = useTranslation();
     const [open, setOpen] = useState(false);
     const rootRef = useRef(null);
-    const activeLanguage = LANGUAGES.find(lang => lang.code === i18n.language) || LANGUAGES[0];
+    const activeLanguageCode = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0];
+    const activeLanguage = LANGUAGES.find(lang => lang.code === activeLanguageCode) || LANGUAGES[0];
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -30,10 +32,16 @@ const LanguageMenu = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const selectLanguage = (code) => {
-        i18n.changeLanguage(code);
+    const selectLanguage = async (code) => {
+        const changed = code !== activeLanguageCode;
+        await i18n.changeLanguage(code);
         sessionStorage.setItem('language', code);
         setOpen(false);
+        if (changed && hasPendingInTaskAudioTranslation(code)) {
+            window.alert(t('optimizedBattery.audioTranslationPending', {
+                defaultValue: 'Some in-task audio is currently English. We are working on translations for your selected language.',
+            }));
+        }
     };
 
     return (

@@ -596,5 +596,39 @@
         "seedingFailedStatus": "Error al subir ({{status}}): {{message}}",
         "unexpectedError": "Error inesperado: {{status}}",
         "connectionFailed": "Error de conexi?n."
+    },
+    "optimizedBattery": {
+        "listen": "Escuchar las instrucciones",
+        "speechInNoise": { "paraphrase": "Da una paráfrasis breve del pasaje." },
+        "words": {
+            "eyes": { "open": "abiertos", "closed": "cerrados" },
+            "operations": { "add": "sume", "subtract": "reste" },
+            "directions": { "north": "el norte", "east": "el este", "south": "el sur", "west": "el oeste" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "Empiece en {{startValue}}; siga mentalmente cada operación hablada e indique solo el valor final.",
+            "working_memory_manipulation": "La secuencia inicial se presenta solo después de iniciar el registro EEG. Memorícela, siga cada actualización hablada e informe solo el orden final.",
+            "auditory_target_counting": "Cuente mentalmente cada tono alto e ignore los tonos bajos. Indique un único recuento después.",
+            "semantic_induction_category_switching": "Infiera el principio organizador del primer flujo de palabras y el nuevo principio después del cambio continuo.",
+            "visuospatial_transformation_orientation": "Empiece en la fila {{row}}, columna {{column}}, orientado hacia {{orientation}}. Cada giro mostrado cambia tanto la dirección como la posición en la cuadrícula. Las filas van de arriba abajo y las columnas de izquierda a derecha.",
+            "divergent_ideation": {
+                "prompt": "Consigna en inglés: {{prompt}}",
+                "response": "Genere ideas mentalmente; después escribirá cada idea en una línea separada."
+            },
+            "dual_task_rule_switching": "Empiece en {{startValue}}. Antes del cambio, {{beforeOperation}} {{beforeDelta}} en cada señal inglesa Update. Después de Switch, {{afterOperation}} {{afterDelta}} en cada señal Update. Cuente los tonos altos durante toda la tarea.",
+            "rule_based_anomaly_detection": {
+                "rule": "Cada código debe contener exactamente una letra, un guion y dos dígitos en ese mismo orden.",
+                "response": "Cuente las anomalías mentalmente y recuerde sus tipos; no haga clic durante el flujo."
+            },
+            "rapid_visual_comparison": "Mantenga la mirada en el centro mientras ambas cadenas de códigos se actualizan sincronizadamente. Pulse DETECT una vez cuando aparezca una diferencia gradual y permanezca quieto hasta el final del bloque.",
+            "pattern_closure_visual_noise": "Un objetivo fragmentado aparecerá gradualmente entre ruido visual denso. Pulse RECOGNIZED una vez cuando sepa qué es y permanezca quieto hasta el final del bloque.",
+            "speech_in_noise_comprehension": "Escuche todo el pasaje en inglés con ruido de fondo moderado. Responda solo después de que el audio y el registro EEG se hayan detenido.",
+            "written_comprehension_synthesis": "Lea cada sección en inglés mostrada en el centro. Después planifique mentalmente una síntesis concisa; podrá escribir solo cuando termine el EEG.",
+            "common": {
+                "block": "Este es un bloque de registro EEG ininterrumpido de {{duration}} segundos.",
+                "eyes": "Mantenga los ojos {{eyeState}} y reduzca los parpadeos, la tensión de la mandíbula y el movimiento.",
+                "response": "No hable ni escriba hasta que termine el registro y aparezca el formulario de respuesta."
+            }
+        }
     }
 }
