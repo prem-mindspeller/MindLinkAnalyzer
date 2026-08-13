@@ -36,6 +36,20 @@
         "partnerTitle": "Geben Sie die Partner-ID ein",
         "partnerSubtitle": "Schritt 3 von 7: Geben Sie Ihre Partner-ID ein, um fortzufahren"
     },
+    "qrSignIn": {
+        "subtitle": "Schritt 2 von 7: Melden Sie sich mit Ihrem Telefon an, um fortzufahren",
+        "or": "ODER",
+        "switchCta": "Mit Ihrem Telefon anmelden",
+        "instructions": "Scannen Sie diesen Code mit Ihrem Telefon, melden Sie sich dort mit Google oder Ihrem Passwort an und bestätigen Sie dieses Gerät.",
+        "preparing": "Ihr Code wird vorbereitet...",
+        "expired": "Dieser Code ist abgelaufen.",
+        "newCode": "Neuen Code anfordern",
+        "expiresIn": "Läuft ab in",
+        "waiting": "Warten auf Bestätigung auf Ihrem Telefon...",
+        "cantScan": "Können Sie nicht scannen?",
+        "openAddress": "Öffnen Sie diese Adresse auf Ihrem Telefon:",
+        "usePasswordInstead": "Stattdessen E-Mail und Passwort verwenden"
+    },
     "loginForm": {
         "emailLabel": "E-Mail:",
         "passwordLabel": "Passwort:",
@@ -595,6 +609,10 @@
         "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
         "seedingFailedStatus": "Upload fehlgeschlagen ({{status}}): {{message}}",
         "unexpectedError": "Unerwarteter Fehler: {{status}}",
-        "connectionFailed": "Verbindung fehlgeschlagen."
+        "connectionFailed": "Verbindung fehlgeschlagen.",
+        "qrStartFailed": "Die Anmeldung konnte nicht gestartet werden. Bitte versuchen Sie es erneut.",
+        "qrStartFailedStatus": "Die Anmeldung konnte nicht gestartet werden ({{status}}).",
+        "qrRenderFailed": "Der QR-Code konnte nicht angezeigt werden. Verwenden Sie stattdessen den Link unten.",
+        "qrNoLongerValid": "Diese Anmeldung ist nicht mehr gültig. Bitte beginnen Sie erneut."
     }
 }

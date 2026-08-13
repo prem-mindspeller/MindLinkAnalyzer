@@ -1,4 +1,4 @@
-﻿/* ── Warning / checklist card ── */
+/* ── Warning / checklist card ── */
 .warning-card {
     width: 100%;
     max-width: 480px;
@@ -74,6 +74,10 @@ main {
 }
 
 .login-page {
+    /* Inner padding shared by every section of the sign-in panel. */
+    --lp-gutter: 40px;
+    --lp-radius: 18px;
+
     background: #eef0fb;
     margin: 0 -40px -40px;
     padding: 40px;
@@ -82,6 +86,10 @@ main {
     display: flex;
     flex-direction: column;
     align-items: center;
+    gap: 16px;
+    /* As a flex item of .app-main this would otherwise be shrunk to the
+       viewport, squashing the panel instead of letting .app-main scroll. */
+    flex-shrink: 0;
     animation: fadeIn 0.45s ease;
 }
 
@@ -103,43 +111,54 @@ main {
     color: #4338ca;
 }
 
-.page-header {
-    background: white;
-    border-radius: 16px 16px 0 0;
-    padding: 36px 40px 28px;
+/* ── Sign-in panel ── */
+/* One card holding the heading and whichever form is active, so the
+   heading and the fields no longer read as two stacked boxes. */
+.login-panel {
+    position: relative;
     width: 100%;
     max-width: 480px;
-    border: 1px solid #e8eaf0;
-    border-bottom: none;
+    min-width: 0;
+    /* overflow:hidden below would clip the form, not scroll it, if the
+       panel were ever compressed to fit. */
+    flex-shrink: 0;
+    background: white;
+    border: 1px solid #e6e8f2;
+    border-radius: var(--lp-radius);
+    box-shadow: 0 14px 44px -14px rgba(67, 56, 202, 0.28), 0 2px 8px rgba(30, 27, 75, 0.05);
+    overflow: hidden;
+}
+
+/* Echoes the app header's gradient so the panel reads as part of the shell. */
+.login-panel::before {
+    content: '';
+    display: block;
+    height: 4px;
+    background: linear-gradient(90deg, #3B5BDB 0%, #D6307A 55%, #F7A72A 100%);
+}
+
+.page-header {
+    padding: 30px var(--lp-gutter) 0;
 }
 
 .page-title {
-    font-size: 1.6rem;
+    font-size: 1.55rem;
     font-weight: 700;
+    letter-spacing: -0.01em;
     color: #1e1b4b;
     margin: 0 0 6px;
 }
 
 .page-subtitle {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
     color: #6b7280;
     margin: 0;
 }
 
 .login-card {
-    background: white;
-    border-radius: 0 0 16px 16px;
-    padding: 0 40px 40px;
-    box-shadow: 0 10px 40px rgba(67, 56, 202, 0.1);
-    width: 100%;
-    max-width: 480px;
-    border: 1px solid #e8eaf0;
-    border-top: none;
-    transition: box-shadow 0.3s ease;
-}
-
-.login-card:hover {
-    box-shadow: 0 14px 50px rgba(67, 56, 202, 0.13);
+    min-width: 0;
+    padding: 24px var(--lp-gutter) 28px;
 }
 
 .login-form {
@@ -190,12 +209,12 @@ main {
 .form-input {
     width: 100%;
     padding: 13px 44px 13px 14px;
-    border: 1px solid #e8eaf0;
+    border: 1px solid #e6e8f2;
     border-radius: 10px;
     font-size: 0.95rem;
     font-family: 'Segoe UI', sans-serif;
-    transition: all 0.2s ease;
-    background: #f0f1fa;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    background: #f1f2fb;
     color: #1e1b4b;
 }
 
@@ -208,7 +227,7 @@ main {
     outline: none;
     border-color: #4338ca;
     background: white;
-    box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.1);
+    box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.12);
 }
 
 .form-input::placeholder {
@@ -255,6 +274,7 @@ main {
     color: #dc2626;
     font-size: 0.9rem;
     font-weight: 500;
+    text-align: left;
     animation: slideIn 0.3s ease;
 }
 
@@ -284,12 +304,13 @@ main {
     border-radius: 10px;
     font-size: 1rem;
     font-weight: 600;
+    font-family: inherit;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: background 0.2s ease, box-shadow 0.2s ease;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
     box-shadow: 0 4px 16px rgba(67, 56, 202, 0.28);
 }
 
@@ -300,11 +321,13 @@ main {
 
 .submit-btn:active {
     background: #312e81;
+    transform: translateY(1px);
 }
 
 .submit-btn:disabled {
     opacity: 0.65;
     cursor: not-allowed;
+    transform: none;
 }
 
 .spinner {
@@ -322,8 +345,19 @@ main {
     }
 }
 
+/* Buttons inside the panel are reachable by keyboard, so make focus visible. */
+.login-page button:focus-visible,
+.login-page summary:focus-visible {
+    outline: 2px solid #4338ca;
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
 @media (max-width: 600px) {
     .login-page {
+        --lp-gutter: 24px;
+        --lp-radius: 14px;
+
         margin: -40px;
         padding: 24px 20px;
         width: calc(100% + 80px);
@@ -331,14 +365,201 @@ main {
     }
 
     .page-header {
-        padding: 28px 24px 20px;
+        padding-top: 24px;
     }
 
-    .login-card {
-        padding: 0 24px 32px;
+    .page-title {
+        font-size: 1.35rem;
+    }
+
+    .page-subtitle {
+        font-size: 0.83rem;
     }
 
     .form-input {
         padding: 12px 40px 12px 14px;
+    }
+}
+/* ── QR sign-in (device pairing) ─────────────────────────────────────── */
+
+/* Sits below .login-card inside the panel, so it carries the panel's own
+   gutter rather than the card's. */
+.login-alt-group {
+    padding: 0 var(--lp-gutter) 30px;
+}
+
+.login-alt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 14px;
+}
+
+.login-alt-line {
+    flex: 1;
+    height: 1px;
+    background: #e5e7eb;
+}
+
+.login-alt-text {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+}
+
+.qr-switch-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 13px;
+    background: transparent;
+    color: #4338ca;
+    border: 1px solid #c7cae8;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.qr-switch-btn:hover {
+    background: #f0f1fa;
+    border-color: #4338ca;
+}
+
+.qr-signin {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.qr-instructions {
+    margin: 0 0 20px;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: #6b7280;
+    max-width: 22rem;
+}
+
+.qr-loading,
+.qr-waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    color: #6b7280;
+    padding: 12px 0;
+}
+
+.qr-canvas-wrap {
+    background: #fff;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    line-height: 0;
+}
+
+.qr-timer {
+    margin: 14px 0 0;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.qr-timer strong {
+    color: #1e1b4b;
+    font-variant-numeric: tabular-nums;
+}
+
+.qr-expired {
+    width: 100%;
+    max-width: 20rem;
+}
+
+.qr-expired p {
+    margin: 0 0 14px;
+    font-size: 0.92rem;
+    color: #6b7280;
+}
+
+.qr-fallback {
+    margin-top: 14px;
+    width: 100%;
+    max-width: 22rem;
+    text-align: left;
+}
+
+.qr-fallback summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: #4338ca;
+    font-weight: 600;
+}
+
+.qr-fallback-text {
+    margin: 10px 0 6px;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+.qr-fallback-url {
+    display: block;
+    font-size: 0.72rem;
+    color: #1e1b4b;
+    background: #f0f1fa;
+    border-radius: 6px;
+    padding: 8px 10px;
+    word-break: break-all;
+}
+
+.qr-back {
+    margin-top: 22px;
+}
+
+/* The QR view is the tallest state of the panel. On a short window, tighten
+   its vertical rhythm so it fits rather than relying on .app-main scrolling,
+   whose scrollbar is hidden and so gives no hint there is more below. */
+@media (max-height: 840px) {
+    .login-page {
+        padding-top: 24px;
+        padding-bottom: 24px;
+    }
+
+    .page-header {
+        padding-top: 24px;
+    }
+
+    .login-card {
+        padding-top: 20px;
+        padding-bottom: 22px;
+    }
+
+    .qr-instructions {
+        margin-bottom: 14px;
+    }
+
+    .qr-canvas-wrap {
+        padding: 10px;
+    }
+
+    .qr-timer {
+        margin-top: 12px;
+    }
+
+    .qr-loading,
+    .qr-waiting {
+        padding: 8px 0;
+    }
+
+    .qr-fallback {
+        margin-top: 10px;
+    }
+
+    .qr-back {
+        margin-top: 16px;
     }
 }

@@ -36,6 +36,20 @@
         "partnerTitle": "Insira o ID do parceiro",
         "partnerSubtitle": "Etapa 3 de 7: insira seu ID de parceiro para continuar"
     },
+    "qrSignIn": {
+        "subtitle": "Etapa 2 de 7: Faça login pelo seu telefone para continuar",
+        "or": "OU",
+        "switchCta": "Fazer login pelo telefone",
+        "instructions": "Escaneie este código com o telefone, faça login com o Google ou sua senha e aprove este dispositivo.",
+        "preparing": "Preparando seu código...",
+        "expired": "Este código expirou.",
+        "newCode": "Obter um novo código",
+        "expiresIn": "Expira em",
+        "waiting": "Aguardando aprovação no seu telefone...",
+        "cantScan": "Não consegue escanear?",
+        "openAddress": "Abra este endereço no seu telefone:",
+        "usePasswordInstead": "Usar e-mail e senha"
+    },
     "loginForm": {
         "emailLabel": "E-mail:",
         "passwordLabel": "Senha:",
@@ -595,6 +609,10 @@
         "sessionExpired": "Sua sess?o expirou. Entre novamente.",
         "seedingFailedStatus": "Falha no upload ({{status}}): {{message}}",
         "unexpectedError": "Erro inesperado: {{status}}",
-        "connectionFailed": "Falha na conex?o."
+        "connectionFailed": "Falha na conex?o.",
+        "qrStartFailed": "Não foi possível iniciar o login. Tente novamente.",
+        "qrStartFailedStatus": "Não foi possível iniciar o login ({{status}}).",
+        "qrRenderFailed": "Não foi possível exibir o código QR. Use o link abaixo.",
+        "qrNoLongerValid": "Este login não é mais válido. Comece novamente."
     }
 }

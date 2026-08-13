@@ -224,8 +224,7 @@ const createWindow = () => {
         autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false,
-            enableRemoteModule: true
+            contextIsolation: false
         }
     })
     mainWin.loadFile(path.join(__dirname, 'dist', 'index.html'))

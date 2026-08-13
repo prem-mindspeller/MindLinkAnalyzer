@@ -36,6 +36,20 @@
         "partnerTitle": "パートナー ID を入力してください",
         "partnerSubtitle": "ステップ 3/7: パートナー ID を入力して続行します"
     },
+    "qrSignIn": {
+        "subtitle": "ステップ 2/7: スマートフォンからサインインして続行してください",
+        "or": "または",
+        "switchCta": "スマートフォンでサインイン",
+        "instructions": "このコードをスマートフォンで読み取り、Google またはパスワードでサインインして、このデバイスを承認してください。",
+        "preparing": "コードを準備しています...",
+        "expired": "このコードは有効期限が切れました。",
+        "newCode": "新しいコードを取得",
+        "expiresIn": "有効期限まで",
+        "waiting": "スマートフォンでの承認を待っています...",
+        "cantScan": "読み取れませんか？",
+        "openAddress": "スマートフォンでこのアドレスを開いてください:",
+        "usePasswordInstead": "メールアドレスとパスワードを使用する"
+    },
     "loginForm": {
         "emailLabel": "電子メール:",
         "passwordLabel": "パスワード:",
@@ -595,6 +609,10 @@
         "sessionExpired": "?????????????????????????????????",
         "seedingFailedStatus": "??????????????{{status}}?: {{message}}",
         "unexpectedError": "????????: {{status}}",
-        "connectionFailed": "??????????"
+        "connectionFailed": "??????????",
+        "qrStartFailed": "サインインを開始できませんでした。もう一度お試しください。",
+        "qrStartFailedStatus": "サインインを開始できませんでした ({{status}})。",
+        "qrRenderFailed": "QR コードを表示できませんでした。下のリンクをご利用ください。",
+        "qrNoLongerValid": "このサインインは無効になりました。最初からやり直してください。"
     }
 }

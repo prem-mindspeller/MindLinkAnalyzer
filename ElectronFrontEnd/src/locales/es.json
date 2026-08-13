@@ -36,6 +36,20 @@
         "partnerTitle": "Ingrese el ID del socio",
         "partnerSubtitle": "Paso 3 de 7: Ingresa tu ID de socio para continuar"
     },
+    "qrSignIn": {
+        "subtitle": "Paso 2 de 7: Inicie sesión desde su teléfono para continuar",
+        "or": "O",
+        "switchCta": "Iniciar sesión con su teléfono",
+        "instructions": "Escanee este código con su teléfono, inicie sesión allí con Google o su contraseña y apruebe este dispositivo.",
+        "preparing": "Preparando su código...",
+        "expired": "Este código ha caducado.",
+        "newCode": "Obtener un código nuevo",
+        "expiresIn": "Caduca en",
+        "waiting": "Esperando la aprobación en su teléfono...",
+        "cantScan": "¿No puede escanear?",
+        "openAddress": "Abra esta dirección en su teléfono:",
+        "usePasswordInstead": "Usar correo electrónico y contraseña"
+    },
     "loginForm": {
         "emailLabel": "Correo electrónico:",
         "passwordLabel": "Contraseña:",
@@ -595,6 +609,10 @@
         "sessionExpired": "Su sesi?n ha caducado. Inicie sesi?n de nuevo.",
         "seedingFailedStatus": "Error al subir ({{status}}): {{message}}",
         "unexpectedError": "Error inesperado: {{status}}",
-        "connectionFailed": "Error de conexi?n."
+        "connectionFailed": "Error de conexi?n.",
+        "qrStartFailed": "No se pudo iniciar el inicio de sesión. Inténtelo de nuevo.",
+        "qrStartFailedStatus": "No se pudo iniciar el inicio de sesión ({{status}}).",
+        "qrRenderFailed": "No se pudo mostrar el código QR. Utilice el enlace de abajo.",
+        "qrNoLongerValid": "Este inicio de sesión ya no es válido. Comience de nuevo."
     }
 }

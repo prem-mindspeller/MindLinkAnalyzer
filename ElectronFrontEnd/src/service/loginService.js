@@ -3,12 +3,43 @@ import { resolveBookingAccess } from './bookingAccess.mjs';
 import { clearBatteryRunData } from './batteryRunCleanup.mjs';
 
 const API_ENDPOINTS = {
-    en: 'https://en.mindspeller.com',
+    // en:'http://127.0.0.1:5000',
+    en: 'https://mindspeller.com',
     nl: 'https://nl.mindspeller.com',
 };
 
+// The web app lives on a different host from the API above. Used to build the
+// link the phone opens during QR device pairing.
+const WEB_ENDPOINTS = {
+    // en:'http://localhost:8080',
+    en: 'https://mindspeller.com',
+    nl: 'https://cas-nl.mindspeller.com',
+};
+
+// Local-development escape hatch. Unset in any normal run, so these resolve to
+// the production hosts above and behaviour is unchanged. To point a dev build
+// at a local stack, run this once in the DevTools console:
+//
+//   localStorage.setItem('mdsp_dev_api_base', 'http://localhost:5000')
+//   localStorage.setItem('mdsp_dev_web_base', 'http://localhost:8080')
+//
+// and localStorage.removeItem(...) to go back to production.
+const devOverride = (key) => {
+    try {
+        const value = localStorage.getItem(key);
+        return value && value.trim() ? value.trim().replace(/\/+$/, '') : null;
+    } catch (err) {
+        return null;
+    }
+};
+
+const getApiBase = (region = 'en') =>
+    devOverride('mdsp_dev_api_base') || API_ENDPOINTS[region] || API_ENDPOINTS.en;
+const getWebBase = (region = 'en') =>
+    devOverride('mdsp_dev_web_base') || WEB_ENDPOINTS[region] || WEB_ENDPOINTS.en;
+
 const loginUser = async (email, password, region = 'en') => {
-    const baseUrl = API_ENDPOINTS[region]
+    const baseUrl = getApiBase(region)
     const loginUrl = `${baseUrl}/api/cas/token/login`;
 
     const loginPayload = {
@@ -49,13 +80,7 @@ const loginUser = async (email, password, region = 'en') => {
             throw new Error(i18n.t('errors.noAuthToken'));
         }
 
-        sessionStorage.setItem('jwtToken', token);
-        sessionStorage.setItem('loggedInUser', email);
-        sessionStorage.setItem('region', region);
-        if (data['x-jwt-refresh-token']) {
-            sessionStorage.setItem('jwtRefreshToken', data['x-jwt-refresh-token']);
-        }
-        _startRefreshInterval();
+        applySession(data, email, region);
 
         return {
             success: true,
@@ -69,6 +94,17 @@ const loginUser = async (email, password, region = 'en') => {
             error: error.message
         };
     }
+};
+
+
+const applySession = (data, email, region = 'en') => {
+    sessionStorage.setItem('jwtToken', data['x-jwt-access-token']);
+    sessionStorage.setItem('loggedInUser', email);
+    sessionStorage.setItem('region', region);
+    if (data['x-jwt-refresh-token']) {
+        sessionStorage.setItem('jwtRefreshToken', data['x-jwt-refresh-token']);
+    }
+    _startRefreshInterval();
 };
 
 
@@ -110,7 +146,7 @@ let _refreshTimer = null;
 const _refreshToken = async () => {
     const refreshToken = sessionStorage.getItem('jwtRefreshToken');
     const region = getRegion();
-    const baseUrl = API_ENDPOINTS[region];
+    const baseUrl = getApiBase(region);
     if (!refreshToken) return;
 
     try {
@@ -157,7 +193,7 @@ const _stopRefreshInterval = () => {
 const checkPartnerBookings = async (partnerId) => {
     const token = getToken();
     const region = getRegion();
-    const baseUrl = API_ENDPOINTS[region];
+    const baseUrl = getApiBase(region);
 
     try {
         const response = await fetch(
@@ -205,6 +241,9 @@ const isAuthenticated = () => {
 
 const loginService = {
     loginUser,
+    applySession,
+    getApiBase,
+    getWebBase,
     getToken,
     getUser,
     getRegion,

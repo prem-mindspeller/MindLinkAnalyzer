@@ -36,6 +36,20 @@
         "partnerTitle": "Inserisci l'ID partner",
         "partnerSubtitle": "Passaggio 3 di 7: inserisci il tuo ID partner per procedere"
     },
+    "qrSignIn": {
+        "subtitle": "Passaggio 2 di 7: accedere dal telefono per continuare",
+        "or": "OPPURE",
+        "switchCta": "Accedere con il telefono",
+        "instructions": "Scansionare questo codice con il telefono, accedere con Google o la propria password e approvare questo dispositivo.",
+        "preparing": "Preparazione del codice...",
+        "expired": "Questo codice è scaduto.",
+        "newCode": "Ottieni un nuovo codice",
+        "expiresIn": "Scade tra",
+        "waiting": "In attesa di approvazione sul telefono...",
+        "cantScan": "Non è possibile scansionare?",
+        "openAddress": "Aprire questo indirizzo sul telefono:",
+        "usePasswordInstead": "Usare e-mail e password"
+    },
     "loginForm": {
         "emailLabel": "E-mail:",
         "passwordLabel": "Password:",
@@ -595,6 +609,10 @@
         "sessionExpired": "La sessione ? scaduta. Accedere di nuovo.",
         "seedingFailedStatus": "Caricamento non riuscito ({{status}}): {{message}}",
         "unexpectedError": "Errore imprevisto: {{status}}",
-        "connectionFailed": "Connessione non riuscita."
+        "connectionFailed": "Connessione non riuscita.",
+        "qrStartFailed": "Impossibile avviare l'accesso. Riprovare.",
+        "qrStartFailedStatus": "Impossibile avviare l'accesso ({{status}}).",
+        "qrRenderFailed": "Impossibile visualizzare il codice QR. Utilizzare il collegamento sottostante.",
+        "qrNoLongerValid": "Questo accesso non è più valido. Ricominciare."
     }
 }

@@ -36,6 +36,20 @@
         "partnerTitle": "Entrez l'ID du partenaire",
         "partnerSubtitle": "Étape 3 sur 7 : saisissez votre identifiant de partenaire pour continuer"
     },
+    "qrSignIn": {
+        "subtitle": "Étape 2 sur 7 : connectez-vous depuis votre téléphone pour continuer",
+        "or": "OU",
+        "switchCta": "Se connecter avec votre téléphone",
+        "instructions": "Scannez ce code avec votre téléphone, connectez-vous avec Google ou votre mot de passe, puis approuvez cet appareil.",
+        "preparing": "Préparation de votre code...",
+        "expired": "Ce code a expiré.",
+        "newCode": "Obtenir un nouveau code",
+        "expiresIn": "Expire dans",
+        "waiting": "En attente d'approbation sur votre téléphone...",
+        "cantScan": "Impossible de scanner ?",
+        "openAddress": "Ouvrez cette adresse sur votre téléphone :",
+        "usePasswordInstead": "Utiliser l'e-mail et le mot de passe"
+    },
     "loginForm": {
         "emailLabel": "E-mail :",
         "passwordLabel": "Mot de passe :",
@@ -595,6 +609,10 @@
         "sessionExpired": "Votre session a expir?. Veuillez vous reconnecter.",
         "seedingFailedStatus": "?chec du t?l?versement ({{status}}) : {{message}}",
         "unexpectedError": "Erreur inattendue : {{status}}",
-        "connectionFailed": "?chec de la connexion."
+        "connectionFailed": "?chec de la connexion.",
+        "qrStartFailed": "Impossible de démarrer la connexion. Veuillez réessayer.",
+        "qrStartFailedStatus": "Impossible de démarrer la connexion ({{status}}).",
+        "qrRenderFailed": "Impossible d'afficher le code QR. Utilisez le lien ci-dessous.",
+        "qrNoLongerValid": "Cette connexion n'est plus valide. Veuillez recommencer."
     }
 }
