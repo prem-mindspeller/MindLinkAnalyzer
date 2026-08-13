@@ -36,6 +36,11 @@ const contentTokens = (value) => normalizeText(value)
   .filter((token) => token.length >= 3 && !KEY_DETAIL_STOPWORDS.has(token));
 
 const keyDetailMatches = (value, expected, thresholds) => {
+  const normalizedValue = normalizeText(value);
+  const normalizedExpected = normalizeText(expected);
+  // Exact keyed responses remain valid even when a language does not use
+  // spaces, or its correct answer is shorter than the token-length heuristic.
+  if (normalizedValue && normalizedValue === normalizedExpected) return true;
   const minimumTokenLength = thresholds.keyDetailMinimumTokenLength;
   const expectedTokens = [...new Set(contentTokens(expected)
     .filter((token) => token.length >= minimumTokenLength))];

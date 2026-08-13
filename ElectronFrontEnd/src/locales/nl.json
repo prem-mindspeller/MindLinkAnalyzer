@@ -139,7 +139,7 @@
         "downloadReport": "Rapport downloaden",
         "analysisFailed": "Analyse mislukt:",
         "finish": "Voltooien",
-        "seedSuccess": "Rapport succesvol ge?pload naar de Mindspeller-database.",
+        "seedSuccess": "Rapport succesvol geüpload naar de Mindspeller-database.",
         "seedFailed": "Uploaden mislukt: {{message}}"
     },
     "liveEeg": {
@@ -603,7 +603,7 @@
         "loginFailedStatus": "Aanmelden mislukt ({{status}}). Probeer het opnieuw.",
         "noAuthToken": "Er is geen authenticatietoken ontvangen.",
         "noBaselineData": "Geen basislijngegevens gevonden. Voltooi eerst de basislijnkalibratie.",
-        "noTaskData": "Geen taakgegevens gevonden. Voltooi eerst ten minste ??n taak.",
+        "noTaskData": "Geen taakgegevens gevonden. Voltooi eerst ten minste één taak.",
         "analysisFailedStatus": "Analyse mislukt ({{status}}): {{message}}",
         "notAuthenticated": "U bent niet geauthenticeerd. Meld u opnieuw aan.",
         "sessionExpired": "Uw sessie is verlopen. Meld u opnieuw aan.",
@@ -614,5 +614,98 @@
         "qrStartFailedStatus": "Aanmelden kon niet worden gestart ({{status}}).",
         "qrRenderFailed": "De QR-code kon niet worden weergegeven. Gebruik de onderstaande link.",
         "qrNoLongerValid": "Deze aanmelding is niet meer geldig. Begin opnieuw."
+    },
+    "optimizedBattery": {
+        "listen": "Luister naar de instructies",
+        "audioTranslationPending": "Een deel van de audio tijdens taken is momenteel Engels. We werken aan vertalingen voor uw geselecteerde taal.",
+        "taskNames": {
+            "adaptive_numerical_reasoning": "Adaptief numeriek redeneren",
+            "working_memory_manipulation": "Werkgeheugenmanipulatie",
+            "auditory_target_counting": "Auditief doeltellen",
+            "semantic_induction_category_switching": "Semantische inductie en categoriewisseling",
+            "visuospatial_transformation_orientation": "Visuospatiële transformatie en oriëntatie",
+            "divergent_ideation": "Divergente ideevorming",
+            "dual_task_rule_switching": "Dubbeltaakprestatie en regelwisseling",
+            "rule_based_anomaly_detection": "Regelgebaseerde anomaliedetectie",
+            "rapid_visual_comparison": "Snelle visuele vergelijking",
+            "pattern_closure_visual_noise": "Patroonsluiting onder visuele ruis",
+            "speech_in_noise_comprehension": "Spraakverstaan in ruis",
+            "written_comprehension_synthesis": "Begrijpend lezen en beknopte synthese"
+        },
+        "phaseLabels": {
+            "adaptive_numerical_reasoning": { "lower_load": "Lagere belasting", "higher_load": "Hogere gemengde belasting" },
+            "working_memory_manipulation": { "maintenance": "Behoud van de reeks", "manipulation": "Bewerking van de reeks" },
+            "auditory_target_counting": { "early": "Vroege monitoring", "middle": "Middelste monitoring", "late": "Late monitoring" },
+            "semantic_induction_category_switching": { "rule_one": "Eerste organiserende principe", "rule_two": "Tweede organiserende principe" },
+            "visuospatial_transformation_orientation": { "lower_density": "Lagere transformatiedichtheid", "higher_density": "Hogere transformatiedichtheid" },
+            "divergent_ideation": { "early": "Vroege ideevorming", "middle": "Middelste ideevorming", "late": "Late ideevorming" },
+            "dual_task_rule_switching": { "before_switch": "Voor de regelwisseling", "after_switch": "Na de regelwisseling" },
+            "rule_based_anomaly_detection": { "lower_density": "Lagere anomaliedichtheid", "higher_density": "Hogere anomaliedichtheid" },
+            "rapid_visual_comparison": { "pre_response": "Doorlopende vergelijking" },
+            "pattern_closure_visual_noise": { "pre_response": "Geleidelijke visuele sluiting" },
+            "speech_in_noise_comprehension": { "listening": "Doorlopend luisteren" },
+            "written_comprehension_synthesis": { "paced_reading": "Centraal gestuurd lezen", "silent_synthesis": "Stille synthese" }
+        },
+        "runner": {
+            "candidateKicker": "Kandidaat/pilot · Taak {{number}} · {{formId}}",
+            "eyesBadge": "Ogen {{eyeState}}",
+            "durationBadge": "⏱ {{duration}} s EEG",
+            "stimulusLanguage": "Stimulus: {{language}}",
+            "guardrail": "EEG-kenmerken zijn kandidaatbewijs binnen de taakcontext. Gedragsvaliditeit en signaalkwaliteit worden afzonderlijk gecontroleerd.",
+            "getReady": "Maak u klaar · Ogen {{eyeState}}",
+            "countdownCaption": "Het ononderbroken meetblok begint na de laatste piep.",
+            "continuousEeg": "● Doorlopende EEG",
+            "eyesClosed": "Ogen gesloten",
+            "eyesClosedCue": "Luister en ga in stilte verder. Antwoord nog niet.",
+            "sessionBlock": "Doorlopend taakblok · Sessie {{session}}",
+            "routeGridAria": "Vijf-bij-vijf route-rooster",
+            "routeHint": "Volg de positie en richting. De wendingen worden dichter na de fasegrens.",
+            "anomalyHint": "Tel in stilte · geen antwoord tijdens de opname",
+            "responseRegistered": "ANTWOORD GEREGISTREERD · BLIJF STIL",
+            "detectMismatch": "AFWIJKING DETECTEREN",
+            "recognized": "HERKEND",
+            "searching": "ZOEKEN…",
+            "silentSynthesis": "Stille synthese",
+            "writtenHint": "Houd uw ogen open. Orden het hoofdidee en de ondersteunende details in gedachten. Typ nog niet.",
+            "savingTitle": "De doorlopende opname wordt gecontroleerd en opgeslagen…",
+            "savingHint": "Sluit de toepassing niet.",
+            "responseKicker": "EEG-beoordeling gestopt · gedragsantwoord",
+            "responseHint": "U kunt nu spreken, typen of bewegen om het gevraagde antwoord in te voeren. Dit antwoord wordt niet meegenomen in de EEG-beoordeling."
+        },
+        "responses": {
+            "select": "Selecteer…", "yes": "Ja", "no": "Nee", "finalValue": "Wat was de eindwaarde?", "finalSequence": "Voer de uiteindelijke reeks in de juiste volgorde in (bijvoorbeeld 4-7-2-5).", "highToneCount": "Hoeveel hoge doeltonen heeft u geteld?", "firstPrinciple": "Eerste organiserende principe", "secondPrinciple": "Tweede organiserende principe", "ruleSwitchDetected": "Heeft u de regelwisseling opgemerkt?", "finalColumn": "Laatste kolom (1–5)", "finalRow": "Laatste rij (1–5)", "finalOrientation": "Laatste oriëntatie", "ideas": "Voer één idee per regel in. Relevantie, categoriediversiteit en originaliteit wachten nog op deskundige of gevalideerde beoordeling.", "finalNumber": "Eindgetal", "anomalyCount": "Hoeveel anomalieën heeft u geteld?", "anomalyTypes": "Welke typen anomalieën heeft u opgemerkt?", "confidence": "Zekerheid: {{confidence}}/5", "recognizedTarget": "Welk doel heeft u herkend?", "mainInterpretation": "Selecteer de hoofdinterpretatie.", "mainIdea": "Selecteer het hoofdidee.", "summary": "Schrijf een samenvatting van {{minimum}}–{{maximum}} woorden ({{count}} woorden).", "summaryWarning": "De samenvatting moet {{minimum}}–{{maximum}} woorden bevatten voordat deze kan worden opgeslagen.", "recognitionTimeout": "Tijdens het blok is geen herkenningsknop ingedrukt; deze poging voldoet niet aan de gedragsvalidatie.", "save": "Antwoord opslaan en signaal controleren"
+        },
+        "anomalyTypes": { "extra_letter": "extra letter", "wrong_order": "verkeerde volgorde", "missing_separator": "ontbrekend scheidingsteken", "missing_digit": "ontbrekend cijfer", "wrong_separator": "verkeerd scheidingsteken" },
+        "speechInNoise": { "paraphrase": "Geef één beknopte parafrase van de tekst." },
+        "words": {
+            "eyes": { "open": "open", "closed": "gesloten" },
+            "operations": { "add": "tel op", "subtract": "trek af" },
+            "directions": { "north": "het noorden", "east": "het oosten", "south": "het zuiden", "west": "het westen" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "Begin bij {{startValue}}; volg elke gesproken bewerking in stilte en geef alleen de eindwaarde.",
+            "working_memory_manipulation": "De eerste reeks wordt pas getoond nadat de EEG-meting begint. Onthoud deze, volg elke gesproken wijziging en rapporteer alleen de uiteindelijke volgorde.",
+            "auditory_target_counting": "Tel elke hoge toon in stilte en negeer de lage tonen. Rapporteer daarna één aantal.",
+            "semantic_induction_category_switching": "Leid het organiserende principe af uit de eerste woordenreeks en het nieuwe principe na de naadloze wissel.",
+            "visuospatial_transformation_orientation": "Begin op rij {{row}}, kolom {{column}}, gericht naar {{orientation}}. Elke getoonde draai verandert zowel richting als positie in het rooster. Rijen lopen van boven naar beneden en kolommen van links naar rechts.",
+            "divergent_ideation": {
+                "prompt": "Engelse prompt: {{prompt}}",
+                "response": "Bedenk ideeën in stilte; daarna noteert u elk idee op een aparte regel."
+            },
+            "dual_task_rule_switching": "Begin bij {{startValue}}. Vóór de wissel: {{beforeOperation}} {{beforeDelta}} bij elk ‘Werk bij’-signaal. Na ‘Wissel’: {{afterOperation}} {{afterDelta}} bij elk ‘Werk bij’-signaal. Tel de hoge tonen voortdurend.",
+            "rule_based_anomaly_detection": {
+                "rule": "Elke code moet precies één letter, een koppelteken en twee cijfers in diezelfde volgorde bevatten.",
+                "response": "Tel afwijkingen in stilte en onthoud hun typen; klik niet tijdens de stroom."
+            },
+            "rapid_visual_comparison": "Blijf centraal kijken terwijl beide tekenreeksen synchroon veranderen. Druk één keer op DETECT zodra één geleidelijke afwijking verschijnt en blijf daarna stil tot het tijdsblok eindigt.",
+            "pattern_closure_visual_noise": "Een gefragmenteerd doel verschijnt geleidelijk uit dichte visuele ruis. Druk één keer op RECOGNIZED zodra u weet wat het is en blijf daarna stil tot het tijdsblok eindigt.",
+            "speech_in_noise_comprehension": "Luister naar de volledige passage met matig achtergrondgeluid. Antwoord pas nadat het geluid en de EEG-meting zijn gestopt.",
+            "written_comprehension_synthesis": "Lees elk centraal getoond Engels deel. Plan daarna in stilte een beknopte samenvatting; typen begint pas nadat de EEG-meting stopt.",
+            "common": {
+                "block": "Dit is één ononderbroken EEG-meetblok van {{duration}} seconden.",
+                "eyes": "Houd uw ogen {{eyeState}} en beperk knipperen, kaakspanning en beweging.",
+                "response": "Spreek of typ niet voordat de opname is beëindigd en het antwoordformulier verschijnt."
+            }
+        }
     }
 }

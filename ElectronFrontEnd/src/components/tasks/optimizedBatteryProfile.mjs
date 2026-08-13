@@ -121,6 +121,8 @@ const audioProfiles = {
     'web_audio_oscillator',
     'browser_speech_synthesis',
     'browser_speech_synthesis_with_generated_noise',
+    'audio_asset_or_browser_speech_synthesis',
+    'audio_asset_with_generated_noise',
     'premixed_audio_asset',
   ],
   countdown: {
@@ -144,10 +146,9 @@ const audioProfiles = {
     acousticallyCalibrated: false,
   },
   speech_in_noise: {
-    mode: 'browser_speech_synthesis_with_generated_noise',
-    // A validated profile switches mode to premixed_audio_asset and supplies
-    // these two fields; the runner need only implement the generic source
-    // descriptor, not a task-specific audio branch.
+    mode: 'audio_asset_with_generated_noise',
+    // Candidate narration assets are generated separately from the deterministic
+    // WebAudio noise, so their nominal SNR must not be described as calibrated.
     assetUri: null,
     assetSha256: null,
     assetsByForm: {},
@@ -290,7 +291,7 @@ export const CANDIDATE_PILOT_PROFILE = deepFreeze({
   protocolProfile: {
     contract_version: 'mindspeller_protocol_profile_v1',
     profile_id: 'mindspeller_optimized_task_battery',
-    profile_version: '2.0.0-candidate.1',
+    profile_version: '2.0.0-candidate.2',
     validation_status: 'pilot',
     components: {
       stimuli: {
@@ -300,7 +301,7 @@ export const CANDIDATE_PILOT_PROFILE = deepFreeze({
       },
       audio: {
         id: 'mindspeller_browser_generated_audio',
-        version: '1.0.0-candidate.1',
+        version: '1.0.0-candidate.2',
         validation_status: 'candidate',
       },
       rubrics: {
@@ -347,7 +348,7 @@ export const PROTOCOL_PROFILE_REF = deepFreeze({
   validation_status: PROTOCOL_PROFILE_METADATA.validation_status,
 });
 
-export const protocolProfileRefForTask = (taskId, profile = ACTIVE_BATTERY_PROFILE) => {
+export const protocolProfileRefForTask = (taskId, profile = ACTIVE_BATTERY_PROFILE, durationOverrideSeconds = null) => {
   const timing = taskTimingFor(taskId, profile);
   return deepFreeze({
     contract_version: profile.protocolProfile.contract_version,
@@ -358,7 +359,7 @@ export const protocolProfileRefForTask = (taskId, profile = ACTIVE_BATTERY_PROFI
       Object.entries(profile.protocolProfile.components).map(([name, component]) => [name, component.version]),
     ),
     task_id: taskId,
-    duration_seconds: timing.durationSeconds,
+    duration_seconds: durationOverrideSeconds || timing.durationSeconds,
   });
 };
 

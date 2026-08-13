@@ -14,6 +14,7 @@ import {
   audioProfileForTask,
   closureRevealState,
   countWords,
+  inTaskAudioLocalization,
   pacedPassageChunk,
   profileComponentRefs,
   protocolProfileRefForTask,
@@ -25,6 +26,7 @@ import {
   visualComparisonFrame,
   visualRouteState,
 } from './optimizedBatteryConfig.mjs';
+import { dutchCueAudioAssetsForForm } from './dutchCueAudioAssets.mjs';
 import { scoreOptimizedTask } from './optimizedTaskScoring.mjs';
 import '../../styles/taskSelection.css';
 
@@ -109,13 +111,14 @@ function renderRuleWithOrderEmphasis(text) {
 }
 
 function normalizeAssetDescriptor(value) {
-  if (typeof value === 'string') return { uri: value, sha256: null };
+  if (typeof value === 'string') return { uri: value, sha256: null, playbackRate: 1 };
   if (!value || typeof value !== 'object') return null;
   const uri = value.uri || value.assetUri || value.asset_uri;
   if (!uri) return null;
   return {
     uri,
     sha256: value.sha256 || value.assetSha256 || value.asset_sha256 || null,
+    playbackRate: Number(value.playbackRate || value.assetPlaybackRate || value.asset_playback_rate) || 1,
   };
 }
 
@@ -123,6 +126,7 @@ function configuredAudioAsset(profile, formId, auditKey, scheduled = {}) {
   const explicit = normalizeAssetDescriptor({
     uri: scheduled.asset_uri || scheduled.assetUri,
     sha256: scheduled.asset_sha256 || scheduled.assetSha256,
+    playbackRate: scheduled.asset_playback_rate || scheduled.assetPlaybackRate,
   });
   if (explicit) return explicit;
 
@@ -167,6 +171,7 @@ function configuredAssetManifest(profile, formId, schedule) {
     const existing = byAsset.get(identity) || {
       uri: descriptor.uri,
       sha256: descriptor.sha256,
+      playback_rate: descriptor.playbackRate,
       stimulus_keys: [],
     };
     existing.stimulus_keys.push(String(scheduled.key));
@@ -218,6 +223,9 @@ function auditSchedule(taskId, form, definition, presentation) {
       type: 'spoken_passage_onset',
       text: form.passage,
       asset_uri: form.audioAssetUri || null,
+      asset_sha256: form.audioAssetSha256 || null,
+      asset_playback_rate: form.audioAssetPlaybackRate || 1,
+      asset_provenance: form.audioAssetProvenance || null,
     });
   }
   if (taskId === TASK_IDS.WRITTEN) {
@@ -303,23 +311,70 @@ function FragmentedClosureTarget({ form, reveal, fragmentOrder }) {
 }
 
 const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
-  const { t } = useTranslation();
-  const definition = TASK_DEFINITIONS[taskId];
-  const form = useMemo(() => taskFormForSession(taskId, sessionDepth), [taskId, sessionDepth]);
+  const { t, i18n } = useTranslation();
+  const baseDefinition = TASK_DEFINITIONS[taskId];
+  const selectedLanguage = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0];
+  const form = useMemo(
+    () => taskFormForSession(taskId, sessionDepth, undefined, selectedLanguage),
+    [taskId, sessionDepth, selectedLanguage],
+  );
+  const definition = useMemo(() => {
+    const taskDurationSeconds = Number(form?.audioAssetTaskDurationSeconds);
+    if (
+      taskId !== TASK_IDS.SPEECH_NOISE
+      || !Number.isFinite(taskDurationSeconds)
+      || taskDurationSeconds <= baseDefinition.duration
+    ) return baseDefinition;
+    return {
+      ...baseDefinition,
+      duration: taskDurationSeconds,
+      phases: baseDefinition.phases.map((phase, index, phases) => (
+        index === phases.length - 1
+          ? { ...phase, end: taskDurationSeconds, duration: taskDurationSeconds - phase.start }
+          : phase
+      )),
+    };
+  }, [baseDefinition, form?.audioAssetTaskDurationSeconds, taskId]);
+  const audioLocalization = useMemo(
+    () => inTaskAudioLocalization(taskId, form, selectedLanguage),
+    [form, selectedLanguage, taskId],
+  );
+  const { hasDutchSpokenCueTranslation } = audioLocalization;
+  const inTaskAudioLanguage = audioLocalization.language;
+  const inTaskAudioTranslationStatus = audioLocalization.status;
   const presentation = useMemo(() => taskPresentationFor(taskId), [taskId]);
   const audioProfile = useMemo(() => audioProfileForTask(taskId), [taskId]);
   // Spoken cues always use a speech-synthesis profile — even on the dual task,
   // whose primary audioProfile is tones. Without this, speak() would receive the
   // tone profile and reject every "Update"/"Switch" cue as an unsupported speech
   // mode, silencing the cues and failing the audio-delivery audit.
-  const speechProfile = useMemo(
-    () => (taskId === TASK_IDS.SPEECH_NOISE
+  const speechProfile = useMemo(() => {
+    const profile = taskId === TASK_IDS.SPEECH_NOISE
       ? ACTIVE_BATTERY_PROFILE.audioProfiles.speech_in_noise
-      : ACTIVE_BATTERY_PROFILE.audioProfiles.spoken_stimuli),
-    [taskId],
-  );
+      : ACTIVE_BATTERY_PROFILE.audioProfiles.spoken_stimuli;
+    if (taskId === TASK_IDS.SPEECH_NOISE && form.audioAssetExpectedDeliverySeconds) {
+      return {
+        ...profile,
+        expectedDeliverySeconds: form.audioAssetExpectedDeliverySeconds,
+        settlingSeconds: Math.max(profile.settlingSeconds || 0, 8),
+      };
+    }
+    if (!hasDutchSpokenCueTranslation) return profile;
+    return {
+      ...profile,
+      mode: 'audio_asset_or_browser_speech_synthesis',
+      language: 'nl-NL',
+      assetsByStimulusKey: dutchCueAudioAssetsForForm(form),
+      assetProvenance: {
+        provider: 'elevenlabs',
+        model_id: 'eleven_multilingual_v2',
+        output_format: 'mp3_44100_128',
+        voice_label: 'Will - Dutch-accent European narrator',
+      },
+    };
+  }, [form, hasDutchSpokenCueTranslation, taskId]);
   const scoringThresholds = useMemo(() => scoringThresholdsFor(taskId), [taskId]);
-  const introductions = useMemo(() => taskIntroduction(taskId, form), [taskId, form]);
+  const introductions = useMemo(() => taskIntroduction(taskId, form, t), [taskId, form, t]);
   const schedule = useMemo(
     () => auditSchedule(taskId, form, definition, presentation),
     [taskId, form, definition, presentation],
@@ -533,21 +588,29 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     try {
       const sourceMode = speechProfile.mode;
       const assetDescriptor = configuredAudioAsset(speechProfile, form.id, auditKey, scheduled);
-      if (sourceMode === 'premixed_audio_asset') {
-        if (!assetDescriptor?.uri || typeof window.Audio !== 'function') {
-          throw new Error('Configured premixed audio asset is unavailable');
+      const canUseAsset = assetDescriptor?.uri && typeof window.Audio === 'function';
+      if (canUseAsset && (
+        sourceMode === 'premixed_audio_asset'
+        || sourceMode === 'audio_asset_with_generated_noise'
+        || sourceMode === 'audio_asset_or_browser_speech_synthesis'
+      )) {
+        if (!assetDescriptor?.uri) {
+          throw new Error('Configured speech audio asset is unavailable');
         }
         const asset = new window.Audio(assetDescriptor.uri);
         asset.preload = 'auto';
         asset.volume = Math.max(0, Math.min(1, Number(speechProfile.volume ?? 1)));
+        asset.playbackRate = Math.max(0.5, Math.min(2, assetDescriptor.playbackRate || 1));
         assetAudioRefsRef.current.add(asset);
         asset.onplaying = () => {
           if (!auditIsCurrent()) return;
           audit.startedSpeech.add(auditKey);
-          if (taskId === TASK_IDS.SPEECH_NOISE) audit.noiseStarted = true;
+          if (sourceMode === 'premixed_audio_asset' && taskId === TASK_IDS.SPEECH_NOISE) audit.noiseStarted = true;
           pushPlaybackMarker('speech_playback_started', {
             source_mode: sourceMode,
+            actual_source_mode: 'audio_asset',
             asset_sha256: assetDescriptor.sha256,
+            asset_playback_rate: asset.playbackRate,
           });
         };
         asset.onended = () => {
@@ -580,6 +643,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       if (
         sourceMode !== 'browser_speech_synthesis'
         && sourceMode !== 'browser_speech_synthesis_with_generated_noise'
+        && sourceMode !== 'audio_asset_or_browser_speech_synthesis'
       ) {
         throw new Error(`Unsupported speech source mode: ${sourceMode || 'missing'}`);
       }
@@ -608,7 +672,10 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       utterance.onstart = () => {
         if (!auditIsCurrent()) return;
         audit.startedSpeech.add(auditKey);
-        pushPlaybackMarker('speech_playback_started', { source_mode: sourceMode });
+        pushPlaybackMarker('speech_playback_started', {
+          source_mode: sourceMode,
+          actual_source_mode: 'browser_speech_synthesis',
+        });
       };
       utterance.onend = () => {
         speechUtteranceRefsRef.current.delete(utterance);
@@ -651,7 +718,10 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
         // playback callback marks both speech and noise as started.
         return;
       }
-      if (audioProfile.mode !== 'browser_speech_synthesis_with_generated_noise') {
+      if (
+        audioProfile.mode !== 'browser_speech_synthesis_with_generated_noise'
+        && audioProfile.mode !== 'audio_asset_with_generated_noise'
+      ) {
         throw new Error(`Speech-in-noise source mode has no noise delivery: ${audioProfile.mode || 'missing'}`);
       }
       const noiseProfile = audioProfile.noise;
@@ -767,13 +837,21 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   }, [recordSignal]);
 
   const fireScheduledEvent = useCallback((scheduled, actualElapsedMs) => {
+    const speechUsesAudioAsset = (
+      speechProfile.mode === 'premixed_audio_asset'
+      || speechProfile.mode === 'audio_asset_with_generated_noise'
+      || (
+        speechProfile.mode === 'audio_asset_or_browser_speech_synthesis'
+        && configuredAudioAsset(speechProfile, form.id, String(scheduled.key), scheduled)?.uri
+      )
+    );
     eventsRef.current.push({
       ...scheduled,
       planned_elapsed_ms: Math.round(scheduled.at * 1000),
       actual_elapsed_ms: Math.round(actualElapsedMs),
       sample_index: recordedSampleCount(),
       marker_basis: scheduled.type === 'spoken_stimulus' || scheduled.type === 'spoken_passage_onset'
-        ? audioProfile.mode === 'premixed_audio_asset'
+        ? speechUsesAudioAsset
           ? 'html_audio_dispatch'
           : 'speech_synthesis_dispatch'
         : scheduled.type === 'tone_onset'
@@ -791,7 +869,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       scheduled,
     );
     if (scheduled.type === 'spoken_stimulus' || scheduled.type === 'spoken_passage_onset') speak(scheduled.text, scheduled);
-  }, [audioProfile.mode, playTone, recordedSampleCount, speak]);
+  }, [audioProfile, form.id, playTone, recordedSampleCount, speak, speechProfile]);
 
   const runDueEvents = useCallback((elapsedMs) => {
     for (const scheduled of schedule) {
@@ -841,16 +919,22 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     );
     const failedAudioKeys = [...audioAudit.failed];
     const noiseDeliveryComplete = !audioAudit.noiseRequired || audioAudit.noiseStarted;
+    const deliveryProfile = audioAudit.expectedSpeech.size ? speechProfile : audioProfile;
     const audioDelivery = {
       profile_id: PROTOCOL_PROFILE_METADATA.components.audio.id,
       profile_version: PROTOCOL_PROFILE_METADATA.components.audio.version,
-      source_mode: audioProfile.mode,
-      acoustically_calibrated: audioProfile.acousticallyCalibrated === true,
-      declared_asset_uri: audioProfile.assetUri || null,
-      declared_asset_sha256: audioProfile.assetSha256 || null,
-      declared_asset_manifest: configuredAssetManifest(audioProfile, form.id, schedule),
-      expected_delivery_seconds: audioProfile.expectedDeliverySeconds ?? null,
-      settling_seconds: audioProfile.settlingSeconds ?? null,
+      source_mode: deliveryProfile.mode,
+      speech_source_mode: audioAudit.expectedSpeech.size ? speechProfile.mode : null,
+      tone_source_mode: audioAudit.expectedTones.size ? audioProfile.mode : null,
+      stimulus_language: inTaskAudioLanguage,
+      translation_status: inTaskAudioTranslationStatus,
+      acoustically_calibrated: deliveryProfile.acousticallyCalibrated === true,
+      declared_asset_uri: deliveryProfile.assetUri || null,
+      declared_asset_sha256: deliveryProfile.assetSha256 || null,
+      declared_asset_manifest: configuredAssetManifest(deliveryProfile, form.id, schedule),
+      voice_asset_provenance: deliveryProfile.assetProvenance || form.audioAssetProvenance || null,
+      expected_delivery_seconds: deliveryProfile.expectedDeliverySeconds ?? null,
+      settling_seconds: deliveryProfile.settlingSeconds ?? null,
       expected_speech_count: audioAudit.expectedSpeech.size,
       scheduled_speech_count: audioAudit.scheduledSpeech.size,
       started_speech_count: audioAudit.startedSpeech.size,
@@ -962,7 +1046,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     setRunState('response');
   // buildMetadata deliberately resolves at callback time from immutable refs.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioProfile, clearTimers, definition.duration, form, onComplete, recordedSampleCount, runDueEvents, schedule, stopAudio, stopSubscriptions, taskId]);
+  }, [audioProfile, clearTimers, definition.duration, form, onComplete, recordedSampleCount, runDueEvents, schedule, speechProfile, stopAudio, stopSubscriptions, taskId]);
 
   const beginRecording = useCallback(() => {
     signalStatsRef.current = { total: 0, good: 0, noisy: 0, notWorn: 0, worstPoorSignal: null };
@@ -1000,9 +1084,21 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     }, 50);
   }, [attachRecording, definition.duration, finishRecording, runDueEvents, schedule, startModerateNoise, taskId]);
 
+  const listenToInstructions = useCallback(() => {
+    try {
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+      window.speechSynthesis.cancel();
+      const utterance = new window.SpeechSynthesisUtterance(introductions.join(' '));
+      utterance.lang = i18n.resolvedLanguage || i18n.language || 'en';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    } catch (_) { /* optional accessibility audio */ }
+  }, [i18n.language, i18n.resolvedLanguage, introductions]);
+
   const startTask = useCallback(() => {
     if (startingRef.current || runState !== 'idle') return;
     startingRef.current = true;
+    try { window.speechSynthesis?.cancel(); } catch (_) { /* optional accessibility audio */ }
     getAudioContext();
     setRunState('countdown');
     let remaining = COUNTDOWN_SECONDS;
@@ -1110,7 +1206,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       threshold_set_version: PROTOCOL_PROFILE_METADATA.components.thresholds.version,
       protocol_validation_status: PROTOCOL_VALIDATION_STATUS,
       protocol_profile: PROTOCOL_PROFILE_METADATA,
-      protocol_profile_ref: protocolProfileRefForTask(taskId),
+      protocol_profile_ref: protocolProfileRefForTask(taskId, undefined, definition.duration),
       protocol_components: profileComponentRefs(),
       protocol_valid: recording.audioDelivery?.protocol_complete === true,
       protocol_invalid_reasons: recording.audioDelivery?.protocol_complete === true
@@ -1121,7 +1217,10 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       canonical_task_name: definition.name,
       session_depth: sessionDepth,
       form_id: form.id,
-      form_language: ACTIVE_BATTERY_PROFILE.language,
+      form_language: form.language || ACTIVE_BATTERY_PROFILE.language,
+      form_language_pack_status: form.language_pack_status || 'candidate_source_english',
+      in_task_audio_language: inTaskAudioLanguage,
+      in_task_audio_translation_status: inTaskAudioTranslationStatus,
       eye_state: definition.eyeState,
       matched_baseline: definition.baseline,
       sample_rate_hz: recording.sampleRateHz || (Number.isFinite(sampleRateHz) ? sampleRateHz : null),
@@ -1198,26 +1297,33 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     elapsedSeconds >= taskPhase.start && elapsedSeconds < taskPhase.end
   )) || definition.phases.at(-1);
   const elapsedPct = Math.min(100, Math.round((elapsedSeconds / definition.duration) * 100));
+  const taskName = t(`optimizedBattery.taskNames.${taskId}`, { defaultValue: definition.name });
+  const eyeState = t(`optimizedBattery.words.eyes.${definition.eyeState}`, { defaultValue: definition.eyeState });
+  const phaseLabel = t(
+    `optimizedBattery.phaseLabels.${taskId}.${currentPhase.id}`,
+    { defaultValue: currentPhase.label },
+  );
 
   if (runState === 'idle') {
     return (
       <div className="task-runner-card optimized-task-card">
-        <p className="optimized-task-kicker">Candidate/pilot · Task {definition.number} · {form.id}</p>
+        <p className="optimized-task-kicker">{t('optimizedBattery.runner.candidateKicker', { defaultValue: 'Candidate/pilot · Task {{number}} · {{formId}}', number: definition.number, formId: form.id })}</p>
         <h2 className="task-runner-name">{t('taskRunner.readInstruction')}</h2>
         <div className="task-runner-badges">
-          <span className={`task-eyes-badge eyes-${definition.eyeState}`}>Eyes {definition.eyeState}</span>
-          <span className="task-eyes-badge task-duration-badge">⏱ {definition.duration}s EEG</span>
-          <span className="task-eyes-badge optimized-language-badge">Stimulus: English</span>
+          <span className={`task-eyes-badge eyes-${definition.eyeState}`}>{t('optimizedBattery.runner.eyesBadge', { defaultValue: 'Eyes {{eyeState}}', eyeState })}</span>
+          <span className="task-eyes-badge task-duration-badge">{t('optimizedBattery.runner.durationBadge', { defaultValue: '⏱ {{duration}}s EEG', duration: definition.duration })}</span>
+          <span className="task-eyes-badge optimized-language-badge">{t('optimizedBattery.runner.stimulusLanguage', { defaultValue: 'Stimulus: {{language}}', language: form.language || 'en' })}</span>
         </div>
-        <div className="task-runner-sound-notice">🔊 Audio is part of this candidate pilot form. Check your volume before starting.</div>
+        <div className="task-runner-sound-notice">🔊 {t('taskRunner.soundNotice')}</div>
         <div className="task-runner-intro">
           <ul className="task-runner-intro-bullets">
             {introductions.map((line) => <li key={line}>{renderRuleWithOrderEmphasis(line)}</li>)}
           </ul>
         </div>
-        <p className="optimized-guardrail">EEG features are task-contextual candidate evidence. Behavioral validity and signal quality are checked separately.</p>
+        <p className="optimized-guardrail">{t('optimizedBattery.runner.guardrail', { defaultValue: 'EEG features are task-contextual candidate evidence. Behavioral validity and signal quality are checked separately.' })}</p>
         <div className="task-runner-actions">
           <button type="button" className="task-runner-btn-back" onClick={onBack}>{t('taskRunner.cancel')}</button>
+          <button type="button" className="task-runner-btn-back" onClick={listenToInstructions}>{t('optimizedBattery.listen', { defaultValue: 'Listen to instructions' })}</button>
           <button type="button" className="task-runner-btn-start" onClick={startTask}>{t('taskRunner.start')}</button>
         </div>
       </div>
@@ -1227,9 +1333,9 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   if (runState === 'countdown') {
     return (
       <div className="task-runner-card task-runner-countdown-screen">
-        <p className="task-runner-get-ready">Get ready · Eyes {definition.eyeState}</p>
+        <p className="task-runner-get-ready">{t('optimizedBattery.runner.getReady', { defaultValue: 'Get ready · Eyes {{eyeState}}', eyeState })}</p>
         <div className="task-runner-big-countdown">{countdown}</div>
-        <p className="task-runner-countdown-caption">The uninterrupted scoring block begins after the final beep.</p>
+        <p className="task-runner-countdown-caption">{t('optimizedBattery.runner.countdownCaption', { defaultValue: 'The uninterrupted scoring block begins after the final beep.' })}</p>
       </div>
     );
   }
@@ -1252,19 +1358,19 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     return (
       <div className={`task-runner-card task-runner-phase phase-recording optimized-running optimized-${definition.type}`}>
         <div className="optimized-running-header">
-          <span className="task-runner-phase-badge">● Continuous EEG</span>
-          <span>{currentPhase.label}</span>
+          <span className="task-runner-phase-badge">{t('optimizedBattery.runner.continuousEeg', { defaultValue: '● Continuous EEG' })}</span>
+          <span>{phaseLabel}</span>
         </div>
 
         {definition.eyeState === 'closed' && (
           <div className="optimized-eyes-closed-cue">
-            <span>Eyes closed</span>
-            <small>Listen and continue silently. Do not answer yet.</small>
+            <span>{t('optimizedBattery.runner.eyesClosed')}</span>
+            <small>{t('optimizedBattery.runner.eyesClosedCue')}</small>
           </div>
         )}
 
         {taskId === TASK_IDS.VISUOSPATIAL && route && (
-          <div className="optimized-route-wrap" aria-label="Five by five route grid">
+          <div className="optimized-route-wrap" aria-label={t('optimizedBattery.runner.routeGridAria', { defaultValue: 'Five by five route grid' })}>
             <div className="optimized-route-column-labels" aria-hidden="true">
               {[1, 2, 3, 4, 5].map((column) => <span key={column}>{column}</span>)}
             </div>
@@ -1287,7 +1393,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
                 })}
               </div>
             </div>
-            <p>Track position and direction. Turns become denser after the phase boundary.</p>
+            <p>{t('optimizedBattery.runner.routeHint')}</p>
           </div>
         )}
 
@@ -1295,7 +1401,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           <div className="optimized-code-stimulus">
             <small>{renderRuleWithOrderEmphasis(form.rule)}</small>
             <strong>{anomalyEntry.value}</strong>
-            <p>Count silently · no response during recording</p>
+            <p>{t('optimizedBattery.runner.anomalyHint')}</p>
           </div>
         )}
 
@@ -1312,7 +1418,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
               className="optimized-detect-button"
               onClick={handleDetection}
               disabled={buttonRuntime?.detected === true}
-            >{buttonRuntime?.detected ? 'RESPONSE REGISTERED · REMAIN STILL' : 'DETECT MISMATCH'}</button>
+            >{buttonRuntime?.detected ? t('optimizedBattery.runner.responseRegistered') : t('optimizedBattery.runner.detectMismatch')}</button>
           </div>
         )}
 
@@ -1331,8 +1437,8 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
               disabled={!closureReveal.responseEnabled || buttonRuntime?.detected === true}
             >{
               buttonRuntime?.detected
-                ? 'RESPONSE REGISTERED · REMAIN STILL'
-                : closureReveal.responseEnabled ? 'RECOGNIZED' : 'SEARCH…'
+                ? t('optimizedBattery.runner.responseRegistered')
+                : closureReveal.responseEnabled ? t('optimizedBattery.runner.recognized') : t('optimizedBattery.runner.searching')
             }</button>
           </div>
         )}
@@ -1341,7 +1447,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           <div className="optimized-paced-reading">
             {writtenChunk
               ? <p>{writtenChunk}</p>
-              : <><strong>Silent synthesis</strong><p>Keep your eyes open. Organize the main idea and supporting details in your mind. Do not type yet.</p></>}
+              : <><strong>{t('optimizedBattery.runner.silentSynthesis')}</strong><p>{t('optimizedBattery.runner.writtenHint')}</p></>}
           </div>
         )}
 
@@ -1358,8 +1464,8 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     return (
       <div className="task-runner-card optimized-saving-card" aria-live="polite">
         <div className="optimized-saving-spinner" />
-        <h2>Checking and saving the continuous recording…</h2>
-        <p>Do not close the application.</p>
+        <h2>{t('optimizedBattery.runner.savingTitle')}</h2>
+        <p>{t('optimizedBattery.runner.savingHint')}</p>
       </div>
     );
   }
@@ -1371,124 +1477,124 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   );
   return (
     <form className="task-runner-card optimized-response-card" onSubmit={submitResponse}>
-      <p className="optimized-task-kicker">EEG scoring stopped · behavioral response</p>
-      <h2>{definition.name}</h2>
-      <p>You may now speak, type, or move to enter the requested answer. This output is not included in EEG scoring.</p>
+      <p className="optimized-task-kicker">{t('optimizedBattery.runner.responseKicker')}</p>
+      <h2>{taskName}</h2>
+      <p>{t('optimizedBattery.runner.responseHint')}</p>
 
       {taskId === TASK_IDS.NUMERICAL && (
-        <ResponseField label="What was the final value?">
+        <ResponseField label={t('optimizedBattery.responses.finalValue')}>
           <input type="number" required value={response.finalValue || ''} onChange={(event) => setResponse({ ...response, finalValue: event.target.value })} />
         </ResponseField>
       )}
       {taskId === TASK_IDS.WORKING_MEMORY && (
-        <ResponseField label="Enter the final sequence in order (for example 4-7-2-5).">
+        <ResponseField label={t('optimizedBattery.responses.finalSequence')}>
           <input required value={response.finalSequence || ''} onChange={(event) => setResponse({ ...response, finalSequence: event.target.value })} />
         </ResponseField>
       )}
       {taskId === TASK_IDS.AUDITORY_COUNT && (
-        <ResponseField label="How many high target tones did you count?">
+        <ResponseField label={t('optimizedBattery.responses.highToneCount')}>
           <input type="number" min="0" required value={response.targetCount || ''} onChange={(event) => setResponse({ ...response, targetCount: event.target.value })} />
         </ResponseField>
       )}
       {taskId === TASK_IDS.SEMANTIC && (
         <>
-          <ResponseField label="First organising principle">
+          <ResponseField label={t('optimizedBattery.responses.firstPrinciple')}>
             <select required value={response.ruleOne || ''} onChange={(event) => setResponse({ ...response, ruleOne: event.target.value })}>
-              <option value="">Select…</option>
+              <option value="">{t('optimizedBattery.responses.select')}</option>
               {form.ruleOptions.map((option) => <option key={option}>{option}</option>)}
             </select>
           </ResponseField>
-          <ResponseField label="Second organising principle">
+          <ResponseField label={t('optimizedBattery.responses.secondPrinciple')}>
             <select required value={response.ruleTwo || ''} onChange={(event) => setResponse({ ...response, ruleTwo: event.target.value })}>
-              <option value="">Select…</option>
+              <option value="">{t('optimizedBattery.responses.select')}</option>
               {form.secondRuleOptions.map((option) => <option key={option}>{option}</option>)}
             </select>
           </ResponseField>
-          <ResponseField label="Did you notice the rule switch?">
+          <ResponseField label={t('optimizedBattery.responses.ruleSwitchDetected')}>
             <select required value={response.switchDetected || ''} onChange={(event) => setResponse({ ...response, switchDetected: event.target.value })}>
-              <option value="">Select…</option><option value="yes">Yes</option><option value="no">No</option>
+              <option value="">{t('optimizedBattery.responses.select')}</option><option value="yes">{t('optimizedBattery.responses.yes')}</option><option value="no">{t('optimizedBattery.responses.no')}</option>
             </select>
           </ResponseField>
         </>
       )}
       {taskId === TASK_IDS.VISUOSPATIAL && (
         <div className="optimized-response-grid">
-          <ResponseField label="Final column (1–5)"><input type="number" min="1" max="5" required value={response.x == null ? '' : Number(response.x) + 1} onChange={(event) => setResponse({ ...response, x: Number(event.target.value) - 1 })} /></ResponseField>
-          <ResponseField label="Final row (1–5)"><input type="number" min="1" max="5" required value={response.y == null ? '' : Number(response.y) + 1} onChange={(event) => setResponse({ ...response, y: Number(event.target.value) - 1 })} /></ResponseField>
-          <ResponseField label="Final orientation">
+          <ResponseField label={t('optimizedBattery.responses.finalColumn')}><input type="number" min="1" max="5" required value={response.x == null ? '' : Number(response.x) + 1} onChange={(event) => setResponse({ ...response, x: Number(event.target.value) - 1 })} /></ResponseField>
+          <ResponseField label={t('optimizedBattery.responses.finalRow')}><input type="number" min="1" max="5" required value={response.y == null ? '' : Number(response.y) + 1} onChange={(event) => setResponse({ ...response, y: Number(event.target.value) - 1 })} /></ResponseField>
+          <ResponseField label={t('optimizedBattery.responses.finalOrientation')}>
             <select required value={response.orientation || ''} onChange={(event) => setResponse({ ...response, orientation: event.target.value })}>
-              <option value="">Select…</option>{['north', 'east', 'south', 'west'].map((option) => <option key={option}>{option}</option>)}
+              <option value="">{t('optimizedBattery.responses.select')}</option>{['north', 'east', 'south', 'west'].map((option) => <option key={option} value={option}>{t(`optimizedBattery.words.directions.${option}`, { defaultValue: option })}</option>)}
             </select>
           </ResponseField>
         </div>
       )}
       {taskId === TASK_IDS.IDEATION && (
-        <ResponseField label="Enter one idea per line. Relevance, category diversity, and originality remain pending expert/validated scoring.">
+        <ResponseField label={t('optimizedBattery.responses.ideas')}>
           <textarea rows="8" required value={response.ideas || ''} onChange={(event) => setResponse({ ...response, ideas: event.target.value })} />
         </ResponseField>
       )}
       {taskId === TASK_IDS.DUAL_TASK && (
         <div className="optimized-response-grid">
-          <ResponseField label="High-tone count"><input type="number" min="0" required value={response.targetCount || ''} onChange={(event) => setResponse({ ...response, targetCount: event.target.value })} /></ResponseField>
-          <ResponseField label="Final number"><input type="number" required value={response.finalValue || ''} onChange={(event) => setResponse({ ...response, finalValue: event.target.value })} /></ResponseField>
+          <ResponseField label={t('optimizedBattery.responses.highToneCount')}><input type="number" min="0" required value={response.targetCount || ''} onChange={(event) => setResponse({ ...response, targetCount: event.target.value })} /></ResponseField>
+          <ResponseField label={t('optimizedBattery.responses.finalNumber')}><input type="number" required value={response.finalValue || ''} onChange={(event) => setResponse({ ...response, finalValue: event.target.value })} /></ResponseField>
         </div>
       )}
       {taskId === TASK_IDS.ANOMALY && (
         <>
-          <ResponseField label="How many anomalies did you count?"><input type="number" min="0" required value={response.anomalyCount || ''} onChange={(event) => setResponse({ ...response, anomalyCount: event.target.value })} /></ResponseField>
+          <ResponseField label={t('optimizedBattery.responses.anomalyCount')}><input type="number" min="0" required value={response.anomalyCount || ''} onChange={(event) => setResponse({ ...response, anomalyCount: event.target.value })} /></ResponseField>
           <fieldset className="optimized-checkboxes">
-            <legend>Which anomaly types did you notice?</legend>
+            <legend>{t('optimizedBattery.responses.anomalyTypes')}</legend>
             {['extra_letter', 'wrong_order', 'missing_separator', 'missing_digit', 'wrong_separator'].map((type) => (
               <label key={type}><input type="checkbox" checked={response.anomalyTypes.includes(type)} onChange={(event) => {
                 const values = event.target.checked ? [...response.anomalyTypes, type] : response.anomalyTypes.filter((value) => value !== type);
                 setResponse({ ...response, anomalyTypes: values });
-              }} /> {type.replaceAll('_', ' ')}</label>
+              }} /> {t(`optimizedBattery.anomalyTypes.${type}`, { defaultValue: type.replaceAll('_', ' ') })}</label>
             ))}
           </fieldset>
-          <ResponseField label={`Confidence: ${response.confidence}/5`}><input type="range" min="1" max="5" value={response.confidence} onChange={(event) => setResponse({ ...response, confidence: event.target.value })} /></ResponseField>
+          <ResponseField label={t('optimizedBattery.responses.confidence', { confidence: response.confidence })}><input type="range" min="1" max="5" value={response.confidence} onChange={(event) => setResponse({ ...response, confidence: event.target.value })} /></ResponseField>
         </>
       )}
       {taskId === TASK_IDS.CLOSURE && (
-        <ResponseField label="What target did you recognize?">
+        <ResponseField label={t('optimizedBattery.responses.recognizedTarget')}>
           <select required value={response.target || ''} onChange={(event) => setResponse({ ...response, target: event.target.value })}>
-            <option value="">Select…</option>{form.options.map((option) => <option key={option}>{option}</option>)}
+            <option value="">{t('optimizedBattery.responses.select')}</option>{form.options.map((option) => <option key={option}>{option}</option>)}
           </select>
         </ResponseField>
       )}
       {taskId === TASK_IDS.SPEECH_NOISE && (
         <>
-          <ResponseField label="Select the main interpretation.">
+          <ResponseField label={t('optimizedBattery.responses.mainInterpretation')}>
             <select required value={response.mainIdea || ''} onChange={(event) => setResponse({ ...response, mainIdea: event.target.value })}>
-              <option value="">Select…</option>{form.mainIdeaOptions.map((option) => <option key={option}>{option}</option>)}
+              <option value="">{t('optimizedBattery.responses.select')}</option>{form.mainIdeaOptions.map((option) => <option key={option}>{option}</option>)}
             </select>
           </ResponseField>
           <ResponseField label={form.keyDetailQuestion}><input required value={response.keyDetail || ''} onChange={(event) => setResponse({ ...response, keyDetail: event.target.value })} /></ResponseField>
-          <ResponseField label="Give one concise paraphrase of the passage."><textarea rows="4" required value={response.paraphrase || ''} onChange={(event) => setResponse({ ...response, paraphrase: event.target.value })} /></ResponseField>
+          <ResponseField label={t('optimizedBattery.speechInNoise.paraphrase', { defaultValue: 'Give one concise paraphrase of the passage.' })}><textarea rows="4" required value={response.paraphrase || ''} onChange={(event) => setResponse({ ...response, paraphrase: event.target.value })} /></ResponseField>
         </>
       )}
       {taskId === TASK_IDS.WRITTEN && (
         <>
-          <ResponseField label="Select the main idea.">
+          <ResponseField label={t('optimizedBattery.responses.mainIdea')}>
             <select required value={response.mainIdea || ''} onChange={(event) => setResponse({ ...response, mainIdea: event.target.value })}>
-              <option value="">Select…</option>{form.mainIdeaOptions.map((option) => <option key={option}>{option}</option>)}
+              <option value="">{t('optimizedBattery.responses.select')}</option>{form.mainIdeaOptions.map((option) => <option key={option}>{option}</option>)}
             </select>
           </ResponseField>
-          <ResponseField label={`Write a ${scoringThresholds.summaryMinimumWords}–${scoringThresholds.summaryMaximumWords} word summary (${wordCount} words).`}>
+          <ResponseField label={t('optimizedBattery.responses.summary', { minimum: scoringThresholds.summaryMinimumWords, maximum: scoringThresholds.summaryMaximumWords, count: wordCount })}>
             <textarea rows="7" required value={response.summary || ''} onChange={(event) => setResponse({ ...response, summary: event.target.value })} />
           </ResponseField>
           {!writtenLengthValid && (
             <p className="optimized-response-warning">
-              The summary must contain {scoringThresholds.summaryMinimumWords}–{scoringThresholds.summaryMaximumWords} words before it can be saved.
+              {t('optimizedBattery.responses.summaryWarning', { minimum: scoringThresholds.summaryMinimumWords, maximum: scoringThresholds.summaryMaximumWords })}
             </p>
           )}
         </>
       )}
 
       {buttonRuntime?.timedOut && (taskId === TASK_IDS.CLOSURE) && (
-        <p className="optimized-response-warning">No recognition button was pressed during the block; this attempt will fail behavioral validation.</p>
+        <p className="optimized-response-warning">{t('optimizedBattery.responses.recognitionTimeout')}</p>
       )}
       <div className="task-runner-actions">
-        <button type="submit" className="task-runner-btn-start" disabled={taskId === TASK_IDS.WRITTEN && !writtenLengthValid}>Save response & check signal</button>
+        <button type="submit" className="task-runner-btn-start" disabled={taskId === TASK_IDS.WRITTEN && !writtenLengthValid}>{t('optimizedBattery.responses.save')}</button>
       </div>
     </form>
   );

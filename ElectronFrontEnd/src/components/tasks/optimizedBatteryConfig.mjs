@@ -11,6 +11,8 @@ import {
   taskPresentationFor,
   taskTimingFor,
 } from './optimizedBatteryProfile.mjs';
+import { localizedSpeechInNoiseForm } from './speechInNoiseLanguagePacks.mjs';
+import { speechInNoiseAudioAsset } from './speechInNoiseAudioAssets.mjs';
 
 /**
  * Declarative contract for the optimized Mindspeller task battery.
@@ -842,10 +844,125 @@ export const STIMULUS_PACK_REGISTRY = Object.freeze({
 
 export const ACTIVE_STIMULUS_PACK = STIMULUS_PACK_REGISTRY[STIMULUS_PACK_VERSION];
 
-export function taskFormForSession(taskId, sessionDepth, stimulusPack = ACTIVE_STIMULUS_PACK) {
+const DUTCH_SPOKEN_CUE_TASKS = new Set([
+  TASK_IDS.NUMERICAL,
+  TASK_IDS.WORKING_MEMORY,
+  TASK_IDS.DUAL_TASK,
+]);
+
+const DUTCH_NUMBER_WORDS = Object.freeze({
+  1: 'een', 2: 'twee', 3: 'drie', 4: 'vier', 5: 'vijf', 6: 'zes', 7: 'zeven',
+  8: 'acht', 9: 'negen', 11: 'elf', 13: 'dertien', 14: 'veertien',
+  15: 'vijftien', 16: 'zestien', 17: 'zeventien', 18: 'achttien', 20: 'twintig',
+});
+
+const dutchNumberWord = (value) => DUTCH_NUMBER_WORDS[value] || String(value);
+
+const dutchOperationText = (operation) => ({
+  // Spell out add/subtract values and use the natural particle form. The
+  // shorter digit-led commands were difficult to distinguish in listening.
+  add: `Tel ${dutchNumberWord(operation.value)} erbij op.`,
+  subtract: `Trek ${dutchNumberWord(operation.value)} eraf.`,
+  multiply: `Vermenigvuldig met ${operation.value}.`,
+  divide: `Deel door ${operation.value}.`,
+}[operation.op] || operationText(operation));
+
+const dutchMemoryCommandText = (command) => {
+  if (command.op === 'reverse') return 'Draai de volgorde om.';
+  if (command.op === 'shift_left') return 'Schuif elk getal één plaats naar links.';
+  if (command.op === 'shift_right') return 'Schuif elk getal één plaats naar rechts.';
+  if (command.op === 'replace') return `Vervang het ${['eerste', 'tweede', 'derde', 'vierde'][command.index]} getal door ${dutchNumberWord(command.value)}.`;
+  return 'Houd de volgorde hetzelfde.';
+};
+
+function localizedSpokenCueForm(form, taskId, language) {
+  const locale = String(language || 'en').toLowerCase().split('-')[0];
+  if (locale !== 'nl' || !DUTCH_SPOKEN_CUE_TASKS.has(taskId)) return form;
+  if (taskId === TASK_IDS.NUMERICAL) {
+    return {
+      ...form,
+      spokenEvents: [
+        { at: 0, text: `Begin met ${form.startValue}.` },
+        ...form.operations.map((operation) => ({ at: operation.at, text: dutchOperationText(operation) })),
+      ],
+    };
+  }
+  if (taskId === TASK_IDS.WORKING_MEMORY) {
+    return {
+      ...form,
+      spokenEvents: [
+        { at: 0, text: `Onthoud deze reeks: ${form.initial.map(dutchNumberWord).join(', ')}.` },
+        ...form.commands.map((command) => ({ at: command.at, text: dutchMemoryCommandText(command) })),
+      ],
+    };
+  }
+  return {
+    ...form,
+    spokenEvents: form.spokenEvents.map((event) => ({
+      ...event,
+      text: event.text === 'Switch.' ? 'Wissel nu.' : 'Werk je totaal bij.',
+    })),
+  };
+}
+
+export function inTaskAudioLocalization(taskId, form, language = 'en') {
+  const locale = String(language || 'en').toLowerCase().split('-')[0];
+  if (taskId === TASK_IDS.SPEECH_NOISE) {
+    return {
+      language: form?.language || 'en',
+      status: form?.language_pack_status || 'candidate_source_english',
+      hasDutchSpokenCueTranslation: false,
+      pending: false,
+    };
+  }
+  const hasDutchSpokenCueTranslation = locale === 'nl' && DUTCH_SPOKEN_CUE_TASKS.has(taskId);
+  return {
+    language: hasDutchSpokenCueTranslation ? 'nl' : 'en',
+    status: hasDutchSpokenCueTranslation
+      ? 'candidate_translation'
+      : (locale === 'en' ? 'candidate_source_english' : 'pending_translation'),
+    hasDutchSpokenCueTranslation,
+    pending: Boolean(form?.spokenEvents?.length) && locale !== 'en' && !hasDutchSpokenCueTranslation,
+  };
+}
+
+export function taskFormForSession(
+  taskId,
+  sessionDepth,
+  stimulusPack = ACTIVE_STIMULUS_PACK,
+  language = ACTIVE_BATTERY_PROFILE.language,
+) {
   const forms = stimulusPack?.formsByTask?.[taskId];
   if (!forms?.length) throw new Error(`No stimulus form configured for ${taskId}`);
-  return forms[Math.min(sessionFormIndex(taskId, sessionDepth), forms.length - 1)];
+  const form = forms[Math.min(sessionFormIndex(taskId, sessionDepth), forms.length - 1)];
+  if (taskId !== TASK_IDS.SPEECH_NOISE) return localizedSpokenCueForm(form, taskId, language);
+
+  const localized = localizedSpeechInNoiseForm(form, language);
+  const audioAsset = speechInNoiseAudioAsset(localized.language, localized.id);
+  return {
+    ...localized,
+    audioAssetUri: audioAsset?.uri || null,
+    audioAssetSha256: audioAsset?.sha256 || null,
+    audioAssetPlaybackRate: audioAsset?.playbackRate || 1,
+    audioAssetTaskDurationSeconds: audioAsset?.taskDurationSeconds || null,
+    audioAssetExpectedDeliverySeconds: audioAsset?.expectedDeliverySeconds || null,
+    audioAssetProvenance: audioAsset ? {
+      provider: audioAsset.provider,
+      model_id: audioAsset.modelId,
+      output_format: audioAsset.outputFormat,
+      voice_label: audioAsset.voiceLabel,
+    } : null,
+  };
+}
+
+export function taskRequiresAudio(
+  taskId,
+  sessionDepth,
+  stimulusPack = ACTIVE_STIMULUS_PACK,
+  language = ACTIVE_BATTERY_PROFILE.language,
+) {
+  const form = taskFormForSession(taskId, sessionDepth, stimulusPack, language);
+  return Boolean(form.spokenEvents?.length || form.toneEvents?.length || taskId === TASK_IDS.SPEECH_NOISE);
 }
 
 export function visualRouteState(form, elapsedSeconds) {
@@ -903,7 +1020,7 @@ export function pacedPassageChunk(form, elapsedSeconds, options = {}) {
   return words.slice(chunkIndex * chunkSize, (chunkIndex + 1) * chunkSize).join(' ');
 }
 
-export function taskIntroduction(taskId, form) {
+function taskIntroductionEnglish(taskId, form) {
   const definition = TASK_DEFINITIONS[taskId];
   const common = [
     `This is one uninterrupted ${definition.duration}-second EEG scoring block.`,
@@ -928,6 +1045,48 @@ export function taskIntroduction(taskId, form) {
   return [...specific, ...common];
 }
 
+export function taskIntroduction(taskId, form, translate = null) {
+  const instructions = taskIntroductionEnglish(taskId, form);
+  if (!translate) return instructions;
+  const specificKeys = {
+    [TASK_IDS.NUMERICAL]: [TASK_IDS.NUMERICAL],
+    [TASK_IDS.WORKING_MEMORY]: [TASK_IDS.WORKING_MEMORY],
+    [TASK_IDS.AUDITORY_COUNT]: [TASK_IDS.AUDITORY_COUNT],
+    [TASK_IDS.SEMANTIC]: [TASK_IDS.SEMANTIC],
+    [TASK_IDS.VISUOSPATIAL]: [TASK_IDS.VISUOSPATIAL],
+    [TASK_IDS.IDEATION]: [`${TASK_IDS.IDEATION}.prompt`, `${TASK_IDS.IDEATION}.response`],
+    [TASK_IDS.DUAL_TASK]: [TASK_IDS.DUAL_TASK],
+    [TASK_IDS.ANOMALY]: [`${TASK_IDS.ANOMALY}.rule`, `${TASK_IDS.ANOMALY}.response`],
+    [TASK_IDS.VISUAL_COMPARISON]: [TASK_IDS.VISUAL_COMPARISON],
+    [TASK_IDS.CLOSURE]: [TASK_IDS.CLOSURE],
+    [TASK_IDS.SPEECH_NOISE]: [TASK_IDS.SPEECH_NOISE],
+    [TASK_IDS.WRITTEN]: [TASK_IDS.WRITTEN],
+  }[taskId] || [];
+  const keys = [...specificKeys, 'common.block', 'common.eyes', 'common.response'];
+  const eyeState = TASK_DEFINITIONS[taskId]?.eyeState;
+  const beforeOperation = form.beforeDelta < 0 ? 'subtract' : 'add';
+  const afterOperation = form.afterDelta < 0 ? 'subtract' : 'add';
+  const variables = {
+    duration: TASK_DEFINITIONS[taskId]?.duration,
+    eyeState: translate(`optimizedBattery.words.eyes.${eyeState}`, { defaultValue: eyeState }),
+    startValue: form.startValue,
+    row: form.start?.y == null ? undefined : form.start.y + 1,
+    column: form.start?.x == null ? undefined : form.start.x + 1,
+    orientation: form.start?.orientation == null
+      ? undefined
+      : translate(`optimizedBattery.words.directions.${form.start.orientation}`, { defaultValue: form.start.orientation }),
+    prompt: form.prompt,
+    beforeOperation: translate(`optimizedBattery.words.operations.${beforeOperation}`, { defaultValue: beforeOperation }),
+    beforeDelta: Math.abs(form.beforeDelta || 0),
+    afterOperation: translate(`optimizedBattery.words.operations.${afterOperation}`, { defaultValue: afterOperation }),
+    afterDelta: Math.abs(form.afterDelta || 0),
+  };
+  return instructions.map((instruction, index) => translate(
+    `optimizedBattery.instructions.${keys[index]}`,
+    { ...variables, defaultValue: instruction },
+  ));
+}
+
 export function countWords(value) {
   return String(value || '').trim().split(/\s+/).filter(Boolean).length;
 }
@@ -939,7 +1098,12 @@ export function normalizedSequence(value) {
 }
 
 export function normalizeText(value) {
-  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, ' ');
+  return String(value || '')
+    .trim()
+    .normalize('NFKD')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, ' ');
 }
 
 export const FORM_REGISTRY_FOR_TESTS = ACTIVE_STIMULUS_PACK.formsByTask;

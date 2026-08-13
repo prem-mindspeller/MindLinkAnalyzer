@@ -14,6 +14,7 @@ import {
     faRotate,
     faSpinner,
     faTriangleExclamation,
+    faVolumeHigh,
 } from '@fortawesome/free-solid-svg-icons';
 
 import LoggedInHeader from '../components/LoggedInHeader';
@@ -25,6 +26,7 @@ import {
     EYES_OPEN_BASELINE_CHECKPOINT,
     TASK_DEFINITIONS,
     resolveSessionDepth,
+    taskRequiresAudio,
     taskIdsForSession,
     taskSequenceForSession,
 } from '../components/tasks/optimizedBatteryConfig.mjs';
@@ -392,8 +394,8 @@ const TaskSelection = () => {
                 <main className="app-main">
                     <div className="task-selection-page">
                         <div className="ts-task-exec-header">
-                            <h1 className="ts-page-title">{task.name}</h1>
-                            <p className="ts-page-subtitle">Continuous task block · Session {protocolSession}</p>
+                            <h1 className="ts-page-title">{t(`optimizedBattery.taskNames.${activeTaskId}`, { defaultValue: task.name })}</h1>
+                            <p className="ts-page-subtitle">{t('optimizedBattery.runner.sessionBlock', { defaultValue: 'Continuous task block · Session {{session}}', session: protocolSession })}</p>
                         </div>
                         <OptimizedBatteryTask
                             key={`${activeTaskId}:${sessionDepth}`}
@@ -468,6 +470,7 @@ const TaskSelection = () => {
                                 const done = completedIds.includes(item);
                                 const booked = enabledTaskIds.includes(item);
                                 const unlocked = taskIsUnlocked(item);
+                                const audioRequired = taskRequiresAudio(item, sessionDepth);
                                 return (
                                     <>
                                         {[1, 5, 10].includes(meta.number) && (
@@ -486,6 +489,7 @@ const TaskSelection = () => {
                                             {done ? <FontAwesomeIcon icon={faCircleCheck} /> : !unlocked ? <FontAwesomeIcon icon={faLock} /> : <FontAwesomeIcon icon={meta.eyeState === 'closed' ? faMoon : faEye} />}
                                         </span>
                                         <span className="ts-task-item-name">{meta.shortName}</span>
+                                        {audioRequired && <span className="ts-task-item-audio" title="Audio required" aria-label="Audio required"><FontAwesomeIcon icon={faVolumeHigh} /></span>}
                                         <span className="ts-task-item-dur">{booked ? `${meta.duration}s` : 'Booking required'}</span>
                                     </button>
                                     </>

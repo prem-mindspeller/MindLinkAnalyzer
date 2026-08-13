@@ -153,8 +153,8 @@
         "signalNoisy": "Calidad de la señal: ruidosa: quédate quieto y presiona el auricular contra tu frente",
         "infoConnected": "NO continúe hasta que vea Calidad de la señal: Buena en el encabezado de arriba.",
         "infoDisconnected": "Haga clic en el botón Volver a conectar arriba para conectarse al dispositivo antes de continuar",
-        "noDeviceDetected": "No se detect? ning?n dispositivo EEG. Aseg?rese de que el dispositivo est? encendido e int?ntelo de nuevo.",
-        "waitForGoodSignal": "Espere a tener una buena calidad de se?al antes de continuar."
+        "noDeviceDetected": "No se detectó ningún dispositivo EEG. Asegúrese de que el dispositivo esté encendido e inténtelo de nuevo.",
+        "waitForGoodSignal": "Espere a tener una buena calidad de señal antes de continuar."
     },
     "loggedInHeader": {
         "device": "Dispositivo:",
@@ -256,7 +256,7 @@
         "complete": "{{taskName}}¡Completo!",
         "doneMsg": "EEGdatos han sido grabados. Ahora puede volver a la lista de tareas.",
         "backToTasks": "← Volver a Tareas",
-        "emotionalFaceAlt": "Est?mulo facial emocional"
+        "emotionalFaceAlt": "Estímulo facial emocional"
     },
     "taskContent": {
         "attentionFocus": {
@@ -596,23 +596,58 @@
         }
     },
     "errors": {
-        "incorrectCredentials": "Correo electr?nico o contrase?a incorrectos. Int?ntelo de nuevo.",
-        "serverUnavailable": "El servidor no est? disponible temporalmente. Int?ntelo de nuevo en unos minutos.",
-        "serverError": "Error del servidor ({{status}}). Int?ntelo de nuevo m?s tarde.",
-        "loginServiceNotFound": "No se encontr? el servicio de inicio de sesi?n. Revise la selecci?n de regi?n.",
-        "loginFailedStatus": "Error al iniciar sesi?n ({{status}}). Int?ntelo de nuevo.",
-        "noAuthToken": "No se recibi? ning?n token de autenticaci?n.",
-        "noBaselineData": "No se encontraron datos de referencia. Complete primero la calibraci?n de referencia.",
+        "incorrectCredentials": "Correo electrónico o contraseña incorrectos. Inténtelo de nuevo.",
+        "serverUnavailable": "El servidor no está disponible temporalmente. Inténtelo de nuevo en unos minutos.",
+        "serverError": "Error del servidor ({{status}}). Inténtelo de nuevo más tarde.",
+        "loginServiceNotFound": "No se encontró el servicio de inicio de sesión. Revise la selección de región.",
+        "loginFailedStatus": "Error al iniciar sesión ({{status}}). Inténtelo de nuevo.",
+        "noAuthToken": "No se recibió ningún token de autenticación.",
+        "noBaselineData": "No se encontraron datos de referencia. Complete primero la calibración de referencia.",
         "noTaskData": "No se encontraron datos de tareas. Complete primero al menos una tarea.",
-        "analysisFailedStatus": "Error en el an?lisis ({{status}}): {{message}}",
-        "notAuthenticated": "No est? autenticado. Inicie sesi?n de nuevo.",
-        "sessionExpired": "Su sesi?n ha caducado. Inicie sesi?n de nuevo.",
+        "analysisFailedStatus": "Error en el análisis ({{status}}): {{message}}",
+        "notAuthenticated": "No está autenticado. Inicie sesión de nuevo.",
+        "sessionExpired": "Su sesión ha caducado. Inicie sesión de nuevo.",
         "seedingFailedStatus": "Error al subir ({{status}}): {{message}}",
         "unexpectedError": "Error inesperado: {{status}}",
-        "connectionFailed": "Error de conexi?n.",
+        "connectionFailed": "Error de conexión.",
         "qrStartFailed": "No se pudo iniciar el inicio de sesión. Inténtelo de nuevo.",
         "qrStartFailedStatus": "No se pudo iniciar el inicio de sesión ({{status}}).",
         "qrRenderFailed": "No se pudo mostrar el código QR. Utilice el enlace de abajo.",
         "qrNoLongerValid": "Este inicio de sesión ya no es válido. Comience de nuevo."
+
+    },
+    "optimizedBattery": {
+        "listen": "Escuchar las instrucciones",
+        "speechInNoise": { "paraphrase": "Da una paráfrasis breve del pasaje." },
+        "words": {
+            "eyes": { "open": "abiertos", "closed": "cerrados" },
+            "operations": { "add": "sume", "subtract": "reste" },
+            "directions": { "north": "el norte", "east": "el este", "south": "el sur", "west": "el oeste" }
+        },
+        "instructions": {
+            "adaptive_numerical_reasoning": "Empiece en {{startValue}}; siga mentalmente cada operación hablada e indique solo el valor final.",
+            "working_memory_manipulation": "La secuencia inicial se presenta solo después de iniciar el registro EEG. Memorícela, siga cada actualización hablada e informe solo el orden final.",
+            "auditory_target_counting": "Cuente mentalmente cada tono alto e ignore los tonos bajos. Indique un único recuento después.",
+            "semantic_induction_category_switching": "Infiera el principio organizador del primer flujo de palabras y el nuevo principio después del cambio continuo.",
+            "visuospatial_transformation_orientation": "Empiece en la fila {{row}}, columna {{column}}, orientado hacia {{orientation}}. Cada giro mostrado cambia tanto la dirección como la posición en la cuadrícula. Las filas van de arriba abajo y las columnas de izquierda a derecha.",
+            "divergent_ideation": {
+                "prompt": "Consigna en inglés: {{prompt}}",
+                "response": "Genere ideas mentalmente; después escribirá cada idea en una línea separada."
+            },
+            "dual_task_rule_switching": "Empiece en {{startValue}}. Antes del cambio, {{beforeOperation}} {{beforeDelta}} en cada señal inglesa Update. Después de Switch, {{afterOperation}} {{afterDelta}} en cada señal Update. Cuente los tonos altos durante toda la tarea.",
+            "rule_based_anomaly_detection": {
+                "rule": "Cada código debe contener exactamente una letra, un guion y dos dígitos en ese mismo orden.",
+                "response": "Cuente las anomalías mentalmente y recuerde sus tipos; no haga clic durante el flujo."
+            },
+            "rapid_visual_comparison": "Mantenga la mirada en el centro mientras ambas cadenas de códigos se actualizan sincronizadamente. Pulse DETECT una vez cuando aparezca una diferencia gradual y permanezca quieto hasta el final del bloque.",
+            "pattern_closure_visual_noise": "Un objetivo fragmentado aparecerá gradualmente entre ruido visual denso. Pulse RECOGNIZED una vez cuando sepa qué es y permanezca quieto hasta el final del bloque.",
+            "speech_in_noise_comprehension": "Escuche todo el pasaje en inglés con ruido de fondo moderado. Responda solo después de que el audio y el registro EEG se hayan detenido.",
+            "written_comprehension_synthesis": "Lea cada sección en inglés mostrada en el centro. Después planifique mentalmente una síntesis concisa; podrá escribir solo cuando termine el EEG.",
+            "common": {
+                "block": "Este es un bloque de registro EEG ininterrumpido de {{duration}} segundos.",
+                "eyes": "Mantenga los ojos {{eyeState}} y reduzca los parpadeos, la tensión de la mandíbula y el movimiento.",
+                "response": "No hable ni escriba hasta que termine el registro y aparezca el formulario de respuesta."
+            }
+        }
     }
 }
