@@ -4,7 +4,7 @@ import { clearBatteryRunData } from './batteryRunCleanup.mjs';
 
 const API_ENDPOINTS = {
     // en:'http://127.0.0.1:5000',
-    en: 'https://mindspeller.com',
+    en: 'https://en.mindspeller.com',
     nl: 'https://nl.mindspeller.com',
 };
 
