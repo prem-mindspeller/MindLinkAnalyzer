@@ -36,6 +36,20 @@
         "partnerTitle": "Insira o ID do parceiro",
         "partnerSubtitle": "Etapa 3 de 7: insira seu ID de parceiro para continuar"
     },
+    "qrSignIn": {
+        "subtitle": "Etapa 2 de 7: Faça login pelo seu telefone para continuar",
+        "or": "OU",
+        "switchCta": "Fazer login pelo telefone",
+        "instructions": "Escaneie este código com o telefone, faça login com o Google ou sua senha e aprove este dispositivo.",
+        "preparing": "Preparando seu código...",
+        "expired": "Este código expirou.",
+        "newCode": "Obter um novo código",
+        "expiresIn": "Expira em",
+        "waiting": "Aguardando aprovação no seu telefone...",
+        "cantScan": "Não consegue escanear?",
+        "openAddress": "Abra este endereço no seu telefone:",
+        "usePasswordInstead": "Usar e-mail e senha"
+    },
     "loginForm": {
         "emailLabel": "E-mail:",
         "passwordLabel": "Senha:",
@@ -125,7 +139,7 @@
         "downloadReport": "Baixar relatório",
         "analysisFailed": "Falha na análise:",
         "finish": "Concluir",
-        "seedSuccess": "O relat?rio foi carregado com sucesso no banco de dados Mindspeller.",
+        "seedSuccess": "O relatório foi carregado com sucesso no banco de dados Mindspeller.",
         "seedFailed": "Falha no upload: {{message}}"
     },
     "liveEeg": {
@@ -242,7 +256,7 @@
         "complete": "{{taskName}}Completo!",
         "doneMsg": "EEGdados foram registrados. Agora você pode retornar à lista de tarefas.",
         "backToTasks": "← Voltar para Tarefas",
-        "emotionalFaceAlt": "Est?mulo facial emocional"
+        "emotionalFaceAlt": "Estímulo facial emocional"
     },
     "taskContent": {
         "attentionFocus": {
@@ -583,19 +597,23 @@
     },
     "errors": {
         "incorrectCredentials": "E-mail ou senha incorretos. Tente novamente.",
-        "serverUnavailable": "O servidor est? temporariamente indispon?vel. Tente novamente em alguns minutos.",
+        "serverUnavailable": "O servidor está temporariamente indisponível. Tente novamente em alguns minutos.",
         "serverError": "Erro do servidor ({{status}}). Tente novamente mais tarde.",
-        "loginServiceNotFound": "Servi?o de login n?o encontrado. Verifique a sele??o de regi?o.",
+        "loginServiceNotFound": "Serviço de login não encontrado. Verifique a seleção de região.",
         "loginFailedStatus": "Falha no login ({{status}}). Tente novamente.",
-        "noAuthToken": "Nenhum token de autentica??o foi recebido.",
-        "noBaselineData": "Nenhum dado de linha de base encontrado. Conclua primeiro a calibra??o de linha de base.",
+        "noAuthToken": "Nenhum token de autenticação foi recebido.",
+        "noBaselineData": "Nenhum dado de linha de base encontrado. Conclua primeiro a calibração de linha de base.",
         "noTaskData": "Nenhum dado de tarefa encontrado. Conclua primeiro pelo menos uma tarefa.",
-        "analysisFailedStatus": "Falha na an?lise ({{status}}): {{message}}",
-        "notAuthenticated": "Voc? n?o est? autenticado. Entre novamente.",
-        "sessionExpired": "Sua sess?o expirou. Entre novamente.",
+        "analysisFailedStatus": "Falha na análise ({{status}}): {{message}}",
+        "notAuthenticated": "Você não está autenticado. Entre novamente.",
+        "sessionExpired": "Sua sessão expirou. Entre novamente.",
         "seedingFailedStatus": "Falha no upload ({{status}}): {{message}}",
         "unexpectedError": "Erro inesperado: {{status}}",
-        "connectionFailed": "Falha na conex?o."
+        "connectionFailed": "Falha na conexão.",
+        "qrStartFailed": "Não foi possível iniciar o login. Tente novamente.",
+        "qrStartFailedStatus": "Não foi possível iniciar o login ({{status}}).",
+        "qrRenderFailed": "Não foi possível exibir o código QR. Use o link abaixo.",
+        "qrNoLongerValid": "Este login não é mais válido. Comece novamente."
     },
     "optimizedBattery": {
         "listen": "Ouvir as instruções",

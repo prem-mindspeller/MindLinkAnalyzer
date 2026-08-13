@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>ES.EdiImpl_Release</id>
+    <version>2.0.2.1355</version>
+    <authors>eemagine Medical Imaging Solutions GmbH</authors>
+    <owners>eemagine Medical Imaging Solutions GmbH</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>EDI</description>
+    <copyright>Copyright 1997-2025</copyright>
+    <dependencies>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="Google.Protobuf" version="3.24.4" />
+        <dependency id="Grpc.Core" version="2.46.6" />
+        <dependency id="Zeroconf" version="3.6.11" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

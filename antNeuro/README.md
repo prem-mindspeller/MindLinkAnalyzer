@@ -2,32 +2,94 @@
 
 This folder contains all files related to the ANT Neuro eego 64-channel EEG headset integration.
 
+## Three-Layer Architecture
+
+The ANT Neuro analyzer follows the same three-layer inheritance pattern as the BrainLink analyzer:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Layer 3: AntNeuroAnalyzer_GUI_Sequential.py  (RUN THIS)     │
+│  - Guided workflow wizard                                     │
+│  - Session management                                         │
+│  - Task recording                                             │
+│  - Comprehensive export                                       │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 2: AntNeuroAnalyzer_GUI_Enhanced.py                   │
+│  - Multi-channel feature extraction                           │
+│  - Spatial features (coherence, PLI, asymmetry)              │
+│  - ROI-based analysis                                         │
+│  - Statistical testing (Kost-McDermott FDR)                  │
+│  - Topographic visualization                                  │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 1: AntNeuroAnalyzer_GUI.py  (Base)                    │
+│  - eego SDK connection                                        │
+│  - MindSpeller authentication                                 │
+│  - Basic streaming & visualization                            │
+│  - Signal processing utilities                                │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Quick Start
+
+**IMPORTANT:** Use Python 3.13 (SDK rebuilt February 2026)
+
+```powershell
+# Option 1: Interactive test launcher
+cd M:\CODEBASE\BrainLinkCompanion
+.\antNeuro\run_tests.ps1
+
+# Option 2: Direct test with Python 3.13
+C:\Python313\python.exe antNeuro\test_antneuro_eego.py
+C:\Python313\python.exe antNeuro\check_device_state.py
+
+# Option 3: Use the batch file launcher
+antNeuro\run_test.bat antNeuro\test_antneuro_eego.py
+```
+
+**Python Version Check:** All scripts now verify Python 3.13+ is being used and provide clear error messages if not.
+
+**SDK Status:** Built for Python 3.13.5 from GitLab source (February 4, 2026)
+- SDK Version: 1.3.29.57168
+- Location: `eego_sdk_toolbox/eego_sdk.pyd`
+- ⚠️ Known issue: Power detection doesn't work for USB-C powered EE225 models
+- See [POWER_STATE_ISSUE.md](POWER_STATE_ISSUE.md) for details
+
 ## Files
 
-### Python Modules
-- **`antneuro_data_acquisition.py`** - Core data acquisition module for ANT Neuro devices
-  - Class: `AntNeuroDevice` - Main interface for device connection and streaming
-  - Handles 64-channel EEG data streaming
-  - Supports multiple sampling rates (500Hz, 1000Hz, etc.)
+### Application Scripts (Three-Layer Stack)
+- **`AntNeuroAnalyzer_GUI.py`** - Base/Parent class
+  - Core device connection with eego SDK
+  - Authentication system
+  - Basic EEG streaming and 64-channel visualization
+  - Signal processing utilities (bandpass, notch, PSD)
+  - Demo mode for testing without hardware
 
-- **`test_antneuro_eego.py`** - Test script to verify SDK installation and device connection
+- **`AntNeuroAnalyzer_GUI_Enhanced.py`** - Enhanced child class
+  - Inherits all base functionality
+  - `EnhancedFeatureEngine` - Multi-channel feature extraction
+  - `StatisticalEngine` - Kost-McDermott FDR, cluster correction
+  - `TopographicWidget` - Scalp topography visualization
+  - Spatial features: coherence, PLI, asymmetry
+
+- **`AntNeuroAnalyzer_GUI_Sequential.py`** - Main application (RUN THIS)
+  - Inherits all enhanced functionality
+  - Session wizard for guided workflow
+  - Task recording with configurable tasks
+  - Comprehensive session export (CSV + JSON)
+
+### Utility Scripts
+- **`antneuro_data_acquisition.py`** - Standalone data acquisition module
+  - Class: `AntNeuroDevice` - Low-level device interface
+  - Can be used independently of GUI
+
+- **`test_antneuro_eego.py`** - SDK test script
   - Tests SDK import
   - Discovers connected amplifiers
   - Verifies basic functionality
 
 ### Documentation
 - **`ANT_Neuro_Integration_Plan.md`** - Complete integration plan and architecture
-  - Setup completion status
-  - Integration architecture
-  - Development roadmap
-  - Next steps for full integration
-
-- **`ANT_Neuro_SDK_Developer_Setup_Guide.md`** - Step-by-step setup guide for developers
-  - Prerequisites and requirements
-  - Complete installation instructions
-  - Build process documentation
-  - Troubleshooting guide
-  - Quick reference
+- **`ANT_Neuro_SDK_Developer_Setup_Guide.md`** - Step-by-step setup guide
 
 ## SDK Location
 

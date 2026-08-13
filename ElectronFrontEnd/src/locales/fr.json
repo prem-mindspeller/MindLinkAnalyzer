@@ -36,6 +36,20 @@
         "partnerTitle": "Entrez l'ID du partenaire",
         "partnerSubtitle": "Étape 3 sur 7 : saisissez votre identifiant de partenaire pour continuer"
     },
+    "qrSignIn": {
+        "subtitle": "Étape 2 sur 7 : connectez-vous depuis votre téléphone pour continuer",
+        "or": "OU",
+        "switchCta": "Se connecter avec votre téléphone",
+        "instructions": "Scannez ce code avec votre téléphone, connectez-vous avec Google ou votre mot de passe, puis approuvez cet appareil.",
+        "preparing": "Préparation de votre code...",
+        "expired": "Ce code a expiré.",
+        "newCode": "Obtenir un nouveau code",
+        "expiresIn": "Expire dans",
+        "waiting": "En attente d'approbation sur votre téléphone...",
+        "cantScan": "Impossible de scanner ?",
+        "openAddress": "Ouvrez cette adresse sur votre téléphone :",
+        "usePasswordInstead": "Utiliser l'e-mail et le mot de passe"
+    },
     "loginForm": {
         "emailLabel": "E-mail :",
         "passwordLabel": "Mot de passe :",
@@ -125,8 +139,8 @@
         "downloadReport": "Télécharger le rapport",
         "analysisFailed": "L'analyse a échoué :",
         "finish": "Terminer",
-        "seedSuccess": "Le rapport a ?t? t?l?vers? avec succ?s dans la base de donn?es Mindspeller.",
-        "seedFailed": "?chec du t?l?versement : {{message}}"
+        "seedSuccess": "Le rapport a été téléversé avec succès dans la base de données Mindspeller.",
+        "seedFailed": "Échec du téléversement : {{message}}"
     },
     "liveEeg": {
         "title": "En directEEGLecture",
@@ -139,7 +153,7 @@
         "signalNoisy": "Qualité du signal : Bruyant : restez immobile et appuyez le casque contre votre front.",
         "infoConnected": "Ne continuez PAS jusqu'à ce que vous voyiez Qualité du signal : Bonne dans l'en-tête ci-dessus.",
         "infoDisconnected": "Cliquez sur le bouton Reconnecter ci-dessus pour vous connecter à l'appareil avant de continuer.",
-        "noDeviceDetected": "Aucun appareil EEG d?tect?. V?rifiez que l?appareil est allum?, puis r?essayez.",
+        "noDeviceDetected": "Aucun appareil EEG détecté. Vérifiez que l'appareil est allumé, puis réessayez.",
         "waitForGoodSignal": "Attendez une bonne qualit? de signal avant de continuer."
     },
     "loggedInHeader": {
@@ -582,20 +596,25 @@
         }
     },
     "errors": {
-        "incorrectCredentials": "Adresse e-mail ou mot de passe incorrect. Veuillez r?essayer.",
-        "serverUnavailable": "Le serveur est temporairement indisponible. Veuillez r?essayer dans quelques minutes.",
-        "serverError": "Erreur serveur ({{status}}). Veuillez r?essayer plus tard.",
-        "loginServiceNotFound": "Service de connexion introuvable. Veuillez v?rifier votre s?lection de r?gion.",
-        "loginFailedStatus": "Connexion ?chou?e ({{status}}). Veuillez r?essayer.",
-        "noAuthToken": "Aucun jeton d?authentification n?a ?t? re?u.",
-        "noBaselineData": "Aucune donn?e de r?f?rence trouv?e. Veuillez d?abord terminer l??talonnage de r?f?rence.",
-        "noTaskData": "Aucune donn?e de t?che trouv?e. Veuillez d?abord terminer au moins une t?che.",
-        "analysisFailedStatus": "Analyse ?chou?e ({{status}}) : {{message}}",
-        "notAuthenticated": "Vous n??tes pas authentifi?. Veuillez vous reconnecter.",
-        "sessionExpired": "Votre session a expir?. Veuillez vous reconnecter.",
-        "seedingFailedStatus": "?chec du t?l?versement ({{status}}) : {{message}}",
+        "incorrectCredentials": "Adresse e-mail ou mot de passe incorrect. Veuillez réessayer.",
+        "serverUnavailable": "Le serveur est temporairement indisponible. Veuillez réessayer dans quelques minutes.",
+        "serverError": "Erreur serveur ({{status}}). Veuillez réessayer plus tard.",
+        "loginServiceNotFound": "Service de connexion introuvable. Veuillez vérifier votre sélection de région.",
+        "loginFailedStatus": "Connexion échouée ({{status}}). Veuillez réessayer.",
+        "noAuthToken": "Aucun jeton d'authentification n'a été reçu.",
+        "noBaselineData": "Aucune donnée de référence trouvée. Veuillez d'abord terminer l'étalonnage de référence.",
+        "noTaskData": "Aucune donnée de tâche trouvée. Veuillez d'abord terminer au moins une tâche.",
+        "analysisFailedStatus": "Analyse échouée ({{status}}) : {{message}}",
+        "notAuthenticated": "Vous n'êtes pas authentifié. Veuillez vous reconnecter.",
+        "sessionExpired": "Votre session a expiré. Veuillez vous reconnecter.",
+        "seedingFailedStatus": "Échec du téléversement ({{status}}) : {{message}}",
         "unexpectedError": "Erreur inattendue : {{status}}",
-        "connectionFailed": "?chec de la connexion."
+        "connectionFailed": "?chec de la connexion.",
+        "qrStartFailed": "Impossible de démarrer la connexion. Veuillez réessayer.",
+        "qrStartFailedStatus": "Impossible de démarrer la connexion ({{status}}).",
+        "qrRenderFailed": "Impossible d'afficher le code QR. Utilisez le lien ci-dessous.",
+        "qrNoLongerValid": "Cette connexion n'est plus valide. Veuillez recommencer."
+
     },
     "optimizedBattery": {
         "listen": "Écouter les consignes",

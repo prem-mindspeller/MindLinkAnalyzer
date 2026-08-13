@@ -36,6 +36,20 @@
         "partnerTitle": "Enter Partner ID",
         "partnerSubtitle": "Step 3 of 7: Enter your Partner ID to proceed"
     },
+    "qrSignIn": {
+        "subtitle": "Step 2 of 7: Sign in from your phone to continue",
+        "or": "OR",
+        "switchCta": "Sign in with your phone",
+        "instructions": "Scan this code with your phone, sign in there with Google or your password, and approve this device.",
+        "preparing": "Preparing your code...",
+        "expired": "This code has expired.",
+        "newCode": "Get a new code",
+        "expiresIn": "Expires in",
+        "waiting": "Waiting for approval on your phone...",
+        "cantScan": "Can't scan?",
+        "openAddress": "Open this address on your phone:",
+        "usePasswordInstead": "Use email and password instead"
+    },
     "loginForm": {
         "emailLabel": "Email:",
         "passwordLabel": "Password:",
@@ -599,7 +613,11 @@
         "sessionExpired": "Your session has expired. Please sign in again.",
         "seedingFailedStatus": "Upload failed ({{status}}): {{message}}",
         "unexpectedError": "Unexpected error: {{status}}",
-        "connectionFailed": "Connection failed."
+        "connectionFailed": "Connection failed.",
+        "qrStartFailed": "Could not start sign-in. Please try again.",
+        "qrStartFailedStatus": "Could not start sign-in ({{status}}).",
+        "qrRenderFailed": "Could not display the QR code. Use the link below instead.",
+        "qrNoLongerValid": "This sign-in is no longer valid. Please start again."
     },
     "optimizedBattery": {
         "listen": "Listen to instructions",

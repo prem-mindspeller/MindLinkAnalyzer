@@ -36,6 +36,20 @@
         "partnerTitle": "Ingrese el ID del socio",
         "partnerSubtitle": "Paso 3 de 7: Ingresa tu ID de socio para continuar"
     },
+    "qrSignIn": {
+        "subtitle": "Paso 2 de 7: Inicie sesión desde su teléfono para continuar",
+        "or": "O",
+        "switchCta": "Iniciar sesión con su teléfono",
+        "instructions": "Escanee este código con su teléfono, inicie sesión allí con Google o su contraseña y apruebe este dispositivo.",
+        "preparing": "Preparando su código...",
+        "expired": "Este código ha caducado.",
+        "newCode": "Obtener un código nuevo",
+        "expiresIn": "Caduca en",
+        "waiting": "Esperando la aprobación en su teléfono...",
+        "cantScan": "¿No puede escanear?",
+        "openAddress": "Abra esta dirección en su teléfono:",
+        "usePasswordInstead": "Usar correo electrónico y contraseña"
+    },
     "loginForm": {
         "emailLabel": "Correo electrónico:",
         "passwordLabel": "Contraseña:",
@@ -139,8 +153,8 @@
         "signalNoisy": "Calidad de la señal: ruidosa: quédate quieto y presiona el auricular contra tu frente",
         "infoConnected": "NO continúe hasta que vea Calidad de la señal: Buena en el encabezado de arriba.",
         "infoDisconnected": "Haga clic en el botón Volver a conectar arriba para conectarse al dispositivo antes de continuar",
-        "noDeviceDetected": "No se detect? ning?n dispositivo EEG. Aseg?rese de que el dispositivo est? encendido e int?ntelo de nuevo.",
-        "waitForGoodSignal": "Espere a tener una buena calidad de se?al antes de continuar."
+        "noDeviceDetected": "No se detectó ningún dispositivo EEG. Asegúrese de que el dispositivo esté encendido e inténtelo de nuevo.",
+        "waitForGoodSignal": "Espere a tener una buena calidad de señal antes de continuar."
     },
     "loggedInHeader": {
         "device": "Dispositivo:",
@@ -242,7 +256,7 @@
         "complete": "{{taskName}}¡Completo!",
         "doneMsg": "EEGdatos han sido grabados. Ahora puede volver a la lista de tareas.",
         "backToTasks": "← Volver a Tareas",
-        "emotionalFaceAlt": "Est?mulo facial emocional"
+        "emotionalFaceAlt": "Estímulo facial emocional"
     },
     "taskContent": {
         "attentionFocus": {
@@ -582,20 +596,25 @@
         }
     },
     "errors": {
-        "incorrectCredentials": "Correo electr?nico o contrase?a incorrectos. Int?ntelo de nuevo.",
-        "serverUnavailable": "El servidor no est? disponible temporalmente. Int?ntelo de nuevo en unos minutos.",
-        "serverError": "Error del servidor ({{status}}). Int?ntelo de nuevo m?s tarde.",
-        "loginServiceNotFound": "No se encontr? el servicio de inicio de sesi?n. Revise la selecci?n de regi?n.",
-        "loginFailedStatus": "Error al iniciar sesi?n ({{status}}). Int?ntelo de nuevo.",
-        "noAuthToken": "No se recibi? ning?n token de autenticaci?n.",
-        "noBaselineData": "No se encontraron datos de referencia. Complete primero la calibraci?n de referencia.",
+        "incorrectCredentials": "Correo electrónico o contraseña incorrectos. Inténtelo de nuevo.",
+        "serverUnavailable": "El servidor no está disponible temporalmente. Inténtelo de nuevo en unos minutos.",
+        "serverError": "Error del servidor ({{status}}). Inténtelo de nuevo más tarde.",
+        "loginServiceNotFound": "No se encontró el servicio de inicio de sesión. Revise la selección de región.",
+        "loginFailedStatus": "Error al iniciar sesión ({{status}}). Inténtelo de nuevo.",
+        "noAuthToken": "No se recibió ningún token de autenticación.",
+        "noBaselineData": "No se encontraron datos de referencia. Complete primero la calibración de referencia.",
         "noTaskData": "No se encontraron datos de tareas. Complete primero al menos una tarea.",
-        "analysisFailedStatus": "Error en el an?lisis ({{status}}): {{message}}",
-        "notAuthenticated": "No est? autenticado. Inicie sesi?n de nuevo.",
-        "sessionExpired": "Su sesi?n ha caducado. Inicie sesi?n de nuevo.",
+        "analysisFailedStatus": "Error en el análisis ({{status}}): {{message}}",
+        "notAuthenticated": "No está autenticado. Inicie sesión de nuevo.",
+        "sessionExpired": "Su sesión ha caducado. Inicie sesión de nuevo.",
         "seedingFailedStatus": "Error al subir ({{status}}): {{message}}",
         "unexpectedError": "Error inesperado: {{status}}",
-        "connectionFailed": "Error de conexi?n."
+        "connectionFailed": "Error de conexión.",
+        "qrStartFailed": "No se pudo iniciar el inicio de sesión. Inténtelo de nuevo.",
+        "qrStartFailedStatus": "No se pudo iniciar el inicio de sesión ({{status}}).",
+        "qrRenderFailed": "No se pudo mostrar el código QR. Utilice el enlace de abajo.",
+        "qrNoLongerValid": "Este inicio de sesión ya no es válido. Comience de nuevo."
+
     },
     "optimizedBattery": {
         "listen": "Escuchar las instrucciones",

@@ -752,7 +752,7 @@ Component design conventions:
 | `start` | `electron .` | Launch packaged/built app |
 | `dev` | `concurrently webpack-watch + electron` | Development with hot reload |
 | `build` | `webpack --mode production` | Optimised one-time build |
-| `test` | *(not implemented)* | Placeholder |
+| `test` | `node --test "tests/*.test.mjs"` | Run the contract/unit suite in `tests/` |
 
 ---
 
@@ -783,9 +783,6 @@ Component design conventions:
     battery needs for calibrated production audio (see
     `docs/Task_Battery_Optimization_Implementation.md`).
 - **Single language server regions** — Only the English (`en`) region is selectable in the UI; the Dutch region card is visible but locked.
-- **Test script wiring** — Automated `.test.mjs` contract/unit tests exist, but
-  the package-level `npm test` script is still a placeholder; run them with
-  Node's test runner until that script is wired up.
 - **`nodeIntegration: true`** — The renderer has full Node.js access. This is acceptable for a local desktop app with no external content but would be a security concern in a web context.
 - **Run recovery after full window close** — Raw EEG is durable in IndexedDB,
   but the active run identifier is session-scoped. Reloading the current window

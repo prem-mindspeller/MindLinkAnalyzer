@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MindLink — Administrator Quick Reference Card</title>
+  <link rel="icon" href="/assets/favicon.ico" />
+  <link rel="stylesheet" href="/docs/admin-quickref-card/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<!-- ================================================================== -->
+<!-- PAGE 1 — SETUP & FITTING                                            -->
+<!-- ================================================================== -->
+<section class="page" id="page1">
+  <header class="header-bar">
+    <img src="/assets/logo-no-text.png" alt="MindLink logo" class="header-logo" />
+    <div class="header-text">
+      <h1 class="header-title">MINDLINK — ADMINISTRATOR QUICK REFERENCE</h1>
+      <p class="header-sub">Booth Operator Guide &middot; v2.0</p>
+    </div>
+  </header>
+
+  <div class="page-body">
+
+    <!-- Section 1: Session Flow Overview -->
+    <div class="card card-highlight">
+      <h2 class="section-title"><span class="section-num">①</span> SESSION FLOW AT A GLANCE</h2>
+      <div class="flow-strip">
+        <div class="flow-step"><span class="flow-badge">1</span><span>Connect headband<br/>+ power ON</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="flow-badge">2</span><span>Log in<br/>(booth account)</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="flow-badge">3</span><span>Check signal <br/>quality indicator<br/>→ <strong class="green-text">Good?</strong></span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="flow-badge">4</span><img src="/assets/eye-off.png" alt="" class="flow-icon"/><span>Eyes CLOSED<br/>30 seconds</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="flow-badge">5</span><img src="/assets/eye.png" alt="" class="flow-icon"/><span>Eyes OPEN<br/>30 seconds</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="flow-badge">6</span><span>Cognitive<br/>tasks</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="flow-badge">7</span><span>Seed Report<br/>+ wrap up</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="flow-badge">8</span><span>Student refreshes<br/>browser + presses<br/><strong>Unlock</strong> (~4 min)</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="flow-badge">9</span><span>Printer station<br/>→ business card<br/>+ QR code</span></div>
+      </div>
+      <p class="flow-total">Total time per student: <strong>~12–15 minutes</strong></p>
+    </div>
+
+    <!-- Section 2: Connecting the Amplifier -->
+    <div class="card">
+      <h2 class="section-title"><span class="section-num">②</span> CONNECTING THE AMPLIFIER TO LAPTOP</h2>
+      
+      <ol class="action-list-numbered">
+        <li>Press and hold the button on the BrainLink device for <strong>2 seconds</strong></li>
+        <li>Wait for the LED to blink <strong>blue-red-blue</strong> pattern</li>
+        <li>On your laptop, open <strong>Bluetooth settings</strong> and click "Add device"</li>
+        <li>Select the device labeled <strong>"Brainlink_Pro (Audio)"</strong></li>
+        <li>The device will connect briefly and then disconnect — <strong>this is normal</strong></li>
+        <li>Open the <strong>MindLink app</strong> and log in — the actual connection is established through the app</li>
+        <li>When successfully connected, the LED will change from blue-red-blue to <strong>solid blue</strong></li>
+      </ol>
+
+      <div class="callout callout-neutral">
+        <div class="callout-icon">TIP</div>
+        <div>
+          <strong>Connection Tip:</strong> The Bluetooth pairing is just the first step. The device will appear to disconnect after initial pairing, but this is expected behavior. The real data connection happens when you log into the MindLink app.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-body -->
+
+  <footer class="page-footer">
+    <span class="golden-rule-text">GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration.</span>
+    <span class="page-number">Page 1 of 6</span>
+  </footer>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- PAGE 2 — HEADBAND FITTING & DEVICE SETUP                            -->
+<!-- ================================================================== -->
+<section class="page" id="page2">
+  <header class="header-bar header-bar-slim">
+    <img src="/assets/logo-no-text.png" alt="MindLink logo" class="header-logo" />
+    <h1 class="header-title">HEADBAND FITTING &amp; DEVICE SETUP</h1>
+  </header>
+
+  <div class="page-body">
+
+    <!-- Section 3: Headband Fitting -->
+    <div class="card">
+      <h2 class="section-title"><span class="section-num">③</span> HEADBAND FITTING</h2>
+
+      <div class="two-col">
+        <div class="col-visual">
+          <img src="/assets/wearinstructions.jpg" alt="How to wear the headband" class="big-img" />
+        </div>
+        <div class="col-content">
+          <ul class="checklist">
+            <li><span class="check">-</span> Clean electrode contacts with a soft cloth</li>
+            <li><span class="check">-</span> Push hair aside from the forehead electrode area</li>
+            <li><span class="check">-</span> Moisten the electrode pad lightly (alcohol wipes)</li>
+            <li><span class="check">-</span> Place electrode ~2 cm above the center of eyebrows</li>
+            <li><span class="check">-</span> Strap snug but NOT tight — no red marks on skin</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout callout-amber">
+        <div class="callout-icon">NOTE</div>
+        <div>
+          <strong>Switch to Macrotellect soft-shell flex-band if:</strong>
+          <ul>
+            <li>If head is small and the fit is loose</li>
+            <li>Standard band keeps slipping after 2 re-seats</li>
+            <li>Signal stays RED or AMBER after 3 repositioning attempts</li>
+            <li>Student reports discomfort with the rigid band</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="img-row">
+        <figure>
+          <img src="/assets/insertinstructions.jpg" alt="How to insert battery / connect" class="medium-img" />
+          <figcaption>Battery / USB connection</figcaption>
+        </figure>
+        <figure>
+          <img src="/assets/onoffinstructions.jpg" alt="Power on and off" class="medium-img" />
+          <figcaption>Power ON / OFF</figcaption>
+        </figure>
+      </div>
+    </div>
+
+  </div><!-- /page-body -->
+
+  <footer class="page-footer">
+    <span class="golden-rule-text">GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration.</span>
+    <span class="page-number">Page 2 of 6</span>
+  </footer>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- PAGE 3 — SIGNAL QUALITY & STUDENT FAQ                               -->
+<!-- ================================================================== -->
+<section class="page" id="page3">
+  <header class="header-bar header-bar-slim">
+    <img src="/assets/logo-no-text.png" alt="MindLink logo" class="header-logo" />
+    <h1 class="header-title">SIGNAL QUALITY &amp; NETWORK</h1>
+  </header>
+
+  <div class="page-body">
+
+    <!-- Signal Quality -->
+    <div class="card">
+      <h2 class="section-title"><span class="section-num">④</span> SIGNAL QUALITY — TRAFFIC LIGHT</h2>
+
+      <div class="signal-grid">
+         <div class="signal-card sg-gray">
+          <span class="dot dot-gray"></span>
+          <div>
+            <strong>GRAY — Waiting</strong>
+            <p>Normal on startup. Wait 5–10 seconds.</p>
+          </div>
+        </div>
+        <div class="signal-card sg-green">
+          <span class="dot dot-green"></span>
+          <div>
+            <strong>GREEN — Good</strong>
+            <p>Proceed with calibration.</p>
+          </div>
+        </div>
+        <!-- <div class="signal-card sg-yellow">
+          <span class="dot dot-yellow"></span>
+          <div>
+            <strong>YELLOW — Fair</strong>
+            <p>Acceptable. Try adjusting headband to reach green.</p>
+          </div>
+        </div> -->
+        <div class="signal-card sg-amber">
+          <span class="dot dot-amber"></span>
+          <div>
+            <strong>AMBER — Poor</strong>
+            <p>Re-seat headband. Ask student to relax forehead &amp; jaw.</p>
+          </div>
+        </div>
+        <div class="signal-card sg-red">
+          <span class="dot dot-red"></span>
+          <div>
+            <strong>RED — Not worn</strong>
+            <p>Electrode not touching skin — reposition immediately.</p>
+          </div>
+        </div>
+       
+      </div>
+
+      <div class="callout callout-red">
+        <div class="callout-icon">FIX</div>
+        <div>
+          <strong>If stuck on RED or AMBER:</strong>
+          <ol>
+            <li>Moisten the electrode pad</li>
+            <li>Re-seat lower on forehead (~2 cm above brow line)</li>
+            <li>Clear hair from under the electrode</li>
+            <li>Clean the skin with an alcohol wipe</li>
+            <li>Switch to the soft shell flex-band</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Network / Login -->
+    <div class="card">
+      <h2 class="section-title"><span class="section-num">⑤</span> NETWORK / LOGIN ISSUES</h2>
+
+      <ul class="action-list">
+        <li><span class="bullet-icon">-</span> <strong>Windows security block:</strong> Right-click the .exe -> Properties -> check "Unblock" -> OK</li>
+        <li><span class="bullet-icon">-</span> <strong>Firewall:</strong> Allow BrainCompanion.exe through Windows Firewall (both Private and Public)</li>
+        <li><span class="bullet-icon">-</span> <strong>Required URLs</strong> (must be reachable via HTTPS):<br/>
+          <code>en.mindspeller.com</code> &emsp; <code>nl.mindspeller.com</code></li>
+        <li><span class="bullet-icon">-</span> <strong>Campus / corporate Wi-Fi:</strong> Ask venue IT to whitelist the URLs above <em>before</em> the event</li>
+      </ul>
+    </div>
+
+  </div><!-- /page-body -->
+
+  <footer class="page-footer">
+    <span class="golden-rule-text">GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration.</span>
+    <span class="page-number">Page 3 of 6</span>
+  </footer>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- PAGE 4 — STUDENT FAQ                                                -->
+<!-- ================================================================== -->
+<section class="page" id="page4">
+  <header class="header-bar header-bar-slim">
+    <img src="/assets/logo-no-text.png" alt="MindLink logo" class="header-logo" />
+    <h1 class="header-title">STUDENT FAQ &amp; WELLBEING</h1>
+  </header>
+
+  <div class="page-body">
+    <div class="card">
+      <h2 class="section-title"><span class="section-num">⑥</span> COMMON STUDENT QUESTIONS</h2>
+      <div class="faq-grid">
+        <div class="faq-item">
+          <p class="faq-q">"Can I blink?"</p>
+          <p class="faq-a"><strong>YES</strong> — blink normally when performing eyes open calibration or tasks. Our software filters blink artifacts. Trying NOT to blink creates more noise.</p>
+        </div>
+        <div class="faq-item">
+          <p class="faq-q">"Can I move?"</p>
+          <p class="faq-a">Stay as <strong>still</strong> as comfortable. Avoid head turns, jaw clenching, or scratching during recording. Stretch between segments.</p>
+        </div>
+        <div class="faq-item">
+          <p class="faq-q">"What am I supposed to do?"</p>
+          <p class="faq-a">Follow the <strong>on-screen prompts</strong>. I'll tell you when to close or open your eyes. Just relax and pay attention.</p>
+        </div>
+        <div class="faq-item">
+          <p class="faq-q">"Is this safe?"</p>
+          <p class="faq-a">Completely. It only <strong>READS</strong> brain waves, sends nothing into your head. Just a simple sensor on your forehead.</p>
+        </div>
+        <div class="faq-item">
+          <p class="faq-q">"How long does it take?"</p>
+          <p class="faq-a">About <strong>7–10 minutes</strong>. 30 s eyes closed, 30 s eyes open, then a few short tasks on screen.</p>
+        </div>
+        <div class="faq-item">
+          <p class="faq-q">"What if I mess up?"</p>
+          <p class="faq-a">No right or wrong — we measure your brain's <strong>natural response</strong>, not performance. Just do your best.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Student Distress -->
+    <div class="card card-danger">
+      <h2 class="section-title"><span class="section-num">⑦</span> IF A STUDENT WANTS TO STOP</h2>
+
+      <ol class="action-list-numbered">
+        <li>Say calmly: <strong>"No problem at all."</strong></li>
+        <li>Click ✕ on the task window to end recording</li>
+        <li>Gently remove the headband</li>
+        <li>Reassure: <strong>"This is completely voluntary. Your data will not be used."</strong></li>
+        <li>Log the incident on the booth sheet (student initials + time)</li>
+      </ol>
+
+      <div class="callout callout-neutral">
+        <div class="callout-icon">NOTE</div>
+        <div>
+          <strong>If anxious but willing to continue:</strong>
+          <ul>
+            <li>"It only reads, like a fitness tracker for your brain."</li>
+            <li>"You can stop at any time, just say the word."</li>
+            <li>"Just relax and breathe normally."</li>
+            <li>Offer water. Take a 30-second break before restarting.</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="danger-warning">NEVER force continuation. Student wellbeing is more important than data.</p>
+    </div>
+  </div><!-- /page-body -->
+
+  <footer class="page-footer">
+    <span class="golden-rule-text">GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration.</span>
+    <span class="page-number">Page 4 of 6</span>
+  </footer>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- PAGE 5 — EMG NOISE & STUDENT DISTRESS                               -->
+<!-- ================================================================== -->
+<section class="page" id="page5">
+  <header class="header-bar header-bar-slim">
+    <img src="/assets/logo-no-text.png" alt="MindLink logo" class="header-logo" />
+    <h1 class="header-title">TROUBLESHOOTING — EMG / NOISE</h1>
+  </header>
+
+  <div class="page-body">
+
+    <!-- EMG / Noise -->
+    <div class="card">
+      <h2 class="section-title"><span class="section-num">⑧</span> EMG / NOISE ERRORS</h2>
+
+      <p class="card-intro"><strong>If "High noise detected" appears on screen:</strong></p>
+      <ul class="action-list">
+        <li><span class="bullet-icon">-</span> Ask: <em>"Can you relax your forehead? Try to unclench your jaw."</em></li>
+        <li><span class="bullet-icon">-</span> Move student's phone / smartwatch <strong>&gt;30 cm</strong> away from headband</li>
+        <li><span class="bullet-icon">-</span> Check that laptop charger cable isn't draped near the headband</li>
+        <li><span class="bullet-icon">-</span> Re-seat headband <strong>lower</strong> on forehead</li>
+        <li><span class="bullet-icon">-</span> Wait 10 seconds, transient bursts often self-resolve</li>
+      </ul>
+
+      <div class="callout callout-amber">
+        <div class="callout-icon">TIME</div>
+        <div>
+          <strong>If noise persists &gt;30 seconds:</strong>
+          <ol>
+            <li>Power-cycle device (OFF → wait 5 sec → ON)</li>
+            <li>Close the app completely and reopen</li>
+            <li>Try the Macrotellect soft shell flex-band</li>
+          </ol>
+        </div>
+      </div>
+
+      <h3 class="sub-heading">Warning Messages Explained</h3>
+      <table class="warning-table">
+        <thead><tr><th>Message on Screen</th><th>What It Means</th><th>What to Do</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="msg-name">"Not Worn"</td>
+            <td>Electrode has no skin contact</td>
+            <td>Reposition headband on forehead</td>
+          </tr>
+          <tr>
+            <td class="msg-name">"Demo signal detected"</td>
+            <td>Device streaming test data, not real EEG</td>
+            <td>Reconnect USB &amp; power-cycle the device</td>
+          </tr>
+          <tr>
+            <td class="msg-name">"Signal: Waiting…"</td>
+            <td>App is filling its data buffer</td>
+            <td>Normal, just wait 5–10 seconds</td>
+          </tr>
+          <tr>
+            <td class="msg-name">"High noise detected"</td>
+            <td>Muscle tension or electrical interference</td>
+            <td>Follow the EMG steps above</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /page-body -->
+
+  <footer class="page-footer">
+    <span class="golden-rule-text">GOLDEN RULE: If signal indicator says 'Noisy', do NOT start calibration.</span>
+    <span class="page-number">Page 5 of 6</span>
+  </footer>
+</section>
+
+
+<!-- ================================================================== -->
+<!-- PAGE 6 — END OF SESSION, RECONNECTION, NETWORK                      -->
+<!-- ================================================================== -->
+<section class="page" id="page6">
+  <header class="header-bar header-bar-slim">
+    <img src="/assets/logo-no-text.png" alt="MindLink logo" class="header-logo" />
+    <h1 class="header-title">WRAP-UP &amp; DEVICE RECONNECTION</h1>
+  </header>
+
+  <div class="page-body">
+
+    <!-- End of session -->
+    <div class="card">
+      <h2 class="section-title"><span class="section-num">⑨</span> END OF SESSION</h2>
+
+      <div class="two-col">
+        <div class="col-visual">
+          <img src="/assets/takeoffinstructions.jpg" alt="How to remove the headband" class="big-img" />
+        </div>
+        <div class="col-content">
+          <ol class="action-list-numbered">
+            <li>Press the analyze button and mention that it will take a few minutes to complete</li>
+            <li> When the Seed report button is active, click and confirm the student's email ID</li>
+            <li>Wait for seeding to complete. Proceed after you see a success message</li>
+            <li>Gently remove the headband</li>
+            <li>Power <strong>OFF</strong> the device</li>
+            <li>Wipe electrode &amp; headband with an alcohol wipe</li>
+            <li>Ask the student to go back to the browser, refresh the page, and press the <strong>Unlock</strong> button — neuroprofile generation will begin (takes <strong>~4 minutes</strong>)</li>
+            <li>Direct the student to the <strong>printer station</strong> — they will receive a business card with their neuroprofile and a unique QR code</li>
+
+          </ol>
+          <p class="turnaround">Target turnaround between students: <strong>~30 seconds</strong></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device Reconnection -->
+    <div class="card">
+      <h2 class="section-title"><span class="section-num">⑩</span> DEVICE RECONNECTION (MID-SESSION)</h2>
+
+      <p class="card-intro">If the device disconnects during a session:</p>
+      <ol class="action-list-numbered">
+        <li>Restart the application</li>
+        <li>Switch <strong>OFF</strong> the BrainLink amplifier (hold power button 2 seconds)</li>
+        <li>Wait <strong>3–5 seconds</strong></li>
+        <li>Switch <strong>ON</strong> the amplifier and check the LED if it blinks blue-red-blue</li>
+        <!-- <li>In the app, click <strong>← Back</strong> repeatedly until you reach the Login screen</li> -->
+        <li><strong>Log in again</strong> - this clears stale data and re-establishes the serial connection</li>
+      </ol>
+
+      <div class="callout callout-amber">
+        <div class="callout-icon">LINK</div>
+        <div>
+          <strong>If it still won't connect:</strong>
+          <ul>
+            <li>Turn off the device and wait 10 seconds</li>
+            <li>Restart the MindLink application entirely</li>
+            <li>Verify battery level is above 20%</li>
+            <li>Check if the LED blinks blue-red-blue, which means its ready to connect.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-body -->
+
+  <footer class="page-footer">
+    <span class="golden-rule-text">REMEMBER: Signal Indicator should show Good FIRST. Noisy = no calibration.</span>
+    <span class="page-number">Page 6 of 6</span>
+  </footer>
+</section>
+
+
+<!-- Screen-only controls -->
+<div class="screen-controls no-print">
+  <div class="btn-row">
+    <button onclick="window.print()">Print / Save as PDF</button>
+    <button class="btn-open" onclick="window.open(window.location.href,'_blank')">Open in Browser</button>
+  </div>
+  <span class="hint">
+    <strong>Best results:</strong> Click "Open in Browser" to open in Chrome/Edge &rarr; press Ctrl+P &rarr;
+    Paper: <strong>A4</strong> &middot; Orientation: <strong>Landscape</strong> &middot;
+    Scale: <strong>100%</strong> &middot; Margins: <strong>None</strong> &middot; uncheck Headers &amp; Footers &rarr; Save as PDF.
+  </span>
+</div>
+
+</body>
+</html>

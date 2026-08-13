@@ -455,6 +455,37 @@ AVAILABLE_TASKS = {
             'images': ['ORDER_SURPRISE.png'],
             'videos': []
         }
+    },
+    '40hz_stimulation': {
+        'name': '40Hz Stimulation',
+        'description': '40Hz visual stimulation task with resting baseline - Multi-channel only',
+        'duration': 285,  # 5s cue + 60s rest + 5s cue + 150s task + 5s cue + 60s rest
+        'instructions': (
+            '👁️ EYES OPEN TASK - Gamma entrainment protocol\n\n'
+            'Phase 1 (5s): PREPARATION - Get ready for resting state.\n'
+            'Phase 2 (60s): RESTING STATE - Relax and calm yourself. Do nothing.\n'
+            'Phase 3 (5s): PREPARATION - Get ready for the task phase.\n'
+            'Phase 4 (150s): STIMULATION - Look at the white box. Focus on the red LED.\n'
+            'Phase 5 (5s): PREPARATION - Get ready for resting state.\n'
+            'Phase 6 (60s): RESTING STATE - Relax and calm yourself again.\n\n'
+            'Audio cues: 1 beep = Start | 1 smooth beep = Phase change | 2 beeps = End'
+        ),
+        'phases': ['analyze', 'rest'],
+        'continuous_recording': True,
+        'multichannel_only': True,  # Multi-channel devices only (ANT Neuro)
+        'hide_countdown': True,  # Don't show countdown timer for eyes-open tasks
+        'phase_structure': [
+            {'type': 'cue', 'duration': 5, 'record': False, 'instruction': 'PREPARATION (Phase 1 of 6)\n\nGet ready for resting state...\n\nRelax and calm yourself.'},
+            {'type': 'rest', 'duration': 60, 'record': True, 'instruction': 'RESTING STATE (Phase 2 of 6)\n\nTry to relax and calm yourself.\nDo nothing.\n\n60 seconds'},
+            {'type': 'cue', 'duration': 5, 'record': False, 'instruction': 'PREPARATION (Phase 3 of 6)\n\nGet ready for the task phase...\n\nThe stimulation will start soon.'},
+            {'type': 'task', 'duration': 150, 'record': True, 'instruction': '40Hz STIMULATION (Phase 4 of 6)\n\nLook at the white box to your right.\nStay calm and focused on the red LED\nin the center of the white box.\n\n150 seconds (2.5 minutes)'},
+            {'type': 'cue', 'duration': 5, 'record': False, 'instruction': 'PREPARATION (Phase 5 of 6)\n\nGet ready for resting state...\n\nRelax and calm yourself.'},
+            {'type': 'rest', 'duration': 60, 'record': True, 'instruction': 'RESTING STATE (Phase 6 of 6)\n\nTry to relax and calm yourself again.\nDo nothing.\n\n60 seconds'}
+        ],
+        'media': {
+            'images': [],
+            'videos': []
+        }
     }
 }
 

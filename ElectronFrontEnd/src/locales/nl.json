@@ -36,6 +36,20 @@
         "partnerTitle": "Partner-ID invoeren",
         "partnerSubtitle": "Stap 3 van 7: Voer uw partner-ID in om door te gaan"
     },
+    "qrSignIn": {
+        "subtitle": "Stap 2 van 7: Meld u aan met uw telefoon om door te gaan",
+        "or": "OF",
+        "switchCta": "Aanmelden met uw telefoon",
+        "instructions": "Scan deze code met uw telefoon, meld u daar aan met Google of uw wachtwoord en keur dit apparaat goed.",
+        "preparing": "Uw code wordt voorbereid...",
+        "expired": "Deze code is verlopen.",
+        "newCode": "Nieuwe code ophalen",
+        "expiresIn": "Verloopt over",
+        "waiting": "Wachten op goedkeuring op uw telefoon...",
+        "cantScan": "Kunt u niet scannen?",
+        "openAddress": "Open dit adres op uw telefoon:",
+        "usePasswordInstead": "Gebruik e-mailadres en wachtwoord"
+    },
     "loginForm": {
         "emailLabel": "E-mail:",
         "passwordLabel": "Wachtwoord:",
@@ -125,7 +139,7 @@
         "downloadReport": "Rapport downloaden",
         "analysisFailed": "Analyse mislukt:",
         "finish": "Voltooien",
-        "seedSuccess": "Rapport succesvol ge?pload naar de Mindspeller-database.",
+        "seedSuccess": "Rapport succesvol geüpload naar de Mindspeller-database.",
         "seedFailed": "Uploaden mislukt: {{message}}"
     },
     "liveEeg": {
@@ -589,13 +603,17 @@
         "loginFailedStatus": "Aanmelden mislukt ({{status}}). Probeer het opnieuw.",
         "noAuthToken": "Er is geen authenticatietoken ontvangen.",
         "noBaselineData": "Geen basislijngegevens gevonden. Voltooi eerst de basislijnkalibratie.",
-        "noTaskData": "Geen taakgegevens gevonden. Voltooi eerst ten minste ??n taak.",
+        "noTaskData": "Geen taakgegevens gevonden. Voltooi eerst ten minste één taak.",
         "analysisFailedStatus": "Analyse mislukt ({{status}}): {{message}}",
         "notAuthenticated": "U bent niet geauthenticeerd. Meld u opnieuw aan.",
         "sessionExpired": "Uw sessie is verlopen. Meld u opnieuw aan.",
         "seedingFailedStatus": "Uploaden mislukt ({{status}}): {{message}}",
         "unexpectedError": "Onverwachte fout: {{status}}",
-        "connectionFailed": "Verbinding mislukt."
+        "connectionFailed": "Verbinding mislukt.",
+        "qrStartFailed": "Aanmelden kon niet worden gestart. Probeer het opnieuw.",
+        "qrStartFailedStatus": "Aanmelden kon niet worden gestart ({{status}}).",
+        "qrRenderFailed": "De QR-code kon niet worden weergegeven. Gebruik de onderstaande link.",
+        "qrNoLongerValid": "Deze aanmelding is niet meer geldig. Begin opnieuw."
     },
     "optimizedBattery": {
         "listen": "Luister naar de instructies",

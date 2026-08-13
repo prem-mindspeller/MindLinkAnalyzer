@@ -36,6 +36,20 @@
         "partnerTitle": "Geben Sie die Partner-ID ein",
         "partnerSubtitle": "Schritt 3 von 7: Geben Sie Ihre Partner-ID ein, um fortzufahren"
     },
+    "qrSignIn": {
+        "subtitle": "Schritt 2 von 7: Melden Sie sich mit Ihrem Telefon an, um fortzufahren",
+        "or": "ODER",
+        "switchCta": "Mit Ihrem Telefon anmelden",
+        "instructions": "Scannen Sie diesen Code mit Ihrem Telefon, melden Sie sich dort mit Google oder Ihrem Passwort an und bestätigen Sie dieses Gerät.",
+        "preparing": "Ihr Code wird vorbereitet...",
+        "expired": "Dieser Code ist abgelaufen.",
+        "newCode": "Neuen Code anfordern",
+        "expiresIn": "Läuft ab in",
+        "waiting": "Warten auf Bestätigung auf Ihrem Telefon...",
+        "cantScan": "Können Sie nicht scannen?",
+        "openAddress": "Öffnen Sie diese Adresse auf Ihrem Telefon:",
+        "usePasswordInstead": "Stattdessen E-Mail und Passwort verwenden"
+    },
     "loginForm": {
         "emailLabel": "E-Mail:",
         "passwordLabel": "Passwort:",
@@ -139,8 +153,8 @@
         "signalNoisy": "Signalqualität: Rauschen – halten Sie ruhig und drücken Sie das Headset gegen Ihre Stirn",
         "infoConnected": "Fahren Sie NICHT fort, bis Sie in der Kopfzeile oben Signalqualität: Gut sehen.",
         "infoDisconnected": "Klicken Sie oben auf die Schaltfläche „Erneut verbinden“, um eine Verbindung zum Gerät herzustellen, bevor Sie fortfahren",
-        "noDeviceDetected": "Kein EEG-Ger?t erkannt. Stellen Sie sicher, dass das Ger?t eingeschaltet ist, und versuchen Sie es erneut.",
-        "waitForGoodSignal": "Warten Sie auf eine gute Signalqualit?t, bevor Sie fortfahren."
+        "noDeviceDetected": "Kein EEG-Gerät erkannt. Stellen Sie sicher, dass das Gerät eingeschaltet ist, und versuchen Sie es erneut.",
+        "waitForGoodSignal": "Warten Sie auf eine gute Signalqualität, bevor Sie fortfahren."
     },
     "loggedInHeader": {
         "device": "Gerät:",
@@ -583,19 +597,24 @@
     },
     "errors": {
         "incorrectCredentials": "E-Mail-Adresse oder Passwort ist falsch. Bitte versuchen Sie es erneut.",
-        "serverUnavailable": "Der Server ist vor?bergehend nicht verf?gbar. Bitte versuchen Sie es in einigen Minuten erneut.",
-        "serverError": "Serverfehler ({{status}}). Bitte versuchen Sie es sp?ter erneut.",
-        "loginServiceNotFound": "Anmeldedienst nicht gefunden. Bitte ?berpr?fen Sie Ihre Regionsauswahl.",
+        "serverUnavailable": "Der Server ist vorübergehend nicht verfügbar. Bitte versuchen Sie es in einigen Minuten erneut.",
+        "serverError": "Serverfehler ({{status}}). Bitte versuchen Sie es später erneut.",
+        "loginServiceNotFound": "Anmeldedienst nicht gefunden. Bitte überprüfen Sie Ihre Regionsauswahl.",
         "loginFailedStatus": "Anmeldung fehlgeschlagen ({{status}}). Bitte versuchen Sie es erneut.",
         "noAuthToken": "Es wurde kein Authentifizierungstoken empfangen.",
-        "noBaselineData": "Keine Basisliniendaten gefunden. Bitte schlie?en Sie zuerst die Basislinienkalibrierung ab.",
-        "noTaskData": "Keine Aufgabendaten gefunden. Bitte schlie?en Sie zuerst mindestens eine Aufgabe ab.",
+        "noBaselineData": "Keine Basisliniendaten gefunden. Bitte schließen Sie zuerst die Basislinienkalibrierung ab.",
+        "noTaskData": "Keine Aufgabendaten gefunden. Bitte schließen Sie zuerst mindestens eine Aufgabe ab.",
         "analysisFailedStatus": "Analyse fehlgeschlagen ({{status}}): {{message}}",
         "notAuthenticated": "Sie sind nicht authentifiziert. Bitte melden Sie sich erneut an.",
         "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
         "seedingFailedStatus": "Upload fehlgeschlagen ({{status}}): {{message}}",
         "unexpectedError": "Unerwarteter Fehler: {{status}}",
-        "connectionFailed": "Verbindung fehlgeschlagen."
+        "connectionFailed": "Verbindung fehlgeschlagen.",
+        "qrStartFailed": "Die Anmeldung konnte nicht gestartet werden. Bitte versuchen Sie es erneut.",
+        "qrStartFailedStatus": "Die Anmeldung konnte nicht gestartet werden ({{status}}).",
+        "qrRenderFailed": "Der QR-Code konnte nicht angezeigt werden. Verwenden Sie stattdessen den Link unten.",
+        "qrNoLongerValid": "Diese Anmeldung ist nicht mehr gültig. Bitte beginnen Sie erneut."
+
     },
     "optimizedBattery": {
         "listen": "Anweisungen anhören",

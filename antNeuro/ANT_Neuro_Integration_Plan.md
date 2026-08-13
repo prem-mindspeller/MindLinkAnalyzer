@@ -20,6 +20,8 @@
 - `libwinpthread-1.dll` - pthread library
 - `stream.py` - Example/test script from SDK
 
+AFTER CONNECTING AMPLIFIER RUN THIS IN THE POWERSHELL AS ADMINISTRATOR: 'pnputil /add-driver "M:\CODEBASE\antneuroSDK\eego-sdk-pybind11-master\BUILD311\_deps\eego_sdk-src\windows\driver\win8\x64\cyusb3.inf" /install'
+
 ### 3. Environment Variables Configured ✓
 
 #### PYTHONPATH
