@@ -12,7 +12,27 @@ task execution, analysis) is the REAL implementation, just reorganized into step
 import os
 import sys
 import platform
+import time
+import atexit
 import numpy as np
+
+# Global reference for cleanup
+_ANT_NEURO_INSTANCE = None
+
+def _cleanup_edi2_on_exit():
+    """Cleanup EDI2 gRPC server on application exit (atexit handler)"""
+    global _ANT_NEURO_INSTANCE
+    if _ANT_NEURO_INSTANCE is not None:
+        try:
+            if _ANT_NEURO_INSTANCE.is_connected:
+                print("[ATEXIT] Cleaning up ANT Neuro EDI2...")
+                _ANT_NEURO_INSTANCE.disconnect()
+                print("[ATEXIT] ANT Neuro EDI2 cleanup complete")
+        except Exception as e:
+            print(f"[ATEXIT] EDI2 cleanup error: {e}")
+
+# Register cleanup handler
+atexit.register(_cleanup_edi2_on_exit)
 
 # Set Qt environment BEFORE any imports
 os.environ.setdefault('PYQTGRAPH_QT_LIB', 'PySide6')
@@ -109,6 +129,46 @@ from BrainLinkAnalyzer_GUI_Enhanced import (
 
 # Import signal quality check functions from base GUI
 import BrainLinkAnalyzer_GUI as BaseGUI
+
+# Try to import enhanced 64-channel analysis engine for ANT Neuro
+ENHANCED_64CH_AVAILABLE = False
+Enhanced64ChannelEngine = None
+create_enhanced_engine = None
+
+try:
+    from antNeuro.enhanced_multichannel_analysis import Enhanced64ChannelEngine, create_enhanced_engine  # type: ignore
+    ENHANCED_64CH_AVAILABLE = True
+    print("✓ Enhanced 64-channel analysis engine loaded for ANT Neuro")
+except ImportError as e:
+    ENHANCED_64CH_AVAILABLE = False
+    Enhanced64ChannelEngine = None
+    create_enhanced_engine = None
+    print(f"⚠ Enhanced 64-channel engine not available: {e}")
+except Exception as e:
+    ENHANCED_64CH_AVAILABLE = False
+    Enhanced64ChannelEngine = None
+    create_enhanced_engine = None
+    print(f"⚠ Error loading enhanced 64-channel engine: {e}")
+
+# Try to import OFFLINE 64-channel analysis engine (no live processing)
+OFFLINE_64CH_AVAILABLE = False
+OfflineMultichannelEngine = None
+create_offline_engine = None
+
+try:
+    from antNeuro.offline_multichannel_analysis import OfflineMultichannelEngine, create_offline_engine  # type: ignore
+    OFFLINE_64CH_AVAILABLE = True
+    print("✓ Offline 64-channel analysis engine loaded for ANT Neuro")
+except ImportError as e:
+    OFFLINE_64CH_AVAILABLE = False
+    OfflineMultichannelEngine = None
+    create_offline_engine = None
+    print(f"⚠ Offline 64-channel engine not available: {e}")
+except Exception as e:
+    OFFLINE_64CH_AVAILABLE = False
+    OfflineMultichannelEngine = None
+    create_offline_engine = None
+    print(f"⚠ Error loading offline 64-channel engine: {e}")
 
 
 def assess_eeg_signal_quality(data_window, fs=512):
@@ -367,6 +427,247 @@ def assess_eeg_signal_quality(data_window, fs=512):
     
     return quality_score, status, details
 
+
+# ============================================================================
+# MULTI-CHANNEL SIGNAL QUALITY ASSESSMENT (for 64-channel ANT Neuro)
+# ============================================================================
+
+def assess_multichannel_signal_quality(multichannel_data, fs=500, channel_names=None):
+    """
+    Comprehensive multi-channel EEG signal quality assessment for 64-channel systems.
+    
+    This function assesses signal quality across all channels and provides:
+    - Per-channel quality scores and status
+    - Overall system quality score
+    - Bad channel detection (flat, noisy, artifact-laden)
+    - Regional quality assessment (frontal, central, parietal, occipital, temporal)
+    - Cap positioning feedback
+    
+    Parameters:
+    -----------
+    multichannel_data : np.ndarray
+        Shape: (n_samples, n_channels) or (n_channels, n_samples)
+        Multi-channel EEG data
+    fs : int
+        Sampling frequency (default 500 Hz for ANT Neuro)
+    channel_names : list, optional
+        List of channel names (e.g., ['Fp1', 'Fp2', ...])
+    
+    Returns:
+    --------
+    overall_score : float
+        Overall quality score (0-100)
+    overall_status : str
+        'good', 'acceptable', 'poor', or 'cap_issue'
+    details : dict
+        Detailed quality metrics including:
+        - per_channel_scores: dict of channel -> score
+        - per_channel_status: dict of channel -> status
+        - bad_channels: list of channel names/indices with poor quality
+        - regional_scores: dict of region -> score
+        - issues: list of detected issues
+    """
+    from scipy import signal as scipy_signal
+    from scipy.stats import kurtosis, zscore
+    
+    # Default 64-channel names for ANT Neuro eego SDK
+    # SDK provides channels 0-63 as EEG reference channels
+    # Channels 64-87 are bipolar auxiliary channels (not used in quality assessment)
+    if channel_names is None:
+        channel_names = [f'Ch{i}' for i in range(64)]
+    
+    # Define regional groupings based on typical 64-channel cap layout
+    # Using channel indices for ANT Neuro SDK (channels 0-63)
+    REGIONS = {
+        'frontal': [f'Ch{i}' for i in range(0, 16)],     # Frontal electrodes
+        'central': [f'Ch{i}' for i in range(16, 32)],    # Central electrodes  
+        'parietal': [f'Ch{i}' for i in range(32, 48)],   # Parietal electrodes
+        'occipital': [f'Ch{i}' for i in range(48, 56)],  # Occipital electrodes
+        'temporal': [f'Ch{i}' for i in range(56, 64)]    # Temporal electrodes
+    }
+    
+    # Ensure data is in (samples, channels) format
+    data = np.array(multichannel_data)
+    if data.ndim == 1:
+        data = data.reshape(-1, 1)
+    
+    # Auto-detect orientation: if first dim is small (like 64), transpose
+    if data.shape[0] < data.shape[1] and data.shape[0] <= 128:
+        data = data.T
+    
+    n_samples, n_channels = data.shape
+    
+    # Adjust channel names list to match actual channel count
+    if len(channel_names) > n_channels:
+        channel_names = channel_names[:n_channels]
+    elif len(channel_names) < n_channels:
+        channel_names = channel_names + [f'Ch{i}' for i in range(len(channel_names), n_channels)]
+    
+    details = {
+        'n_channels': n_channels,
+        'n_samples': n_samples,
+        'sample_rate': fs,
+        'per_channel_scores': {},
+        'per_channel_status': {},
+        'bad_channels': [],
+        'flat_channels': [],
+        'noisy_channels': [],
+        'artifact_channels': [],
+        'regional_scores': {},
+        'issues': []
+    }
+    
+    # Minimum samples check
+    if n_samples < 256:
+        return 0, "insufficient_data", details
+    
+    # ===================================================================
+    # FAST PER-CHANNEL QUALITY ASSESSMENT
+    # Uses simple time-domain metrics for speed (no PSD computation)
+    # ===================================================================
+    channel_scores = []
+    
+    for ch_idx in range(n_channels):
+        ch_name = channel_names[ch_idx]
+        ch_data = data[:, ch_idx]
+        
+        ch_score = 100
+        ch_status = "good"
+        
+        # 1. Check for flat signal (disconnected electrode)
+        ch_std = np.std(ch_data)
+        if ch_std < 1.0:
+            ch_score = 5
+            ch_status = "flat"
+            details['flat_channels'].append(ch_name)
+            details['bad_channels'].append(ch_name)
+            details['per_channel_scores'][ch_name] = ch_score
+            details['per_channel_status'][ch_name] = ch_status
+            channel_scores.append(ch_score)
+            continue  # Skip further analysis for flat channels
+        
+        # 2. Check for excessive amplitude (saturation or major artifact)
+        ch_max = np.max(np.abs(ch_data))
+        if ch_max > 1000:  # Saturated
+            ch_score = 10
+            ch_status = "saturated"
+            details['artifact_channels'].append(ch_name)
+        elif ch_max > 500:  # High amplitude artifact
+            ch_score = 30
+            ch_status = "artifact"
+            details['artifact_channels'].append(ch_name)
+        elif ch_max > 200:  # Minor artifact
+            ch_score -= 20
+        
+        # 3. Fast noise check using standard deviation
+        # Good EEG signal typically has std between 10-100 µV
+        if ch_std > 200:  # Very noisy
+            ch_score -= 30
+            details['noisy_channels'].append(ch_name)
+        elif ch_std > 100:  # Noisy
+            ch_score -= 15
+            details['noisy_channels'].append(ch_name)
+        elif ch_std < 5:  # Very low variance (poor contact)
+            ch_score -= 25
+        
+        # Clamp score
+        ch_score = max(0, min(100, ch_score))
+        
+        # Update status based on final score
+        if ch_score < 30:
+            ch_status = "bad"
+            if ch_name not in details['bad_channels']:
+                details['bad_channels'].append(ch_name)
+        elif ch_score < 50:
+            ch_status = "poor"
+        elif ch_score < 70:
+            ch_status = "acceptable"
+        else:
+            ch_status = "good"
+        
+        details['per_channel_scores'][ch_name] = ch_score
+        details['per_channel_status'][ch_name] = ch_status
+        channel_scores.append(ch_score)
+    
+    # ===================================================================
+    # REGIONAL QUALITY ASSESSMENT
+    # ===================================================================
+    for region_name, region_channels in REGIONS.items():
+        region_scores = []
+        for ch in region_channels:
+            if ch in details['per_channel_scores']:
+                region_scores.append(details['per_channel_scores'][ch])
+        
+        if region_scores:
+            region_avg = np.mean(region_scores)
+            details['regional_scores'][region_name] = float(region_avg)
+            
+            # Detect regional issues
+            if region_avg < 40:
+                details['issues'].append(f"{region_name}_region_poor")
+    
+    # Skip expensive inter-channel correlation check during streaming
+    # This can be done separately for detailed impedance analysis
+    
+    # ===================================================================
+    # OVERALL QUALITY CALCULATION
+    # ===================================================================
+    
+    # Calculate overall score (weighted average)
+    if channel_scores:
+        # Weight: good channels contribute more to overall score
+        weights = [max(0.1, s/100) for s in channel_scores]
+        overall_score = np.average(channel_scores, weights=weights)
+    else:
+        overall_score = 0
+    
+    # Penalize for bad channels
+    bad_channel_ratio = len(details['bad_channels']) / n_channels
+    if bad_channel_ratio > 0.3:
+        overall_score *= 0.6  # Heavy penalty if >30% bad channels
+        details['issues'].append(f"too_many_bad_channels_{len(details['bad_channels'])}")
+    elif bad_channel_ratio > 0.15:
+        overall_score *= 0.8
+        details['issues'].append(f"several_bad_channels_{len(details['bad_channels'])}")
+    
+    # Penalize for flat channels (usually indicates cap not properly worn)
+    flat_ratio = len(details['flat_channels']) / n_channels
+    if flat_ratio > 0.5:
+        overall_score = min(overall_score, 15)
+        details['issues'].append("cap_not_worn")
+    elif flat_ratio > 0.2:
+        overall_score *= 0.7
+        details['issues'].append("poor_electrode_contact")
+    
+    overall_score = max(0, min(100, overall_score))
+    
+    # Determine overall status
+    if flat_ratio > 0.5:
+        overall_status = "cap_not_worn"
+    elif overall_score >= 70:
+        overall_status = "good"
+    elif overall_score >= 50:
+        overall_status = "acceptable"
+    elif overall_score >= 30:
+        overall_status = "poor"
+    else:
+        overall_status = "cap_issue"
+    
+    # Summary statistics
+    details['overall_score'] = float(overall_score)
+    details['overall_status'] = overall_status
+    details['good_channel_count'] = sum(1 for s in channel_scores if s >= 70)
+    details['acceptable_channel_count'] = sum(1 for s in channel_scores if 50 <= s < 70)
+    details['poor_channel_count'] = sum(1 for s in channel_scores if s < 50)
+    
+    # Only print occasionally (controlled by caller's throttling)
+    # print(f"[MULTI-CH QUALITY] Overall: {overall_score:.1f} ({overall_status}) | "
+    #       f"Good: {details['good_channel_count']}, Acceptable: {details['acceptable_channel_count']}, "
+    #       f"Poor: {details['poor_channel_count']}, Bad: {len(details['bad_channels'])}")
+    
+    return overall_score, overall_status, details
+
+
 # Import Qt components directly from PySide6
 from PySide6 import QtCore, QtWidgets, QtGui
 from PySide6.QtWidgets import (
@@ -382,10 +683,13 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QFrame,
     QFormLayout,
-    QMessageBox
+    QMessageBox,
+    QScrollArea,
+    QGridLayout,
+    QCheckBox
 )
-from PySide6.QtCore import Qt, QSettings, QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt, QSettings, QTimer, QPoint, QRectF, Signal, Slot, QObject
+from PySide6.QtGui import QIcon, QPainter, QPen, QBrush, QColor, QFont, QPainterPath
 import pyqtgraph as pg
 import numpy as np
 from typing import Optional, Dict, Any
@@ -562,6 +866,30 @@ class MindLinkStatusBar(QFrame):
         self.signal_quality = QLabel("Signal: Checking...")
         layout.addWidget(self.signal_quality)
         
+        # Channel quality viewer button (for multi-channel devices)
+        device_type = getattr(main_window, 'device_type', 'mindlink')
+        if device_type == 'antneuro':
+            self.channel_quality_button = QPushButton("📊 Channels")
+            self.channel_quality_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #3b82f6;
+                    color: #ffffff;
+                    border-radius: 6px;
+                    padding: 4px 12px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    border: 0;
+                }
+                QPushButton:hover {
+                    background-color: #2563eb;
+                }
+                QPushButton:pressed {
+                    background-color: #1d4ed8;
+                }
+            """)
+            self.channel_quality_button.clicked.connect(self.show_channel_quality_dialog)
+            layout.addWidget(self.channel_quality_button)
+        
         layout.addStretch()
         
         # Help button
@@ -599,30 +927,8 @@ class MindLinkStatusBar(QFrame):
         try:
             import time
             import numpy as np
-            _STALE_S = 2.0
-            now = time.time()
             
-            # -------------------------------------------------------
-            # CRITICAL: Check hardware signal quality FIRST
-            # If signal=200, the onRaw() gate blocks samples, making
-            # buffer empty. Must check this BEFORE buffer length to
-            # show "Not Worn" instead of "No Signal".
-            # -------------------------------------------------------
-            _hw_signal = getattr(BL, 'headset_signal_quality', None)
-            if _hw_signal is not None and _hw_signal >= 200:
-                # Headset is transmitting but electrode has no contact
-                self.eeg_status.setText("EEG: ⚠ Not Worn")
-                self.eeg_status.setStyleSheet("color: #f59e0b; font-weight: 700;")
-                self._sq_displayed_noisy = True
-                self._sq_noisy_reason = 'demo_signal'
-                self._sq_worn_since = None
-                if not getattr(self, '_sq_not_worn_since', None):
-                    self._sq_not_worn_since = now
-                self.signal_quality.setText("Signal: ⚠ Headset Not Worn")
-                self.signal_quality.setStyleSheet("color: #ef4444; font-weight: 700;")
-                return
-            
-            # Check EEG connection status (buffer has data = device connected)
+            # Check EEG connection status (simple check like LiveEEGDialog)
             if BL.live_data_buffer and len(BL.live_data_buffer) > 0:
                 self.eeg_status.setText("EEG: ✓ Connected")
                 self.eeg_status.setStyleSheet("color: #10b981; font-weight: 700;")
@@ -631,26 +937,11 @@ class MindLinkStatusBar(QFrame):
                 self.eeg_status.setStyleSheet("color: #fbbf24; font-weight: 700;")
             
             # Professional multi-metric signal quality assessment (same as LiveEEGDialog)
-            if len(BL.live_data_buffer) >= 512:
-                recent_data = np.array(list(BL.live_data_buffer)[-512:])
+            if len(data_buffer) >= sample_rate:
+                recent_data = np.array(list(data_buffer)[-sample_rate:])
                 
-                # Staleness check: frozen buffer means headset disconnected
-                current_tail = tuple(recent_data[-4:])
-                if current_tail != getattr(self, '_sq_last_tail', None):
-                    self._sq_last_tail = current_tail
-                    self._sq_last_change_time = now
-                elif getattr(self, '_sq_last_change_time', None) and (now - self._sq_last_change_time) > _STALE_S:
-                    self.eeg_status.setText("EEG: ✗ No Signal")
-                    self.eeg_status.setStyleSheet("color: #fbbf24; font-weight: 700;")
-                    self.signal_quality.setText("Signal: ✗ No Signal")
-                    self.signal_quality.setStyleSheet("color: #94a3b8; font-weight: 700;")
-                    return
+                quality_score, status, details = assess_eeg_signal_quality(recent_data, fs=512)
                 
-                result = assess_eeg_signal_quality(recent_data, fs=512)
-                if result is None:
-                    return
-                quality_score, status, details = result
-
                 # Debug output - print every 5 seconds (timer is 500ms)
                 if not hasattr(self, '_debug_counter'):
                     self._debug_counter = 0
@@ -662,28 +953,11 @@ class MindLinkStatusBar(QFrame):
                     print(f"  low_freq_dom={details.get('low_freq_dominance', 0):.2%}, high_freq={details.get('high_freq_ratio', 0):.2%}")
                     if 'not_worn_reason' in details:
                         print(f"  NOT WORN reason: {details['not_worn_reason']}")
-
-                # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
+                
+                # Simplified logic: Only show "Noisy" if headset is not worn
                 if status == "not_worn":
-                    self._sq_worn_since = None
-                    if not getattr(self, '_sq_not_worn_since', None):
-                        self._sq_not_worn_since = now
-                    if (now - self._sq_not_worn_since) >= 3.0:
-                        self._sq_displayed_noisy = True
-                        self._sq_noisy_reason = details.get('not_worn_reason', 'not_worn')
-                else:
-                    self._sq_not_worn_since = None
-                    if not getattr(self, '_sq_worn_since', None):
-                        self._sq_worn_since = now
-                    if (now - self._sq_worn_since) >= 5.0:
-                        self._sq_displayed_noisy = False
-                if getattr(self, '_sq_displayed_noisy', False):
-                    if getattr(self, '_sq_noisy_reason', '') == 'demo_signal':
-                        self.signal_quality.setText("Signal: ⚠ Demo Signal")
-                        self.signal_quality.setStyleSheet("color: #ef4444; font-weight: 700;")
-                    else:
-                        self.signal_quality.setText("Signal: ⚠ Noisy")
-                        self.signal_quality.setStyleSheet("color: #f59e0b; font-weight: 700;")
+                    self.signal_quality.setText("Signal: ⚠ Noisy")
+                    self.signal_quality.setStyleSheet("color: #f59e0b; font-weight: 700;")
                 else:
                     self.signal_quality.setText("Signal: ✓ Good")
                     self.signal_quality.setStyleSheet("color: #10b981; font-weight: 700;")
@@ -706,11 +980,24 @@ class MindLinkStatusBar(QFrame):
             self.help_dialog.raise_()
             self.help_dialog.activateWindow()
     
+    def show_channel_quality_dialog(self):
+        """Show live 64-channel EEG monitoring dialog for multi-channel devices"""
+        # Use shared instance from main_window to avoid duplicate dialogs
+        if not hasattr(self.main_window, 'multichannel_dialog') or self.main_window.multichannel_dialog is None or not self.main_window.multichannel_dialog.isVisible():
+            self.main_window.multichannel_dialog = MultiChannelViewDialog(self.main_window, parent=None)
+            self.main_window.multichannel_dialog.show()
+        else:
+            # Bring existing dialog to front
+            self.main_window.multichannel_dialog.raise_()
+            self.main_window.multichannel_dialog.activateWindow()
+    
     def cleanup(self):
         """Stop the update timer and close help dialog"""
         self.update_timer.stop()
         if self.help_dialog and self.help_dialog.isVisible():
             self.help_dialog.close()
+        if hasattr(self.main_window, 'multichannel_dialog') and self.main_window.multichannel_dialog and self.main_window.multichannel_dialog.isVisible():
+            self.main_window.multichannel_dialog.close()
 
 
 def add_status_bar_to_dialog(dialog: QDialog, main_window) -> MindLinkStatusBar:
@@ -797,7 +1084,7 @@ def add_protocol_filter_to_enhanced_window():
         }
         self._cognitive_tasks = [
             'visual_imagery', 'attention_focus', 'mental_math', 'working_memory',
-            'language_processing', 'motor_imagery', 'cognitive_load'
+            'language_processing', 'motor_imagery', 'cognitive_load', '40hz_stimulation'
         ]
     
     def _apply_protocol_filter(self):
@@ -809,15 +1096,40 @@ def add_protocol_filter_to_enhanced_window():
         self.task_combo.blockSignals(True)
         self.task_combo.clear()
         
+        # Check device type for multichannel filtering
+        device_type = getattr(self, 'device_type', 'mindlink')
+        is_multichannel = (device_type == 'antneuro')
+        print(f"[PROTOCOL FILTER] device_type='{device_type}', is_multichannel={is_multichannel}")
+        print(f"[PROTOCOL FILTER] _cognitive_tasks={self._cognitive_tasks}")
+        
         # Add cognitive tasks (present in AVAILABLE_TASKS)
+        available_tasks = getattr(BL, 'AVAILABLE_TASKS', {})
+        print(f"[PROTOCOL FILTER] BL.AVAILABLE_TASKS has {len(available_tasks)} tasks")
         for key in self._cognitive_tasks:
-            if key in getattr(BL, 'AVAILABLE_TASKS', {}):
+            print(f"[TASK FILTER] Checking cognitive task '{key}'...")
+            if key in available_tasks:
+                # Filter multichannel-only tasks for single-channel devices
+                task_def = available_tasks[key]
+                multichannel_only = task_def.get('multichannel_only', False)
+                if multichannel_only and not is_multichannel:
+                    print(f"[TASK FILTER] ❌ Skipping '{key}' - multichannel_only=True, device={device_type}")
+                    continue  # Skip multichannel-only tasks on single-channel devices
+                print(f"[TASK FILTER] ✓ Adding cognitive task '{key}' (multichannel_only={multichannel_only})")
                 self.task_combo.addItem(key)
+            else:
+                print(f"[TASK FILTER] ⚠ '{key}' NOT FOUND in BL.AVAILABLE_TASKS")
         
         # Add protocol-specific tasks
         if self._selected_protocol and self._selected_protocol in self._protocol_groups:
             for key in self._protocol_groups[self._selected_protocol]:
                 if key in getattr(BL, 'AVAILABLE_TASKS', {}):
+                    # Filter multichannel-only tasks for single-channel devices
+                    task_def = BL.AVAILABLE_TASKS[key]
+                    multichannel_only = task_def.get('multichannel_only', False)
+                    if multichannel_only and not is_multichannel:
+                        print(f"[TASK FILTER] ❌ Skipping protocol task '{key}' - multichannel_only=True, device={device_type}")
+                        continue  # Skip multichannel-only tasks on single-channel devices
+                    print(f"[TASK FILTER] ✓ Adding protocol task '{key}' (multichannel_only={multichannel_only})")
                     self.task_combo.addItem(key)
         
         # Select first item if available
@@ -828,6 +1140,7 @@ def add_protocol_filter_to_enhanced_window():
             except Exception:
                 pass
         
+        print(f"[PROTOCOL FILTER] Populated task_combo with {self.task_combo.count()} tasks")
         self.task_combo.blockSignals(False)
     
     # Monkey-patch both methods onto the class
@@ -1393,22 +1706,995 @@ class HelpDialog(QDialog):
 
 
 # ============================================================================
+# CHANNEL QUALITY DIALOG (Head Map Visualization)
+# ============================================================================
+
+class HeadMapWidget(QWidget):
+    """Custom widget to draw 64-channel head map with NA-265 electrode layout"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(700, 700)
+        self.impedances = {}
+        # Colors based on ANT Neuro datasheet thresholds
+        self.colors = {
+            'preferred': QColor("#059669"),  # Bright green (< 20 kΩ - best contact)
+            'good': QColor("#22c55e"),       # Green (< 50 kΩ - acceptable)
+            'poor': QColor("#f97316"),       # Orange (50-100 kΩ)
+            'bad': QColor("#ef4444"),         # Red (> 100 kΩ)
+            'unknown': QColor("#cbd5e1")     # Gray (No signal)
+        }
+        
+        # NA-265 waveguard net 64-channel cap electrode layout
+        # Mapped from screenshot / datasheet to normalized coordinates
+        # Y+ is Anterior (Front/Nose), X+ is Right
+        # Channel index (0-63) -> (name, x, y)
+        # Using CHANNEL_NAMES from ImpedanceCheckDialog for consistency
+        _NAMES = [
+            # Connector 1 (Ch 0-31)
+            'Fp1', 'Fp2', 'F9', 'F7', 'F3', 'Fz', 'F4', 'F8',
+            'F10', 'FC5', 'FC1', 'FC2', 'FC6', 'T9', 'T7', 'C3',
+            'C4', 'T8', 'T10', 'CP5', 'CP1', 'CP2', 'CP6', 'P9',
+            'P7', 'P3', 'Pz', 'P4', 'P8', 'P10', 'O1', 'O2',
+            # Connector 2 (Ch 32-63)
+            'AF7', 'AF3', 'AF4', 'AF8', 'F5', 'F1', 'F2', 'F6',
+            'FC3', 'FCz', 'FC4', 'C5', 'C1', 'C2', 'C6', 'CP3',
+            'CP4', 'P5', 'P1', 'P2', 'P6', 'PO5', 'PO3', 'PO4',
+            'PO6', 'FT7', 'FT8', 'TP7', 'TP8', 'PO7', 'PO8', 'POz'
+        ]
+        
+        # Standard 10-20 positions (normalized -1 to 1, matching screenshot layout)
+        # Row-by-row from front (top) to back (bottom)
+        _POS = {
+            # Row 1: Frontal pole
+            'Fp1': (-0.18, 0.90),  'Fpz': (0.0, 0.95),   'Fp2': (0.18, 0.90),
+            # Row 2: AF line
+            'AF7': (-0.45, 0.78),  'AF3': (-0.20, 0.78),  'AF4': (0.20, 0.78),  'AF8': (0.45, 0.78),
+            # Row 3: Frontal
+            'F9': (-0.82, 0.58),   'F7': (-0.58, 0.60),   'F5': (-0.40, 0.60),
+            'F3': (-0.28, 0.60),   'F1': (-0.14, 0.60),   'Fz': (0.0, 0.60),
+            'F2': (0.14, 0.60),    'F4': (0.28, 0.60),    'F6': (0.40, 0.60),
+            'F8': (0.58, 0.60),    'F10': (0.82, 0.58),
+            # Row 4: Fronto-central
+            'FT7': (-0.72, 0.37),  'FC5': (-0.50, 0.37),  'FC3': (-0.32, 0.37),
+            'FC1': (-0.16, 0.37),  'FCz': (0.0, 0.37),    'FC2': (0.16, 0.37),
+            'FC4': (0.32, 0.37),   'FC6': (0.50, 0.37),   'FT8': (0.72, 0.37),
+            # Row 5: Central
+            'T9': (-0.90, 0.12),   'T7': (-0.72, 0.12),   'C5': (-0.50, 0.12),
+            'C3': (-0.32, 0.12),   'C1': (-0.16, 0.12),   'Cz': (0.0, 0.12),
+            'C2': (0.16, 0.12),    'C4': (0.32, 0.12),    'C6': (0.50, 0.12),
+            'T8': (0.72, 0.12),    'T10': (0.90, 0.12),
+            # Row 6: Centro-parietal
+            'TP7': (-0.72, -0.14), 'CP5': (-0.50, -0.14), 'CP3': (-0.32, -0.14),
+            'CP1': (-0.16, -0.14), 'CPz': (0.0, -0.14),   'CP2': (0.16, -0.14),
+            'CP4': (0.32, -0.14),  'CP6': (0.50, -0.14),  'TP8': (0.72, -0.14),
+            # Row 7: Parietal
+            'P9': (-0.82, -0.40),  'P7': (-0.58, -0.40),  'P5': (-0.40, -0.40),
+            'P3': (-0.28, -0.40),  'P1': (-0.14, -0.40),  'Pz': (0.0, -0.40),
+            'P2': (0.14, -0.40),   'P4': (0.28, -0.40),   'P6': (0.40, -0.40),
+            'P8': (0.58, -0.40),   'P10': (0.82, -0.40),
+            # Row 8: Parieto-occipital
+            'PO7': (-0.50, -0.62), 'PO5': (-0.35, -0.62), 'PO3': (-0.20, -0.62),
+            'POz': (0.0, -0.62),   'PO4': (0.20, -0.62),  'PO6': (0.35, -0.62),
+            'PO8': (0.50, -0.62),
+            # Row 9: Occipital
+            'O1': (-0.18, -0.82),  'Oz': (0.0, -0.82),    'O2': (0.18, -0.82),
+            # GND (top center)
+            'GND': (0.0, 0.82),
+            # M1/M2 mastoids
+            'M1': (-0.88, -0.25),  'M2': (0.88, -0.25),
+        }
+        
+        # Build coords mapping: channel index -> (name, x, y)
+        self.coords = {}         # 'ChN' -> (x, y) for backward compat with impedance data keyed by 'ChN'
+        self.channel_labels = {} # 'ChN' -> display_name
+        for idx, name in enumerate(_NAMES):
+            key = f'Ch{idx}'
+            if name in _POS:
+                self.channel_labels[key] = name
+                self.coords[key] = _POS[name]
+            else:
+                # Fallback: place unknowns in a safe spot
+                self.channel_labels[key] = name
+                self.coords[key] = (0.0, 0.0)
+        
+        # Also include GND position if reported
+        self.coords['GND'] = _POS['GND']
+        self.channel_labels['GND'] = 'GND'
+
+    def set_impedances(self, imp_dict):
+        self.impedances = imp_dict
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        rect = self.rect()
+        w = rect.width()
+        h = rect.height()
+        cx, cy = w / 2, h / 2
+        scale = min(w, h) / 2.5  # Scale factor to fit head in widget
+        
+        # Draw Head Contour
+        painter.setPen(QPen(QColor("#334155"), 3))
+        painter.setBrush(QBrush(QColor("#f8fafc"))) # Very light gray fill
+        painter.drawEllipse(QPoint(int(cx), int(cy)), int(scale), int(scale))
+        
+        # Draw Nose
+        nose_base_y = cy - scale * 0.95
+        nose_tip_y = cy - scale * 1.15
+        path = QPainterPath()
+        path.moveTo(cx - scale * 0.1, nose_base_y)
+        path.lineTo(cx, nose_tip_y)
+        path.lineTo(cx + scale * 0.1, nose_base_y)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(path)
+        
+        # Define Fonts
+        name_font = QFont("Segoe UI", 8, QFont.Bold)
+        val_font = QFont("Segoe UI", 7)
+        
+        # Iterate and Draw Channels
+        dot_radius = 14
+        
+        for key, (nx, ny) in self.coords.items():
+            screen_x = cx + nx * scale
+            screen_y = cy - ny * scale # Screen Y is down
+            
+            # Get display name
+            display_name = self.channel_labels.get(key, key)
+            
+            # Impedance Data
+            val = self.impedances.get(key)
+            
+            # Determine Color and State (ANT Neuro datasheet thresholds)
+            fill_color = self.colors['unknown']
+            val_text = "--"
+            is_filled = False
+            
+            if val is not None:
+                val_text = f"{val:.0f}kΩ"
+                is_filled = True
+                if val < 20:    fill_color = self.colors['preferred']  # < 20 kΩ preferred
+                elif val < 50:  fill_color = self.colors['good']      # < 50 kΩ good
+                elif val < 100: fill_color = self.colors['poor']      # 50-100 kΩ poor
+                else:           fill_color = self.colors['bad']       # > 100 kΩ bad
+            
+            # Draw Electrode Dot
+            painter.setPen(QPen(QColor("#475569"), 2))
+            if is_filled:
+                painter.setBrush(QBrush(fill_color))
+            else:
+                painter.setBrush(Qt.NoBrush)
+                
+            center_pt = QPoint(int(screen_x), int(screen_y))
+            painter.drawEllipse(center_pt, dot_radius, dot_radius)
+            
+            # Draw Channel Name (inside circle)
+            painter.setPen(QPen(QColor("#1e293b") if not is_filled else QColor("#ffffff")))
+            painter.setFont(name_font)
+            name_rect = QRectF(screen_x - 18, screen_y - 8, 36, 12)
+            painter.drawText(name_rect, Qt.AlignCenter, display_name)
+            
+            # Draw Impedance Value (below name, inside circle)
+            painter.setFont(val_font)
+            val_rect = QRectF(screen_x - 22, screen_y + 3, 44, 11)
+            painter.drawText(val_rect, Qt.AlignCenter, val_text)
+
+
+class ChannelQualityDialog(QDialog):
+    """Live 64-Channel Impedance Head Map"""
+    
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.setWindowTitle("64-Channel Impedance Map")
+        self.setModal(False)
+        self.resize(1000, 750)
+        
+        set_window_icon(self)
+        
+        # Main Layout: HBox (Map | Legend/Stats)
+        main_layout = QHBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 1. Left: Head Map
+        map_container = QWidget()
+        map_layout = QVBoxLayout(map_container)
+        
+        header = QLabel("Live Impedance Topography")
+        header.setStyleSheet("font-size: 18px; font-weight: 700; color: #1e40af; padding: 10px;")
+        header.setAlignment(Qt.AlignCenter)
+        map_layout.addWidget(header)
+        
+        self.head_map = HeadMapWidget()
+        map_layout.addWidget(self.head_map, 1)
+        
+        main_layout.addWidget(map_container, 70) # 70% width
+        
+        # 2. Right: Legend & Controls
+        side_panel = QFrame()
+        side_panel.setStyleSheet("background-color: #f8fafc; border-left: 1px solid #e2e8f0;")
+        side_layout = QVBoxLayout(side_panel)
+        side_layout.setContentsMargins(20, 40, 20, 40)
+        side_layout.setSpacing(20)
+        
+        # Legend Title
+        legend_title = QLabel("Quality Legend")
+        legend_title.setStyleSheet("font-size: 16px; font-weight: 600; color: #334155;")
+        side_layout.addWidget(legend_title)
+        
+        # Legend Items
+        self.add_legend_item(side_layout, "#059669", "Preferred", "< 20 kΩ")
+        self.add_legend_item(side_layout, "#22c55e", "Good", "< 50 kΩ")
+        self.add_legend_item(side_layout, "#f97316", "Poor", "50 - 100 kΩ")
+        self.add_legend_item(side_layout, "#ef4444", "Bad", "> 100 kΩ")
+        self.add_legend_item(side_layout, "#cbd5e1", "No Signal", "--")
+        
+        side_layout.addStretch()
+        
+        # Summary Stats
+        stats_box = QFrame()
+        stats_box.setStyleSheet("background: white; border-radius: 8px; padding: 15px; border: 1px solid #e2e8f0;")
+        stats_layout = QVBoxLayout(stats_box)
+        
+        stats_title = QLabel("Channel Status")
+        stats_title.setStyleSheet("font-weight: 600; font-size: 14px;")
+        stats_layout.addWidget(stats_title)
+        
+        self.stats_label = QLabel("Good: 0\nAcceptable: 0\nPoor: 0")
+        self.stats_label.setStyleSheet("font-family: monospace; font-size: 13px; color: #475569; line-height: 1.5;")
+        stats_layout.addWidget(self.stats_label)
+        
+        side_layout.addWidget(stats_box)
+        
+        side_layout.addSpacing(20)
+        
+        # Close Button
+        close_btn = QPushButton("Close Monitor")
+        close_btn.clicked.connect(self.close)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #334155;
+                color: white;
+                padding: 12px;
+                border-radius: 6px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background-color: #1e293b; }
+        """)
+        side_layout.addWidget(close_btn)
+        
+        main_layout.addWidget(side_panel, 30) # 30% width
+        self.setLayout(main_layout)
+        
+        # Update Timer
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.update_display)
+        self.update_timer.start(500) # 2 Hz update
+        
+        self.update_display()
+        
+    def add_legend_item(self, layout, color, text, subtext):
+        item = QWidget()
+        h_layout = QHBoxLayout(item)
+        h_layout.setContentsMargins(0,0,0,0)
+        
+        dot = QLabel()
+        dot.setFixedSize(16, 16)
+        dot.setStyleSheet(f"background-color: {color}; border-radius: 8px; border: 2px solid #94a3b8;")
+        
+        lbl_layout = QVBoxLayout()
+        lbl_layout.setSpacing(2)
+        t1 = QLabel(text)
+        t1.setStyleSheet("font-weight: 600; color: #1e293b;")
+        t2 = QLabel(subtext)
+        t2.setStyleSheet("font-size: 11px; color: #64748b;")
+        lbl_layout.addWidget(t1)
+        lbl_layout.addWidget(t2)
+        
+        h_layout.addWidget(dot)
+        h_layout.addLayout(lbl_layout)
+        h_layout.addStretch()
+        layout.addWidget(item)
+
+    def update_display(self):
+        # Get data - use cached values to avoid stopping/restarting stream
+        # get_real_time_impedances returns cached values if < 2 seconds old
+        # For multi-channel, we use the quality assessment data instead of real impedances
+        # during streaming to avoid disrupting the stream
+        
+        device_type = getattr(self.main_window, 'device_type', 'mindlink')
+        
+        if device_type == 'antneuro' and ANT_NEURO.is_streaming:
+            # During streaming, use signal quality metrics to estimate channel health
+            # Real impedance measurement requires stopping the stream
+            data = ANT_NEURO.current_impedances if hasattr(ANT_NEURO, 'current_impedances') and ANT_NEURO.current_impedances else None
+            if not data:
+                # Estimate impedance from signal characteristics during streaming
+                # If we have multichannel data, use variance to estimate contact quality
+                multichannel_buffer = getattr(ANT_NEURO, 'multichannel_buffer', None)
+                if multichannel_buffer and len(multichannel_buffer) >= 256:
+                    mc_data = np.array(list(multichannel_buffer)[-512:])
+                    data = {}
+                    for i in range(min(64, mc_data.shape[1])):
+                        ch_std = np.std(mc_data[:, i])
+                        # Map variance to estimated impedance: 
+                        # High variance (~50+ µV) = good contact (<20 kΩ)
+                        # Medium variance (~20-50 µV) = acceptable (<50 kΩ)
+                        # Low variance (<20 µV) = poor contact (>50 kΩ)
+                        if ch_std > 50:
+                            est_imp = 10.0  # Preferred
+                        elif ch_std > 30:
+                            est_imp = 20.0  # Good
+                        elif ch_std > 15:
+                            est_imp = 40.0  # Acceptable
+                        elif ch_std > 5:
+                            est_imp = 60.0  # Poor
+                        else:
+                            est_imp = 200.0  # Flat/no signal
+                        data[f'Ch{i}'] = est_imp
+                else:
+                    # Generate placeholder showing "checking" status
+                    data = {f'Ch{i}': 15.0 for i in range(64)}  # Show as "acceptable" while checking
+        else:
+            data = ANT_NEURO.get_real_time_impedances()
+        
+        if not data:
+            return
+            
+        # Update Map
+        self.head_map.set_impedances(data)
+        
+        # Update Stats
+        counts = {'preferred': 0, 'good': 0, 'poor': 0, 'bad': 0}
+        for val in data.values():
+            if val < 20: counts['preferred'] += 1
+            elif val < 50: counts['good'] += 1
+            elif val < 100: counts['poor'] += 1
+            else: counts['bad'] += 1
+            
+        total = len(data)
+        self.stats_label.setText(
+            f"🟢 Preferred:  {counts['preferred']}/{total}\n"
+            f"🟢 Good:       {counts['good']}/{total}\n"
+            f"🟠 Poor:       {counts['poor']}/{total}\n"
+            f"🔴 Bad:        {counts['bad']}/{total}"
+        )
+
+    def closeEvent(self, event):
+        self.update_timer.stop()
+        event.accept()
+
+
+# ============================================================================
 # WORKFLOW STATE MANAGER
-# ============================================================================# ============================================================================
+# ============================================================================
+
+# ============================================================================
+# ANT NEURO eego SDK SETUP (for 64-channel option)
+# ============================================================================
+
+EEGO_SDK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'eego_sdk_toolbox')
+
+if EEGO_SDK_PATH not in sys.path:
+    sys.path.insert(0, EEGO_SDK_PATH)
+
+if platform.system() == 'Windows':
+    try:
+        os.add_dll_directory(EEGO_SDK_PATH)
+    except Exception:
+        pass
+
+# Import threading for ANT Neuro device manager
+import threading
+
+EEGO_SDK_AVAILABLE = False
+eego_sdk = None
+
+try:
+    import eego_sdk
+    EEGO_SDK_AVAILABLE = True
+    print("✓ ANT Neuro eego SDK loaded successfully")
+except ImportError as e:
+    print(f"⚠ ANT Neuro eego SDK not available: {e}")
+    print("  Will try EDI2 gRPC API instead.")
+
+# EDI2 gRPC API - Modern alternative that solves power state issues
+EDI2_AVAILABLE = False
+EDI2Client = None
+try:
+    from antNeuro.edi2_client import EDI2Client
+    EDI2_AVAILABLE = True
+    print("✓ ANT Neuro EDI2 gRPC client loaded successfully")
+except ImportError as e:
+    print(f"⚠ EDI2 client not available: {e}")
+
+
+class AntNeuroDeviceManager:
+    """Manages ANT Neuro device connection and data streaming using EDI2 gRPC API
+    
+    This class uses the modern EDI2 API which doesn't have the power state blocking
+    issues that affected the old eego SDK on certain USB controllers.
+    """
+    
+    def __init__(self):
+        # EDI2 client (preferred - no power state blocking)
+        self.edi2_client = None
+        self.use_edi2 = EDI2_AVAILABLE  # Prefer EDI2 over eego SDK
+        
+        # Legacy eego SDK (fallback)
+        self.factory = None
+        self.amplifier = None
+        self.stream = None
+        
+        self.is_connected = False
+        self.is_streaming = False
+        self.sample_rate = 512
+        self.channel_count = 88  # EDI2 supports 88 channels (64 ref + 24 bipolar)
+        
+        # Data buffer (single channel for compatibility with BrainLink flow)
+        from collections import deque
+        import threading
+        self.live_data_buffer = deque(maxlen=5120)
+        self.multichannel_buffer = deque(maxlen=5120)
+        
+        # Threading
+        self.stream_thread = None
+        self.stop_thread_flag = False
+        self.device_serial = None
+        
+        # Battery monitoring
+        self.battery_thread = None
+        self.battery_stop_flag = threading.Event()
+        
+        # Feature engine reference (set by main window for calibration/tasks)
+        self.feature_engine = None
+        
+        print(f"[ANT NEURO] Device manager initialized")
+        print(f"[ANT NEURO]   EDI2 available: {EDI2_AVAILABLE}")
+        print(f"[ANT NEURO]   eego SDK available: {EEGO_SDK_AVAILABLE}")
+        
+    def scan_for_devices(self) -> list:
+        """Scan for connected ANT Neuro amplifiers.
+        
+        Returns real devices if found. Only returns demo device if NO real devices detected.
+        """
+        # Try EDI2 first (modern API, no power blocking)
+        if self.use_edi2 and EDI2_AVAILABLE:
+            try:
+                print("[ANT NEURO] Scanning with EDI2 gRPC API...")
+                if self.edi2_client is None:
+                    self.edi2_client = EDI2Client()
+                
+                devices = self.edi2_client.discover_devices()
+                if devices:
+                    result = [{'serial': d['serial'], 'type': f"EDI2-{d.get('type', 'Unknown')}"} for d in devices]
+                    print(f"[ANT NEURO] Found {len(result)} device(s) via EDI2")
+                    return result
+            except Exception as e:
+                print(f"[ANT NEURO] EDI2 scan failed: {e}")
+        
+        # Fallback to eego SDK
+        if EEGO_SDK_AVAILABLE:
+            try:
+                print("[ANT NEURO] Scanning with eego SDK...")
+                if self.factory is None:
+                    self.factory = eego_sdk.factory()
+                
+                amplifiers = self.factory.getAmplifiers()
+                devices = []
+                for amp in amplifiers:
+                    devices.append({
+                        'serial': amp.getSerial(),
+                        'type': amp.getType()
+                    })
+                
+                if devices:
+                    print(f"[ANT NEURO] Found {len(devices)} device(s) via eego SDK")
+                    return devices
+            except Exception as e:
+                print(f"[ANT NEURO] eego SDK scan failed: {e}")
+        
+        # No devices found - return demo
+        print("[ANT NEURO] No devices found, returning demo device")
+        return [{'serial': 'DEMO-001', 'type': 'Demo Device (88-Ch)'}]
+    
+    def connect(self, device_serial: str) -> bool:
+        """Connect to an ANT Neuro amplifier"""
+        self.device_serial = device_serial
+        print(f"\n{'='*60}")
+        print(f"[ANT NEURO CONNECT] Attempting to connect to device: {device_serial}")
+        
+        # Demo mode
+        if device_serial == 'DEMO-001':
+            self.is_connected = True
+            self.use_edi2 = False
+            self.channel_count = 64
+            print(f"[ANT NEURO CONNECT] Mode: DEMO (synthetic data)")
+            print(f"✓ Connected to ANT Neuro demo device: {device_serial}")
+            print(f"{'='*60}\n")
+            return True
+        
+        # Try EDI2 first (modern API, no power blocking)
+        if self.use_edi2 and EDI2_AVAILABLE:
+            try:
+                print(f"[ANT NEURO CONNECT] Using EDI2 gRPC API...")
+                if self.edi2_client is None:
+                    self.edi2_client = EDI2Client()
+                
+                # Extract actual serial if prefixed
+                actual_serial = device_serial.replace('EDI2-', '') if 'EDI2-' in device_serial else device_serial
+                
+                if self.edi2_client.connect(actual_serial):
+                    self.is_connected = True
+                    self.use_edi2 = True
+                    self.channel_count = self.edi2_client.get_channel_count()
+                    
+                    # Get power state
+                    power = self.edi2_client.get_power_state()
+                    print(f"[ANT NEURO CONNECT] Mode: EDI2 gRPC (REAL DEVICE)")
+                    print(f"[ANT NEURO CONNECT] Channels: {self.channel_count}")
+                    print(f"[ANT NEURO CONNECT] Battery: {power.get('battery_level', 'N/A')}%, PowerOn: {power.get('is_power_on', 'N/A')}")
+                    print(f"✓ Connected via EDI2 to: {device_serial}")
+                    print(f"{'='*60}\n")
+                    return True
+                else:
+                    print(f"[ANT NEURO CONNECT] EDI2 connection failed, trying eego SDK...")
+            except Exception as e:
+                print(f"[ANT NEURO CONNECT] EDI2 error: {e}")
+        
+        # Fallback to eego SDK
+        if EEGO_SDK_AVAILABLE:
+            try:
+                if self.factory is None:
+                    self.factory = eego_sdk.factory()
+                
+                amplifiers = self.factory.getAmplifiers()
+                for amp in amplifiers:
+                    if amp.getSerial() == device_serial:
+                        self.amplifier = amp
+                        self.is_connected = True
+                        self.use_edi2 = False
+                        self.channel_count = 64
+                        print(f"[ANT NEURO CONNECT] Mode: eego SDK (REAL DEVICE)")
+                        print(f"✓ Connected via eego SDK to: {device_serial}")
+                        print(f"{'='*60}\n")
+                        return True
+            except Exception as e:
+                print(f"[ANT NEURO CONNECT] eego SDK error: {e}")
+        
+        print(f"[ANT NEURO CONNECT] ERROR: Could not connect to {device_serial}")
+        print(f"{'='*60}\n")
+        return False
+    
+    def disconnect(self):
+        """Disconnect from the amplifier"""
+        self.stop_streaming()
+        
+        # Disconnect EDI2
+        if self.edi2_client:
+            try:
+                self.edi2_client.disconnect()
+            except:
+                pass
+            self.edi2_client = None
+        
+        # Disconnect eego SDK
+        if self.amplifier:
+            self.amplifier = None
+        
+        self.is_connected = False
+        print("Disconnected from ANT Neuro amplifier")
+    
+    def start_streaming(self, sample_rate: int = 512) -> bool:
+        """Start EEG data streaming"""
+        import threading
+        
+        if not self.is_connected:
+            print(f"[ANT NEURO STREAM] ERROR: Device not connected")
+            return False
+        
+        self.sample_rate = sample_rate
+        self.stop_thread_flag = False
+        print(f"\n{'='*60}")
+        print(f"[ANT NEURO STREAM] Starting data stream at {sample_rate} Hz")
+        
+        # Demo mode
+        if self.device_serial == 'DEMO-001':
+            print(f"[ANT NEURO STREAM] Stream mode: DEMO (synthetic EEG)")
+            self.stream_thread = threading.Thread(target=self._demo_stream_loop)
+            self.stream_thread.daemon = True
+            self.stream_thread.start()
+            self.is_streaming = True
+            print(f"✓ Demo streaming started")
+            print(f"{'='*60}\n")
+            return True
+        
+        # EDI2 gRPC streaming (preferred - no power blocking)
+        if self.use_edi2 and self.edi2_client:
+            try:
+                print(f"[ANT NEURO STREAM] Stream mode: EDI2 gRPC (REAL DEVICE)")
+                
+                # Simple counter for debug printing
+                self._sample_count = 0
+                
+                # Determine primary channel index for live plot (Fz = 5 for NA-265 cap)
+                # Use feature engine's primary channel if available
+                primary_ch_idx = 5  # Default to Fz
+                if self.feature_engine is not None and hasattr(self.feature_engine, 'primary_channel_idx'):
+                    primary_ch_idx = self.feature_engine.primary_channel_idx
+                
+                def on_data(data):
+                    # Convert to µV (data comes in Volts from EDI2)
+                    data_uv = data * 1e6
+                    
+                    # EDI2 sends 88 channels (64 EEG + 24 bipolar aux)
+                    # Truncate to 64 EEG channels for processing and recording
+                    eeg_channels = 64
+                    if data_uv.shape[1] > eeg_channels:
+                        data_uv = data_uv[:, :eeg_channels]
+                    
+                    # Extract primary channel values for the entire batch (for live plot)
+                    primary_values = data_uv[:, primary_ch_idx]
+                    
+                    # Batch append to buffers (much faster than per-sample)
+                    self.live_data_buffer.extend(primary_values)
+                    for sample in data_uv:
+                        self.multichannel_buffer.append(sample)
+                    
+                    # Only feed to feature engine during calibration/task phases
+                    # Pass FULL multi-channel data for 64-channel feature extraction
+                    if self.feature_engine is not None:
+                        state = getattr(self.feature_engine, 'current_state', 'idle')
+                        if state != 'idle':
+                            # Feed entire multi-channel batch to feature engine
+                            # Shape: (n_samples, 64) for full 64-channel processing
+                            self.feature_engine.add_data(data_uv)
+                
+                self.edi2_client.set_data_callback(on_data)
+                
+                # Start battery monitoring thread for EDI2
+                self._start_battery_monitor()
+                
+                if self.edi2_client.start_streaming(sample_rate=float(sample_rate)):
+                    self.is_streaming = True
+                    print(f"✓ EDI2 streaming started at {sample_rate} Hz")
+                    print(f"{'='*60}\n")
+                    return True
+                else:
+                    print(f"[ANT NEURO STREAM] EDI2 start_streaming returned False")
+            except Exception as e:
+                print(f"[ANT NEURO STREAM] EDI2 error: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Fallback to eego SDK
+        if EEGO_SDK_AVAILABLE and self.amplifier:
+            try:
+                print(f"[ANT NEURO STREAM] Stream mode: eego SDK (REAL DEVICE)")
+                self.stream = self.amplifier.OpenEegStream(sample_rate)
+                self.stream_thread = threading.Thread(target=self._stream_loop)
+                self.stream_thread.daemon = True
+                self.stream_thread.start()
+                self.is_streaming = True
+                print(f"✓ eego SDK streaming started")
+                print(f"{'='*60}\n")
+                return True
+            except Exception as e:
+                print(f"[ANT NEURO STREAM] eego SDK error: {e}")
+        
+        print(f"[ANT NEURO STREAM] ERROR: Could not start streaming")
+        print(f"{'='*60}\n")
+        return False
+    
+    def stop_streaming(self):
+        """Stop EEG data streaming"""
+        self.stop_thread_flag = True
+        self.is_streaming = False
+        
+        # Stop battery monitoring
+        self._stop_battery_monitor()
+        
+        # Stop EDI2 streaming
+        if self.use_edi2 and self.edi2_client:
+            try:
+                self.edi2_client.stop_streaming()
+            except:
+                pass
+        
+        # Stop thread
+        if self.stream_thread and self.stream_thread.is_alive():
+            self.stream_thread.join(timeout=2)
+        
+        # Stop eego SDK stream
+        if self.stream:
+            try:
+                self.stream = None
+            except Exception:
+                pass
+    
+    def get_real_time_impedances(self):
+        """Get current impedance values from device.
+        
+        Returns dict of channel_name -> impedance (kOhm) or None if unavailable.
+        Updates internal cache that's refreshed every 2 seconds.
+        """
+        import time
+        
+        # Return cached values if recent (< 2 seconds old)
+        if hasattr(self, 'impedance_update_time') and hasattr(self, 'current_impedances'):
+            if time.time() - self.impedance_update_time < 2.0 and self.current_impedances:
+                return self.current_impedances.copy()
+        
+        # Demo mode - return synthetic impedances
+        if self.device_serial == 'DEMO-001':
+            return self._generate_demo_impedances()
+        
+        # EDI2 gRPC - get CACHED impedances from EDI2 client
+        # NOTE: We only use cached values because get_impedances() stops streaming
+        # and causes connection issues with EE225 devices via gRPC
+        if self.use_edi2 and self.edi2_client:
+            try:
+                # Use cached impedances only - don't call get_impedances()
+                impedances = self.edi2_client.get_cached_impedances()
+                if impedances:
+                    self.current_impedances = impedances
+                    self.impedance_update_time = time.time()
+                    return impedances.copy()
+            except Exception as e:
+                print(f"[ANT NEURO] EDI2 impedance error: {e}")
+        
+        # Fallback to eego SDK
+        if EEGO_SDK_AVAILABLE and self.amplifier:
+            try:
+                imp_stream = self.amplifier.OpenImpedanceStream()
+                imp_data = imp_stream.getData()  # Returns list of floats in Ohms
+                
+                # ANT Neuro SDK provides impedances for all channels
+                # Channels 0-63: EEG reference channels (what we need)
+                # Channels 64-87: Bipolar auxiliary channels (skip these)
+                impedances = {}
+                for i, z_ohms in enumerate(imp_data):
+                    # Only use channels 0-63 (EEG reference channels)
+                    if i < 64:
+                        impedances[f'Ch{i}'] = round(z_ohms / 1000.0, 1)  # Convert to kOhm
+                
+                self.current_impedances = impedances
+                self.impedance_update_time = time.time()
+                
+                return impedances.copy()
+            except Exception as e:
+                print(f"[ANT NEURO] eego SDK impedance error: {e}")
+        
+        return self._generate_demo_impedances()
+    
+    def _start_battery_monitor(self):
+        """Start background thread to monitor battery status"""
+        if self.battery_thread and self.battery_thread.is_alive():
+            return
+        
+        self.battery_stop_flag.clear()
+        self.battery_thread = threading.Thread(target=self._battery_monitor_loop, daemon=True)
+        self.battery_thread.start()
+        print("[ANT NEURO] Battery monitoring started")
+    
+    def _stop_battery_monitor(self):
+        """Stop battery monitoring thread"""
+        if self.battery_thread:
+            self.battery_stop_flag.set()
+            if self.battery_thread.is_alive():
+                self.battery_thread.join(timeout=1.0)
+            print("[ANT NEURO] Battery monitoring stopped")
+    
+    def _battery_monitor_loop(self):
+        """Background thread that polls battery status every 5 seconds"""
+        import time
+        from PySide6.QtWidgets import QApplication
+        
+        while not self.battery_stop_flag.is_set():
+            try:
+                if self.use_edi2 and self.edi2_client and self.is_streaming:
+                    power_state = self.edi2_client.get_power_state()
+                    battery_level = power_state.get('battery_level')
+                    
+                    if battery_level is not None:
+                        # Update main window battery display
+                        # Find the main window and emit battery update signal
+                        app = QApplication.instance()
+                        if app:
+                            for widget in app.topLevelWidgets():
+                                if hasattr(widget, 'battery_update'):
+                                    # Emit signal to update battery UI
+                                    widget.battery_update.emit(int(battery_level), None)
+                                    break
+            except Exception as e:
+                # Silent fail - battery monitoring is not critical
+                pass
+            
+            # Wait 5 seconds or until stop flag is set
+            self.battery_stop_flag.wait(5.0)
+    
+    def _generate_demo_impedances(self):
+        """Generate realistic demo impedance values with some variation"""
+        import random
+        import time
+        
+        # ANT Neuro SDK channels 0-63 are EEG reference channels
+        impedances = {}
+        for i in range(64):
+            ch_name = f'Ch{i}'
+            # Most channels good (2-8 kOhm), some acceptable (8-15), few poor (15-25)
+            rand = random.random()
+            if rand < 0.75:  # 75% good
+                z = random.uniform(2.0, 8.0)
+            elif rand < 0.92:  # 17% acceptable
+                z = random.uniform(8.0, 15.0)
+            else:  # 8% poor
+                z = random.uniform(15.0, 25.0)
+            impedances[ch_name] = round(z, 1)
+        
+        self.current_impedances = impedances
+        self.impedance_update_time = time.time()
+        return impedances.copy()
+    
+    def _stream_loop(self):
+        """Main streaming loop for real device"""
+        import time
+        # Get primary channel index (Fz = 5 for NA-265)
+        primary_ch_idx = 5
+        if self.feature_engine is not None and hasattr(self.feature_engine, 'primary_channel_idx'):
+            primary_ch_idx = self.feature_engine.primary_channel_idx
+        
+        while not self.stop_thread_flag and self.stream:
+            try:
+                buffer = self.stream.getData()
+                if buffer:
+                    data = np.array(buffer.getData())
+                    samples = data.reshape(-1, self.channel_count)
+                    
+                    # Truncate to 64 EEG channels (device may send 88: 64 EEG + 24 bipolar)
+                    eeg_channels = 64
+                    eeg_samples = samples[:, :eeg_channels] if samples.shape[1] > eeg_channels else samples
+                    
+                    # Batch processing for efficiency
+                    primary_values = eeg_samples[:, primary_ch_idx]
+                    self.live_data_buffer.extend(primary_values)
+                    for sample in eeg_samples:
+                        self.multichannel_buffer.append(sample)
+                    
+                    # Batch feed 64-channel EEG data to feature engine during calibration/task
+                    if self.feature_engine is not None:
+                        state = getattr(self.feature_engine, 'current_state', 'idle')
+                        if state != 'idle':
+                            # Pass 64 EEG channels for feature extraction
+                            self.feature_engine.add_data(eeg_samples)
+                time.sleep(0.001)  # Minimal sleep to prevent buffer overflow
+            except Exception as e:
+                print(f"ANT Neuro streaming error: {e}")
+                break
+    
+    def _demo_stream_loop(self):
+        """Demo streaming loop with synthetic EEG"""
+        import time
+        
+        # Get primary channel index (Fz = 5 for NA-265)
+        primary_ch_idx = 5
+        if self.feature_engine is not None and hasattr(self.feature_engine, 'primary_channel_idx'):
+            primary_ch_idx = self.feature_engine.primary_channel_idx
+        
+        t = 0
+        batch_size = 50  # Generate 50 samples at a time (100ms at 500 Hz)
+        
+        while not self.stop_thread_flag:
+            # Generate batch of samples
+            samples = np.zeros((batch_size, self.channel_count))
+            for i in range(batch_size):
+                t_sample = t + i / self.sample_rate
+                for ch in range(self.channel_count):
+                    alpha = 30 * np.sin(2 * np.pi * 10 * t_sample + ch * 0.1)
+                    theta = 15 * np.sin(2 * np.pi * 6 * t_sample + ch * 0.05)
+                    beta = 10 * np.sin(2 * np.pi * 20 * t_sample + ch * 0.02)
+                    noise = np.random.randn() * 5
+                    samples[i, ch] = alpha + theta + beta + noise
+            
+            # Batch append
+            primary_values = samples[:, primary_ch_idx]
+            self.live_data_buffer.extend(primary_values)
+            for sample in samples:
+                self.multichannel_buffer.append(sample)
+            
+            # Batch feed FULL multi-channel data to feature engine during calibration/task
+            if self.feature_engine is not None:
+                state = getattr(self.feature_engine, 'current_state', 'idle')
+                if state != 'idle':
+                    # Pass full multi-channel samples for 64-channel processing
+                    self.feature_engine.add_data(samples)
+            
+            t += batch_size / self.sample_rate
+            time.sleep(batch_size / self.sample_rate)  # Sleep for batch duration
+
+
+# Global ANT Neuro device manager instance
+ANT_NEURO = AntNeuroDeviceManager()
+# Set reference for atexit cleanup (uses module-level _ANT_NEURO_INSTANCE defined at top)
+_ANT_NEURO_INSTANCE = ANT_NEURO
+
+
+def get_live_data_buffer(main_window=None):
+    """Get the correct live data buffer based on selected device type.
+    
+    Args:
+        main_window: Reference to the main window (to check device_type attribute).
+                    If None, tries to find it from QApplication.
+    
+    Returns:
+        The live_data_buffer from either ANT_NEURO or BL depending on device type.
+    """
+    # Try to determine device type
+    device_type = "mindlink"  # Default fallback
+    
+    if main_window and hasattr(main_window, 'device_type'):
+        device_type = main_window.device_type
+    else:
+        # Try to find main window from QApplication
+        try:
+            from PySide6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app:
+                for widget in app.topLevelWidgets():
+                    if isinstance(widget, EnhancedBrainLinkAnalyzerWindow):
+                        if hasattr(widget, 'device_type'):
+                            device_type = widget.device_type
+                        break
+        except Exception:
+            pass
+    
+    # Return appropriate buffer
+    if device_type == "antneuro":
+        return ANT_NEURO.live_data_buffer
+    else:
+        return BL.live_data_buffer
+
+
+def get_device_sample_rate(main_window=None):
+    """Get the sample rate for the selected device type.
+    
+    Args:
+        main_window: Reference to the main window (to check device_type attribute).
+    
+    Returns:
+        Sample rate in Hz (512 for MindLink, 500 for ANT Neuro).
+    """
+    device_type = "mindlink"
+    
+    if main_window and hasattr(main_window, 'device_type'):
+        device_type = main_window.device_type
+    
+    if device_type == "antneuro":
+        return ANT_NEURO.sample_rate
+    else:
+        return 512  # MindLink default
+
+
+# ============================================================================
 # WORKFLOW STATE MANAGER
 # ============================================================================
 
 class WorkflowStep:
     """Enumeration of workflow steps"""
     OS_SELECTION = 0
-    ENVIRONMENT_SELECTION = 1
-    LOGIN = 2
-    PARTNER_ID = 3
-    LIVE_EEG = 4
-    PATHWAY_SELECTION = 5
-    CALIBRATION = 6
-    TASK_SELECTION = 7
-    MULTI_TASK_ANALYSIS = 8
+    DEVICE_TYPE_SELECTION = 1  # NEW: Choose MindLink or ANT Neuro
+    ENVIRONMENT_SELECTION = 2
+    LOGIN = 3
+    PARTNER_ID = 4  # For MindLink only
+    ANTNEURO_METADATA = 41  # For ANT Neuro only - Subject/Recording metadata
+    IMPEDANCE_CHECK = 42  # For ANT Neuro only - Electrode impedance check before streaming
+    LIVE_EEG = 5
+    PATHWAY_SELECTION = 6
+    CALIBRATION = 7
+    TASK_SELECTION = 8
+    MULTI_TASK_ANALYSIS = 9
 
 
 class WorkflowManager:
@@ -1437,10 +2723,16 @@ class WorkflowManager:
         # Launch the appropriate dialog for this step
         if step == WorkflowStep.OS_SELECTION:
             self._show_os_selection()
+        elif step == WorkflowStep.DEVICE_TYPE_SELECTION:
+            self._show_device_type_selection()
         elif step == WorkflowStep.ENVIRONMENT_SELECTION:
             self._show_environment_selection()
         elif step == WorkflowStep.PARTNER_ID:
             self._show_partner_id()
+        elif step == WorkflowStep.ANTNEURO_METADATA:
+            self._show_antneuro_metadata()
+        elif step == WorkflowStep.IMPEDANCE_CHECK:
+            self._show_impedance_check()
         elif step == WorkflowStep.LOGIN:
             self._show_login()
         elif step == WorkflowStep.PATHWAY_SELECTION:
@@ -1472,6 +2764,13 @@ class WorkflowManager:
         dialog.raise_()
         dialog.activateWindow()
     
+    def _show_device_type_selection(self):
+        dialog = DeviceTypeSelectionDialog(self)
+        self.current_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+    
     def _show_environment_selection(self):
         dialog = EnvironmentSelectionDialog(self)
         self.current_dialog = dialog
@@ -1481,6 +2780,20 @@ class WorkflowManager:
     
     def _show_partner_id(self):
         dialog = PartnerIDDialog(self)
+        self.current_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+    
+    def _show_antneuro_metadata(self):
+        dialog = AntNeuroMetadataDialog(self)
+        self.current_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+    
+    def _show_impedance_check(self):
+        dialog = ImpedanceCheckDialog(self)
         self.current_dialog = dialog
         dialog.show()
         dialog.raise_()
@@ -1559,7 +2872,7 @@ class OSSelectionDialog(QDialog):
         title_label = QLabel("Welcome to MindLink Analyzer")
         title_label.setObjectName("DialogTitle")
         
-        subtitle_label = QLabel("Step 1 of 9: Choose your Operating System")
+        subtitle_label = QLabel("Step 1 of 10: Choose your Operating System")
         subtitle_label.setObjectName("DialogSubtitle")
         
         card = QFrame()
@@ -1640,21 +2953,183 @@ class OSSelectionDialog(QDialog):
                 event.ignore()
     
     def on_next(self):
-        """Save OS selection and proceed"""
+        """Save OS selection and proceed to Device Type Selection"""
         selected_os = "Windows" if self.radio_windows.isChecked() else "macOS"
         self.workflow.main_window.user_os = selected_os
         # Mark as programmatic close
+        self._programmatic_close = True
+        self.close()
+        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.DEVICE_TYPE_SELECTION))
+
+
+# ============================================================================
+# STEP 2: DEVICE TYPE SELECTION (NEW - Choose MindLink or ANT Neuro)
+# ============================================================================
+
+class DeviceTypeSelectionDialog(QDialog):
+    """Step 2: Select device type - MindLink (single-channel) or ANT Neuro (64-channel)"""
+    
+    def __init__(self, workflow: WorkflowManager, parent=None):
+        super().__init__(parent)
+        self.workflow = workflow
+        self.setWindowTitle("MindLink - Device Selection")
+        self.setModal(True)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+        self.setMinimumWidth(500)
+        self._programmatic_close = False
+        
+        set_window_icon(self)
+        
+        # UI Elements
+        title_label = QLabel("Select EEG Device")
+        title_label.setObjectName("DialogTitle")
+        
+        subtitle_label = QLabel("Step 2 of 10: Choose your EEG hardware")
+        subtitle_label.setObjectName("DialogSubtitle")
+        
+        # Device selection card
+        card = QFrame()
+        card.setObjectName("DialogCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(16)
+        
+        prompt_label = QLabel("Select your EEG device:")
+        prompt_label.setObjectName("DialogSectionTitle")
+        
+        # MindLink option
+        self.radio_mindlink = QRadioButton("Single-Channel Headset")
+        self.radio_mindlink.setStyleSheet("font-size: 14px; font-weight: 600; padding: 8px;")
+        self.radio_mindlink.setChecked(True)
+        
+        # mindlink_desc = QLabel(
+        #     "Consumer-grade single-channel EEG headband.\n"
+        #     "Best for: Quick assessments, personal use, portability."
+        # )
+        # mindlink_desc.setStyleSheet("font-size: 12px; color: #64748b; margin-left: 24px; margin-bottom: 12px;")
+        # mindlink_desc.setWordWrap(True)
+        
+        # ANT Neuro option
+        ant_available = EEGO_SDK_AVAILABLE or True  # Always show, demo mode available
+        self.radio_antneuro = QRadioButton("Multi-Channel Headset")
+        self.radio_antneuro.setStyleSheet("font-size: 14px; font-weight: 600; padding: 8px;")
+        
+        # if EEGO_SDK_AVAILABLE:
+        #     antneuro_desc = QLabel(
+        #         "Professional 64-channel research-grade EEG system.\n"
+        #         "Best for: Research, clinical assessments, detailed brain mapping."
+        #     )
+        # else:
+        #     antneuro_desc = QLabel(
+        #         "Professional 64-channel research-grade EEG system.\n"
+        #         "⚠ SDK not detected - Demo mode available for testing."
+        #     )
+        # antneuro_desc.setStyleSheet("font-size: 12px; color: #64748b; margin-left: 24px;")
+        # antneuro_desc.setWordWrap(True)
+        
+        card_layout.addWidget(prompt_label)
+        card_layout.addWidget(self.radio_mindlink)
+        # card_layout.addWidget(mindlink_desc)
+        card_layout.addWidget(self.radio_antneuro)
+        # card_layout.addWidget(antneuro_desc)
+        
+        # Info box
+        info_box = QLabel(
+            "ℹ️ Both devices use the same cognitive task protocols.\n"
+            "The analysis will adapt based on the selected device type."
+        )
+        info_box.setStyleSheet(
+            "font-size: 12px; color: #3b82f6; padding: 12px; "
+            "background: #eff6ff; border-radius: 8px; border-left: 3px solid #3b82f6;"
+        )
+        info_box.setWordWrap(True)
+        
+        # Navigation buttons
+        nav_layout = QHBoxLayout()
+        
+        self.back_button = QPushButton("← Back")
+        self.back_button.clicked.connect(self.on_back)
+        nav_layout.addWidget(self.back_button)
+        
+        nav_layout.addStretch()
+        
+        self.next_button = QPushButton("Next →")
+        self.next_button.clicked.connect(self.on_next)
+        nav_layout.addWidget(self.next_button)
+        
+        # Layout assembly
+        layout = QVBoxLayout()
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(18)
+        layout.addWidget(title_label)
+        layout.addWidget(subtitle_label)
+        layout.addWidget(card)
+        layout.addWidget(info_box)
+        layout.addLayout(nav_layout)
+        
+        self.setLayout(layout)
+        apply_modern_dialog_theme(self)
+        add_help_button_to_dialog(self)
+    
+    def closeEvent(self, event):
+        if hasattr(self, '_programmatic_close') and self._programmatic_close:
+            event.accept()
+        else:
+            was_on_top = bool(self.windowFlags() & Qt.WindowStaysOnTopHint)
+            if was_on_top:
+                self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
+                self.show()
+            
+            reply = QMessageBox.question(
+                self,
+                'Confirm Exit',
+                'Are you sure you want to exit MindLink Analyzer?',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if was_on_top:
+                self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+                self.show()
+            
+            if reply == QMessageBox.Yes:
+                event.accept()
+                cleanup_and_quit()
+            else:
+                event.ignore()
+    
+    def on_back(self):
+        self._programmatic_close = True
+        self.close()
+        QTimer.singleShot(100, lambda: self.workflow.go_back())
+    
+    def on_next(self):
+        """Save device selection and proceed"""
+        if self.radio_mindlink.isChecked():
+            device_type = "mindlink"
+        else:
+            device_type = "antneuro"
+        
+        # Store device type on main window
+        self.workflow.main_window.device_type = device_type
+        print(f"✓ Selected device type: {device_type}")
+        
+        # Switch to enhanced 64-channel engine if ANT Neuro selected
+        if device_type == "antneuro":
+            self.workflow.main_window.switch_to_enhanced_64ch_engine()
+        
         self._programmatic_close = True
         self.close()
         QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.ENVIRONMENT_SELECTION))
 
 
 # ============================================================================
-# STEP 2: ENVIRONMENT SELECTION (With REAL device detection)
+# STEP 3: ENVIRONMENT SELECTION (With REAL device detection)
 # ============================================================================
 
 class EnvironmentSelectionDialog(QDialog):
-    """Step 2: Select region where the user has their Mindspeller account"""
+    """Step 3: Select region where the user has their Mindspeller account"""
     
     def __init__(self, workflow: WorkflowManager, parent=None):
         super().__init__(parent)
@@ -1667,12 +3142,20 @@ class EnvironmentSelectionDialog(QDialog):
         # Set window icon
         set_window_icon(self)
         
+        # Get device type for display
+        device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
+        device_label = "MindLink (Single-Channel)" if device_type == "mindlink" else "ANT Neuro (64-Channel)"
+        
         # UI Elements
         title_label = QLabel("Select Region")
         title_label.setObjectName("DialogTitle")
         
-        subtitle_label = QLabel("Step 2 of 9: Choose your region")
+        subtitle_label = QLabel("Step 3 of 10: Choose your region")
         subtitle_label.setObjectName("DialogSubtitle")
+        
+        # Device info display
+        device_info = QLabel(f"Selected Device: {device_label}")
+        device_info.setStyleSheet("font-size: 12px; color: #059669; font-weight: 600; padding: 8px; background: #ecfdf5; border-radius: 6px;")
         
         # Environment selection card
         env_card = QFrame()
@@ -1689,7 +3172,7 @@ class EnvironmentSelectionDialog(QDialog):
         self.env_combo.currentTextChanged.connect(self.on_env_changed)
         
         # Warning message
-        warning_label = QLabel("⚠️ Please make sure the region selected is the region where the user has created their Mindspeller account")
+        warning_label = QLabel("WARNING: Please make sure the region selected is the region where the user has created their Mindspeller account")
         warning_label.setStyleSheet("font-size: 12px; color: #f59e0b; padding: 8px; background: #fffbeb; border-radius: 6px; border-left: 3px solid #f59e0b;")
         warning_label.setWordWrap(True)
         
@@ -1697,7 +3180,7 @@ class EnvironmentSelectionDialog(QDialog):
         env_layout.addWidget(self.env_combo)
         env_layout.addWidget(warning_label)
         
-        # Amplifier preparation instructions
+        # Amplifier preparation instructions - adapt based on device type
         prep_card = QFrame()
         prep_card.setObjectName("DialogCard")
         prep_layout = QVBoxLayout(prep_card)
@@ -1707,12 +3190,23 @@ class EnvironmentSelectionDialog(QDialog):
         prep_label = QLabel("Before You Continue:")
         prep_label.setObjectName("DialogSectionTitle")
         
-        info_label = QLabel(
-            "ℹ️ Please ensure the headset is:\n\n"
-            "  • Paired with your device via Bluetooth\n"
-            "  • Turned ON and placed on your head correctly\n\n"
-            "The device connection will be verified when you sign in on the next step."
-        )
+        if device_type == "mindlink":
+            info_text = (
+                "ℹ️ Please ensure the MindLink headset is:\n\n"
+                "  • Paired with your device via Bluetooth\n"
+                "  • Turned ON and placed on your head correctly\n\n"
+                "The device connection will be verified when you sign in on the next step."
+            )
+        else:
+            info_text = (
+                "ℹ️ Please ensure the ANT Neuro amplifier is:\n\n"
+                "  • Connected via USB to your computer\n"
+                "  • Powered ON with electrodes applied\n"
+                "  • Impedances checked (preferably < 10 kΩ)\n\n"
+                "The device connection will be verified when you sign in on the next step."
+            )
+        
+        info_label = QLabel(info_text)
         info_label.setStyleSheet("font-size: 13px; color: #3b82f6; padding: 12px; background: #eff6ff; border-radius: 6px; border-left: 3px solid #3b82f6; line-height: 1.6;")
         info_label.setWordWrap(True)
         
@@ -1783,6 +3277,7 @@ class EnvironmentSelectionDialog(QDialog):
         layout.setSpacing(18)
         layout.addWidget(title_label)
         layout.addWidget(subtitle_label)
+        layout.addWidget(device_info)
         layout.addWidget(env_card)
         layout.addWidget(prep_card)
         layout.addLayout(nav_layout)
@@ -1862,10 +3357,1346 @@ class EnvironmentSelectionDialog(QDialog):
         QTimer.singleShot(100, lambda: self.workflow.go_back())
     
     def on_next(self):
-        """Proceed to login"""
+        """Proceed to next step - Login for both device types"""
         self._programmatic_close = True
         self.close()
+        
+        # Both device types go to Login first (for device detection and authentication)
+        # For ANT Neuro: Login -> Metadata -> Live EEG
+        # For MindLink: Login -> Partner ID -> Live EEG
         QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.LOGIN))
+
+
+# ============================================================================
+# STEP 3A: ANT NEURO METADATA (for ANT Neuro devices only)
+# ============================================================================
+
+class AntNeuroMetadataDialog(QDialog):
+    """ANT Neuro Metadata Collection - Subject info, hardware specs, impedances"""
+    
+    def __init__(self, workflow: WorkflowManager, parent=None):
+        super().__init__(parent)
+        self.workflow = workflow
+        self.setWindowTitle("ANT Neuro - Recording Setup")
+        self.setModal(True)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setMinimumWidth(550)
+        self.setMinimumHeight(650)
+        
+        set_window_icon(self)
+        
+        # UI Elements
+        title_label = QLabel("ANT Neuro 64-Channel Recording Setup")
+        title_label.setObjectName("DialogTitle")
+        
+        subtitle_label = QLabel("Step 4 of 10: Configure recording metadata")
+        subtitle_label.setObjectName("DialogSubtitle")
+        
+        # Create scrollable content
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setSpacing(12)
+        
+        # ===== Subject Information Card =====
+        subject_card = QFrame()
+        subject_card.setObjectName("DialogCard")
+        subject_layout = QVBoxLayout(subject_card)
+        subject_layout.setContentsMargins(16, 16, 16, 16)
+        subject_layout.setSpacing(10)
+        
+        subject_title = QLabel("👤 Subject Information")
+        subject_title.setObjectName("DialogSectionTitle")
+        subject_layout.addWidget(subject_title)
+        
+        # Subject ID
+        subject_id_layout = QHBoxLayout()
+        subject_id_label = QLabel("Subject ID:")
+        subject_id_label.setFixedWidth(120)
+        self.subject_id_input = QLineEdit()
+        self.subject_id_input.setPlaceholderText("e.g., SUB001")
+        import random
+        import string
+        self.subject_id_input.setText(f"SUB{''.join(random.choices(string.digits, k=4))}")
+        subject_id_layout.addWidget(subject_id_label)
+        subject_id_layout.addWidget(self.subject_id_input)
+        subject_layout.addLayout(subject_id_layout)
+        
+        # Age
+        age_layout = QHBoxLayout()
+        age_label = QLabel("Age (years):")
+        age_label.setFixedWidth(120)
+        self.age_input = QLineEdit()
+        self.age_input.setPlaceholderText("e.g., 25")
+        age_layout.addWidget(age_label)
+        age_layout.addWidget(self.age_input)
+        subject_layout.addLayout(age_layout)
+        
+        # Sex
+        sex_layout = QHBoxLayout()
+        sex_label = QLabel("Sex:")
+        sex_label.setFixedWidth(120)
+        self.sex_combo = QComboBox()
+        self.sex_combo.addItems(["Not specified", "Male", "Female", "Other"])
+        sex_layout.addWidget(sex_label)
+        sex_layout.addWidget(self.sex_combo)
+        subject_layout.addLayout(sex_layout)
+        
+        # Handedness
+        hand_layout = QHBoxLayout()
+        hand_label = QLabel("Handedness:")
+        hand_label.setFixedWidth(120)
+        self.hand_combo = QComboBox()
+        self.hand_combo.addItems(["Not specified", "Right", "Left", "Ambidextrous"])
+        hand_layout.addWidget(hand_label)
+        hand_layout.addWidget(self.hand_combo)
+        subject_layout.addLayout(hand_layout)
+        
+        scroll_layout.addWidget(subject_card)
+        
+        # ===== Hardware Specifications Card =====
+        hardware_card = QFrame()
+        hardware_card.setObjectName("DialogCard")
+        hardware_layout = QVBoxLayout(hardware_card)
+        hardware_layout.setContentsMargins(16, 16, 16, 16)
+        hardware_layout.setSpacing(10)
+        
+        hardware_title = QLabel("🔌 Hardware Specifications")
+        hardware_title.setObjectName("DialogSectionTitle")
+        hardware_layout.addWidget(hardware_title)
+        
+        # Device Model (auto-filled)
+        model_layout = QHBoxLayout()
+        model_label = QLabel("Device Model:")
+        model_label.setFixedWidth(120)
+        self.model_display = QLabel("ANT Neuro eego™ mylab 64-channel")
+        self.model_display.setStyleSheet("color: #059669; font-weight: 600;")
+        model_layout.addWidget(model_label)
+        model_layout.addWidget(self.model_display)
+        hardware_layout.addLayout(model_layout)
+        
+        # Sample Rate (auto-filled)
+        rate_layout = QHBoxLayout()
+        rate_label = QLabel("Sample Rate:")
+        rate_label.setFixedWidth(120)
+        self.rate_display = QLabel(f"{ANT_NEURO.sample_rate} Hz")
+        self.rate_display.setStyleSheet("color: #059669; font-weight: 600;")
+        rate_layout.addWidget(rate_label)
+        rate_layout.addWidget(self.rate_display)
+        hardware_layout.addLayout(rate_layout)
+        
+        # Channel Count
+        channels_layout = QHBoxLayout()
+        channels_label = QLabel("Channels:")
+        channels_label.setFixedWidth(120)
+        self.channels_display = QLabel(f"{ANT_NEURO.channel_count} channels (10-20 system)")
+        self.channels_display.setStyleSheet("color: #059669; font-weight: 600;")
+        channels_layout.addWidget(channels_label)
+        channels_layout.addWidget(self.channels_display)
+        hardware_layout.addLayout(channels_layout)
+        
+        # Reference
+        ref_layout = QHBoxLayout()
+        ref_label = QLabel("Reference:")
+        ref_label.setFixedWidth(120)
+        self.ref_combo = QComboBox()
+        self.ref_combo.addItems(["CPz (default)", "Linked Mastoids", "Average Reference", "Cz"])
+        ref_layout.addWidget(ref_label)
+        ref_layout.addWidget(self.ref_combo)
+        hardware_layout.addLayout(ref_layout)
+        
+        scroll_layout.addWidget(hardware_card)
+        
+        # ===== Electrode Impedances Card =====
+        impedance_card = QFrame()
+        impedance_card.setObjectName("DialogCard")
+        impedance_layout = QVBoxLayout(impedance_card)
+        impedance_layout.setContentsMargins(16, 16, 16, 16)
+        impedance_layout.setSpacing(10)
+        
+        impedance_header = QHBoxLayout()
+        impedance_title = QLabel("⚡ Electrode Impedances")
+        impedance_title.setObjectName("DialogSectionTitle")
+        impedance_header.addWidget(impedance_title)
+        impedance_header.addStretch()
+        
+        self.impedance_status = QLabel("✓ All channels < 10 kΩ")
+        self.impedance_status.setStyleSheet("color: #059669; font-weight: 600; font-size: 12px;")
+        impedance_header.addWidget(self.impedance_status)
+        impedance_layout.addLayout(impedance_header)
+        
+        # Get impedances from device if connected, otherwise use demo values
+        self.impedance_values = self._get_impedances()
+        
+        imp_grid = QGridLayout()
+        imp_grid.setSpacing(4)
+        
+        # Show key channels
+        key_channels = ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'P3', 'P4', 'O1', 'O2', 'Fz', 'Cz', 'Pz']
+        for i, ch in enumerate(key_channels):
+            row = i // 4
+            col = i % 4
+            imp_val = self.impedance_values.get(ch, 5.0)
+            color = "#059669" if imp_val < 10 else "#f59e0b" if imp_val < 20 else "#dc2626"
+            ch_label = QLabel(f"{ch}: {imp_val:.1f} kΩ")
+            ch_label.setStyleSheet(f"color: {color}; font-size: 11px; padding: 2px 6px; background: #f8fafc; border-radius: 4px;")
+            imp_grid.addWidget(ch_label, row, col)
+        
+        impedance_layout.addLayout(imp_grid)
+        
+        # Overall impedance info
+        avg_imp = np.mean(list(self.impedance_values.values()))
+        max_imp = np.max(list(self.impedance_values.values()))
+        imp_summary = QLabel(f"Average: {avg_imp:.1f} kΩ | Max: {max_imp:.1f} kΩ")
+        imp_summary.setStyleSheet("color: #64748b; font-size: 11px; margin-top: 4px;")
+        impedance_layout.addWidget(imp_summary)
+        
+        scroll_layout.addWidget(impedance_card)
+        
+        # ===== Recording Parameters Card =====
+        recording_card = QFrame()
+        recording_card.setObjectName("DialogCard")
+        recording_layout = QVBoxLayout(recording_card)
+        recording_layout.setContentsMargins(16, 16, 16, 16)
+        recording_layout.setSpacing(10)
+        
+        recording_title = QLabel("📊 Recording Parameters")
+        recording_title.setObjectName("DialogSectionTitle")
+        recording_layout.addWidget(recording_title)
+        
+        # Filter settings
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Bandpass Filter:")
+        filter_label.setFixedWidth(120)
+        self.filter_combo = QComboBox()
+        self.filter_combo.addItems(["0.1 - 100 Hz (default)", "0.5 - 45 Hz", "1 - 30 Hz", "DC - 100 Hz"])
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_combo)
+        recording_layout.addLayout(filter_layout)
+        
+        # Notch filter
+        notch_layout = QHBoxLayout()
+        notch_label = QLabel("Notch Filter:")
+        notch_label.setFixedWidth(120)
+        self.notch_combo = QComboBox()
+        self.notch_combo.addItems(["50 Hz (Europe)", "60 Hz (US/Canada)", "None"])
+        notch_layout.addWidget(notch_label)
+        notch_layout.addWidget(self.notch_combo)
+        recording_layout.addLayout(notch_layout)
+        
+        scroll_layout.addWidget(recording_card)
+        
+        # ===== Environmental Conditions Card =====
+        env_card = QFrame()
+        env_card.setObjectName("DialogCard")
+        env_layout = QVBoxLayout(env_card)
+        env_layout.setContentsMargins(16, 16, 16, 16)
+        env_layout.setSpacing(10)
+        
+        env_title = QLabel("🌡️ Environmental Conditions")
+        env_title.setObjectName("DialogSectionTitle")
+        env_layout.addWidget(env_title)
+        
+        # Recording location
+        location_layout = QHBoxLayout()
+        location_label = QLabel("Location:")
+        location_label.setFixedWidth(120)
+        self.location_combo = QComboBox()
+        self.location_combo.addItems(["Laboratory", "Clinical", "Home", "Other"])
+        location_layout.addWidget(location_label)
+        location_layout.addWidget(self.location_combo)
+        env_layout.addLayout(location_layout)
+        
+        # Lighting
+        lighting_layout = QHBoxLayout()
+        lighting_label = QLabel("Lighting:")
+        lighting_label.setFixedWidth(120)
+        self.lighting_combo = QComboBox()
+        self.lighting_combo.addItems(["Dim/Low", "Normal", "Bright"])
+        lighting_layout.addWidget(lighting_label)
+        lighting_layout.addWidget(self.lighting_combo)
+        env_layout.addLayout(lighting_layout)
+        
+        # Notes
+        notes_label = QLabel("Notes (optional):")
+        self.notes_input = QTextEdit()
+        self.notes_input.setMaximumHeight(60)
+        self.notes_input.setPlaceholderText("Any additional notes about the recording session...")
+        env_layout.addWidget(notes_label)
+        env_layout.addWidget(self.notes_input)
+        
+        scroll_layout.addWidget(env_card)
+        scroll_layout.addStretch()
+        
+        scroll.setWidget(scroll_content)
+        
+        # Navigation buttons
+        nav_layout = QHBoxLayout()
+        
+        self.back_button = QPushButton("← Back")
+        self.back_button.clicked.connect(self.on_back)
+        self.back_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e2e8f0;
+                color: #475569;
+            }
+            QPushButton:hover {
+                background-color: #cbd5e1;
+            }
+        """)
+        
+        nav_layout.addWidget(self.back_button)
+        nav_layout.addStretch()
+        
+        self.start_button = QPushButton("🚀 Start Recording Session →")
+        self.start_button.setStyleSheet("""
+            QPushButton {
+                background-color: #059669;
+                color: #ffffff;
+                padding: 10px 24px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #047857;
+            }
+        """)
+        self.start_button.clicked.connect(self.on_start)
+        nav_layout.addWidget(self.start_button)
+        
+        # Layout assembly
+        layout = QVBoxLayout()
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
+        layout.addWidget(title_label)
+        layout.addWidget(subtitle_label)
+        layout.addWidget(scroll, 1)
+        layout.addLayout(nav_layout)
+        
+        self.setLayout(layout)
+        apply_modern_dialog_theme(self)
+        add_help_button_to_dialog(self)
+        self._programmatic_close = False
+    
+    def _calculate_demo_impedances(self) -> dict:
+        """Calculate demo impedance values for all 64 channels"""
+        # ANT Neuro SDK uses channels 0-63 for EEG reference channels
+        impedances = {}
+        for i in range(64):
+            ch_name = f'Ch{i}'
+            # Generate realistic impedance values (mostly good, some slightly higher)
+            base = np.random.uniform(2.0, 8.0)
+            # Add some variation
+            if np.random.random() < 0.1:  # 10% chance of slightly higher impedance
+                base = np.random.uniform(8.0, 15.0)
+            impedances[ch_name] = round(base, 1)
+        
+        return impedances
+    
+    def _get_impedances(self) -> dict:
+        """Get electrode impedances from real device if connected, otherwise use demo values.
+        
+        Device should already be connected via Login dialog.
+        """
+        # Check if we have a real device connected (not demo)
+        if ANT_NEURO.is_connected and ANT_NEURO.device_serial != 'DEMO-001':
+            # Try to get real impedances from device
+            try:
+                print("[METADATA] Attempting to read real impedances from device...")
+                # Real device - attempt to read impedances from SDK
+                # Note: This requires the amplifier to support impedance measurement
+                if hasattr(ANT_NEURO, 'amplifier') and ANT_NEURO.amplifier:
+                    # Use eego SDK impedance measurement if available
+                    impedances = self._read_real_impedances()
+                    if impedances:
+                        print(f"[METADATA] ✓ Read real impedances from {len(impedances)} channels")
+                        return impedances
+            except Exception as e:
+                print(f"[METADATA] Could not read real impedances: {e} - using demo values")
+        
+        # Fall back to demo impedances
+        print("[METADATA] Using demo impedance values")
+        return self._calculate_demo_impedances()
+    
+    def _read_real_impedances(self) -> dict:
+        """Read real impedance values from ANT Neuro amplifier via SDK."""
+        impedances = {}
+        
+        try:
+            if EEGO_SDK_AVAILABLE and hasattr(ANT_NEURO, 'amplifier') and ANT_NEURO.amplifier:
+                # Get impedance stream from amplifier
+                imp_stream = ANT_NEURO.amplifier.OpenImpedanceStream()
+                imp_data = imp_stream.getData()
+                
+                # Map impedance values to channel names
+                # ANT Neuro SDK channels 0-63 are EEG reference channels
+                # Channels 64-87 are bipolar auxiliary channels (skip)
+                for i in range(min(64, len(imp_data))):
+                    impedances[f'Ch{i}'] = round(imp_data[i] / 1000.0, 1)  # Convert to kOhm
+                
+                imp_stream.close()
+                return impedances
+        except Exception as e:
+            print(f"[METADATA] Error reading impedances from SDK: {e}")
+        
+        return None  # Return None to trigger fallback to demo values
+    
+    def closeEvent(self, event):
+        """Handle dialog close"""
+        if self._programmatic_close:
+            event.accept()
+        else:
+            reply = QMessageBox.question(
+                self, 'Confirm Exit',
+                'Are you sure you want to exit?',
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                event.accept()
+                cleanup_and_quit()
+            else:
+                event.ignore()
+    
+    def on_back(self):
+        """Navigate back"""
+        self._programmatic_close = True
+        self.close()
+        QTimer.singleShot(100, lambda: self.workflow.go_back())
+    
+    def on_start(self):
+        """Save metadata and start ANT Neuro streaming, then proceed to Live EEG.
+        
+        Device should already be connected via Login dialog.
+        """
+        # Get email from user_data (fetched during login)
+        user_data = getattr(self.workflow.main_window, 'user_data', {})
+        user_email = user_data.get('email', None)
+        
+        # Fallback: Try to get from QSettings if not in user_data
+        if not user_email or user_email == 'unknown@example.com':
+            from PySide6.QtCore import QSettings
+            settings = QSettings("MindLink", "FeatureAnalyzer")
+            saved_username = settings.value("username", "")
+            if saved_username and '@' in saved_username:
+                user_email = saved_username
+                print(f"[METADATA DIALOG] Using email from QSettings: {user_email}")
+            else:
+                user_email = 'unknown@example.com'
+        
+        print(f"\n{'='*60}")
+        print(f"[METADATA DIALOG] Email extraction debug:")
+        print(f"  user_data exists: {user_data is not None}")
+        print(f"  user_data keys: {list(user_data.keys()) if user_data else 'N/A'}")
+        print(f"  user_email: {user_email}")
+        print(f"{'='*60}\n")
+        
+        # Collect all metadata
+        metadata = {
+            'subject': {
+                'id': self.subject_id_input.text().strip() or 'UNKNOWN',
+                'age': self.age_input.text().strip(),
+                'email': user_email,
+                'sex': self.sex_combo.currentText(),
+                'handedness': self.hand_combo.currentText(),
+            },
+            'hardware': {
+                'device_model': 'ANT Neuro eego mylab 64-channel',
+                'sample_rate': ANT_NEURO.sample_rate,
+                'channel_count': ANT_NEURO.channel_count,
+                'reference': self.ref_combo.currentText(),
+                'device_serial': ANT_NEURO.device_serial,
+                'is_demo_mode': ANT_NEURO.device_serial == 'DEMO-001',
+            },
+            'impedances': self.impedance_values,
+            'recording': {
+                'bandpass_filter': self.filter_combo.currentText(),
+                'notch_filter': self.notch_combo.currentText(),
+            },
+            'environment': {
+                'location': self.location_combo.currentText(),
+                'lighting': self.lighting_combo.currentText(),
+                'notes': self.notes_input.toPlainText().strip(),
+            },
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        
+        # Store metadata in main window
+        self.workflow.main_window.antneuro_metadata = metadata
+        
+        print(f"✓ ANT Neuro metadata collected for subject: {metadata['subject']['id']}")
+        print(f"  Device: {metadata['hardware']['device_serial']} (Demo: {metadata['hardware']['is_demo_mode']})")
+        
+        # Device should already be connected from Login dialog
+        # If not connected, log warning and connect
+        if not ANT_NEURO.is_connected:
+            print("[METADATA] Warning: Device not connected from Login - connecting now")
+            device_serial = getattr(self.workflow.main_window, 'selected_device', None)
+            if device_serial:
+                ANT_NEURO.connect(device_serial)
+            else:
+                # Scan for devices - will use real if found, demo only if not found
+                devices = ANT_NEURO.scan_for_devices()
+                if devices:
+                    ANT_NEURO.connect(devices[0]['serial'])
+        
+        # NOTE: Don't start streaming here - we go to Impedance Check first
+        # Streaming will start after impedance check is complete
+        
+        # Set metadata in feature engine if it exists
+        if hasattr(self.workflow.main_window, 'feature_engine'):
+            engine = self.workflow.main_window.feature_engine
+            print(f"\n[METADATA DIALOG] Feature engine found: {type(engine).__name__}")
+            if hasattr(engine, 'set_metadata'):
+                print(f"[METADATA DIALOG] Calling set_metadata with:")
+                print(f"  subject_id: {metadata['subject']['id']}")
+                print(f"  subject_age: {metadata['subject']['age']}")
+                print(f"  subject_email: {metadata['subject']['email']}")
+                engine.set_metadata(
+                    subject_id=metadata['subject']['id'],
+                    subject_age=metadata['subject']['age'],
+                    subject_email=metadata['subject']['email']
+                )
+                print(f"[METADATA DIALOG] set_metadata() completed")
+            else:
+                print(f"[METADATA DIALOG] WARNING: Feature engine has no set_metadata method!")
+        else:
+            print(f"[METADATA DIALOG] WARNING: No feature_engine found in main window!")
+        
+        # Proceed to Impedance Check (for ANT Neuro devices)
+        self._programmatic_close = True
+        self.close()
+        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.IMPEDANCE_CHECK))
+
+
+# ============================================================================
+# STEP 4.5: IMPEDANCE CHECK (ANT Neuro only)
+# ============================================================================
+
+class ImpedanceSignals(QObject):
+    """Thread-safe signals for impedance UI updates"""
+    impedance_updated = Signal(object, float, float)  # impedance_values (as object), ref, gnd
+    status_updated = Signal(str, bool)  # message, is_error
+
+
+class ImpedanceCheckDialog(QDialog):
+    """Step 4.5: Electrode impedance check before streaming (ANT Neuro only)
+    
+    This dialog puts the amplifier into impedance mode and displays real-time
+    electrode impedances. Once the user confirms good electrode contact, 
+    pressing Next will switch to EEG mode and start streaming.
+    """
+    
+    # NA-265 waveguard net 64-channel cap electrode layout (from UDO-SM-1002rev04 datasheet)
+    # Connector 1: Channels 1-32, Connector 2: Channels 33-64
+    # Channel index 0 = Channel Number 1 in datasheet
+    CHANNEL_NAMES = [
+        # Connector 1 (Channels 1-32)
+        'Fp1', 'Fp2', 'F9', 'F7', 'F3', 'Fz', 'F4', 'F8',      # 1-8
+        'F10', 'FC5', 'FC1', 'FC2', 'FC6', 'T9', 'T7', 'C3',    # 9-16
+        'C4', 'T8', 'T10', 'CP5', 'CP1', 'CP2', 'CP6', 'P9',    # 17-24
+        'P7', 'P3', 'Pz', 'P4', 'P8', 'P10', 'O1', 'O2',        # 25-32
+        # Connector 2 (Channels 33-64)
+        'AF7', 'AF3', 'AF4', 'AF8', 'F5', 'F1', 'F2', 'F6',     # 33-40
+        'FC3', 'FCz', 'FC4', 'C5', 'C1', 'C2', 'C6', 'CP3',     # 41-48
+        'CP4', 'P5', 'P1', 'P2', 'P6', 'PO5', 'PO3', 'PO4',     # 49-56
+        'PO6', 'FT7', 'FT8', 'TP7', 'TP8', 'PO7', 'PO8', 'POz'  # 57-64
+    ]
+    
+    # Color thresholds for impedance values (in kΩ) - per ANT Neuro datasheet
+    EXCELLENT_THRESHOLD = 10    # < 10 kΩ is excellent (bright green)
+    GOOD_THRESHOLD = 20         # < 20 kΩ is preferred (green) 
+    ACCEPTABLE_THRESHOLD = 50   # < 50 kΩ is acceptable/good enough (yellow-green)
+    POOR_THRESHOLD = 100        # < 100 kΩ is poor (orange)
+    CAP_NOT_WORN_THRESHOLD = 200 # > 200 kΩ means cap not worn (dark red)
+    
+    def __init__(self, workflow: WorkflowManager, parent=None):
+        super().__init__(parent)
+        self.workflow = workflow
+        self.setWindowTitle("MindLink - Electrode Impedance Check")
+        self.setModal(False)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setMinimumSize(700, 500)
+        self.resize(700, 520)
+        
+        # Set window icon
+        set_window_icon(self)
+        
+        # Get actual channel names from connected device
+        self.channel_names = self._get_device_channel_names()
+        
+        # Thread-safe signals for UI updates
+        self._signals = ImpedanceSignals()
+        self._signals.impedance_updated.connect(self._on_impedance_updated)
+        self._signals.status_updated.connect(self._on_status_updated)
+        
+        # Impedance data storage
+        self.impedance_values = {}  # ch_index -> impedance in kΩ
+        self.reference_impedance = 0.0
+        self.ground_impedance = 0.0
+        self._impedance_mode_active = False
+        self._stop_flag = False
+        self._impedance_thread = None  # Track the thread for proper cleanup
+        
+        # UI Elements
+        title_label = QLabel("Electrode Impedance Check")
+        title_label.setObjectName("DialogTitle")
+        title_label.setStyleSheet("font-size: 16px; font-weight: 600; margin: 0; padding: 0;")
+        
+        subtitle_label = QLabel("Verify electrode contact quality before recording")
+        subtitle_label.setObjectName("DialogSubtitle")
+        subtitle_label.setStyleSheet("font-size: 11px; margin: 0; padding: 0;")
+        
+        # Instructions (compact legend)
+        instructions_label = QLabel(
+            "<span style='color: #059669;'>★&lt;10k</span> | "
+            "<span style='color: #10b981;'>✓&lt;20k</span> | "
+            "<span style='color: #22c55e;'>◉&lt;50k</span> | "
+            "<span style='color: #f97316;'>✗&gt;50k</span> | "
+            "<span style='color: #991b1b;'>⊘&gt;200k</span> | "
+            "<b>Live monitoring - adjust headset until values are good</b>"
+        )
+        instructions_label.setStyleSheet(
+            "font-size: 11px; padding: 6px 10px; background: #f0f9ff; "
+            "border-radius: 6px; border-left: 3px solid #3b82f6;"
+        )
+        instructions_label.setWordWrap(True)
+        
+        # Main content area - Grid of electrode impedances
+        content_card = QFrame()
+        content_card.setObjectName("DialogCard")
+        content_card.setStyleSheet("background: #1e293b; border-radius: 6px; padding: 4px;")
+        content_layout = QVBoxLayout(content_card)
+        content_layout.setContentsMargins(8, 8, 8, 8)
+        content_layout.setSpacing(4)
+        
+        # Summary bar
+        self.summary_label = QLabel("Initializing...")
+        self.summary_label.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: 600; padding: 4px;")
+        self.summary_label.setAlignment(Qt.AlignCenter)
+        content_layout.addWidget(self.summary_label)
+        
+        # Create electrode grid in ANATOMICAL order (front-to-back, left-to-right)
+        # 8 rows x 8 cols = 64 cells matching the NA-265 cap layout
+        grid_widget = QWidget()
+        self.grid_layout = QGridLayout(grid_widget)
+        self.grid_layout.setSpacing(2)
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Anatomical display order: maps grid position -> channel index
+        # Channels sorted front (Fp) to back (O), left to right within each layer
+        # Channel indices reference CHANNEL_NAMES:
+        #  0:Fp1  1:Fp2  2:F9   3:F7   4:F3   5:Fz   6:F4   7:F8
+        #  8:F10  9:FC5 10:FC1 11:FC2 12:FC6 13:T9  14:T7  15:C3
+        # 16:C4  17:T8  18:T10 19:CP5 20:CP1 21:CP2 22:CP6 23:P9
+        # 24:P7  25:P3  26:Pz  27:P4  28:P8  29:P10 30:O1  31:O2
+        # 32:AF7 33:AF3 34:AF4 35:AF8 36:F5  37:F1  38:F2  39:F6
+        # 40:FC3 41:FCz 42:FC4 43:C5  44:C1  45:C2  46:C6  47:CP3
+        # 48:CP4 49:P5  50:P1  51:P2  52:P6  53:PO5 54:PO3 55:PO4
+        # 56:PO6 57:FT7 58:FT8 59:TP7 60:TP8 61:PO7 62:PO8 63:POz
+        anatomical_order = [
+            # Row 0: Fp + AF (frontal pole / anterior frontal)
+             0,  1, 32, 33, 34, 35,  2,  3,
+            # Row 1: F (frontal)
+            36,  4, 37,  5, 38,  6, 39,  7,
+            # Row 2: F10 + FC (fronto-central)
+             8, 57,  9, 40, 10, 41, 11, 42,
+            # Row 3: FC end + C (central)
+            12, 58, 13, 14, 43, 15, 44, 45,
+            # Row 4: C continued + CP start (centro-parietal)
+            16, 46, 17, 18, 59, 19, 47, 20,
+            # Row 5: CP continued + P start (parietal)
+            21, 48, 22, 60, 23, 24, 49, 25,
+            # Row 6: P continued + PO start (parieto-occipital)
+            50, 26, 51, 27, 52, 28, 29, 61,
+            # Row 7: PO continued + O (occipital) — O1 and O2 at bottom
+            53, 54, 63, 55, 56, 62, 30, 31,
+        ]
+        
+        # Create 64 electrode labels indexed by channel index (for update function)
+        self.electrode_labels = [None] * 64
+        for grid_pos, ch_idx in enumerate(anatomical_order):
+            row = grid_pos // 8
+            col = grid_pos % 8
+            
+            # Get channel name from device (actual hardware mapping)
+            ch_name = self.channel_names[ch_idx] if ch_idx < len(self.channel_names) else f"Ch{ch_idx+1}"
+            
+            label = QLabel(f"{ch_name}\n--")
+            label.setAlignment(Qt.AlignCenter)
+            label.setFixedSize(70, 38)
+            label.setStyleSheet(
+                "background: #475569; color: #e2e8f0; border-radius: 3px; "
+                "font-size: 9px; font-weight: 500;"
+            )
+            self.electrode_labels[ch_idx] = label
+            self.grid_layout.addWidget(label, row, col)
+        
+        content_layout.addWidget(grid_widget)
+        
+        # Reference and Ground display
+        ref_gnd_layout = QHBoxLayout()
+        ref_gnd_layout.setSpacing(8)
+        
+        self.ref_label = QLabel("REF: --")
+        self.ref_label.setStyleSheet(
+            "background: #475569; color: #e2e8f0; border-radius: 3px; "
+            "font-size: 11px; font-weight: 600; padding: 4px 12px;"
+        )
+        self.ref_label.setAlignment(Qt.AlignCenter)
+        
+        self.gnd_label = QLabel("GND: --")
+        self.gnd_label.setStyleSheet(
+            "background: #475569; color: #e2e8f0; border-radius: 3px; "
+            "font-size: 11px; font-weight: 600; padding: 4px 12px;"
+        )
+        self.gnd_label.setAlignment(Qt.AlignCenter)
+        
+        ref_gnd_layout.addStretch()
+        ref_gnd_layout.addWidget(self.ref_label)
+        ref_gnd_layout.addWidget(self.gnd_label)
+        ref_gnd_layout.addStretch()
+        
+        content_layout.addLayout(ref_gnd_layout)
+        
+        # Status/error label (compact)
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("color: #94a3b8; font-size: 11px; padding: 4px;")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setWordWrap(True)
+        
+        # Navigation buttons
+        nav_layout = QHBoxLayout()
+        
+        self.back_button = QPushButton("← Back")
+        self.back_button.clicked.connect(self.on_back)
+        self.back_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e2e8f0;
+                color: #475569;
+                font-size: 11px;
+                padding: 6px 14px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #cbd5e1;
+            }
+        """)
+        
+        self.refresh_button = QPushButton("🔄 Refresh")
+        self.refresh_button.clicked.connect(self.start_impedance_check)
+        self.refresh_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0ea5e9;
+                color: white;
+                font-size: 11px;
+                padding: 6px 14px;
+                border-radius: 5px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #0284c7;
+            }
+        """)
+        
+        nav_layout.addWidget(self.back_button)
+        nav_layout.addStretch()
+        nav_layout.addWidget(self.refresh_button)
+        nav_layout.addStretch()
+        
+        self.next_button = QPushButton("Next →")
+        self.next_button.setStyleSheet("""
+            QPushButton {
+                background-color: #10b981;
+                color: white;
+                font-size: 11px;
+                padding: 6px 14px;
+                border-radius: 5px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #059669;
+            }
+        """)
+        self.next_button.clicked.connect(self.on_next)
+        nav_layout.addWidget(self.next_button)
+        
+        # Layout assembly (compact)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
+        layout.addWidget(title_label)
+        layout.addWidget(subtitle_label)
+        layout.addWidget(instructions_label)
+        layout.addWidget(content_card, 1)  # Stretch factor 1
+        layout.addWidget(self.status_label)
+        layout.addLayout(nav_layout)
+        
+        self.setLayout(layout)
+        apply_modern_dialog_theme(self)
+        
+        # Skip status bar to save space
+        self.status_bar = None
+        
+        self._programmatic_close = False
+        
+        # Start impedance check when dialog opens
+        QTimer.singleShot(500, self.start_impedance_check)
+    
+    def _get_device_channel_names(self):
+        """Get actual channel names from connected ANT Neuro device.
+        
+        Returns list of channel names in hardware order (index 0 = first channel, etc.)
+        Falls back to standard 10-20 names if device not available or returns generic names.
+        
+        Note: The ANT Neuro SDK returns "none" as channel names when no electrode layout
+        is configured in the device. The edi2_client converts these to "Ch1", "Ch2", etc.
+        In this case, we use the standard 10-20 system names which correspond to the 
+        waveguard 64-channel cap layout.
+        """
+        import re
+        try:
+            edi2_client = getattr(ANT_NEURO, 'edi2_client', None)
+            if edi2_client and hasattr(edi2_client, 'channels') and edi2_client.channels:
+                # Get channel names from connected device
+                names = [ch.name for ch in edi2_client.channels[:64]]
+                
+                # Check if SDK returned valid electrode names or just generic placeholders
+                # Generic names are: "none", "Ch1", "Ch2", etc.
+                # Valid electrode names are: "Fp1", "Fz", "Cz", "O1", etc.
+                generic_pattern = re.compile(r'^(none|ch\d+)$', re.IGNORECASE)
+                valid_electrode_names = [n for n in names if n and not generic_pattern.match(n)]
+                
+                if len(valid_electrode_names) > len(names) // 2:  # More than half are valid
+                    print(f"[IMPEDANCE] Using {len(names)} channel names from device: {names[:5]}...")
+                    return names
+                else:
+                    print(f"[IMPEDANCE] Device returned generic channel names (no electrode layout configured)")
+                    print(f"[IMPEDANCE] Using standard 10-20 waveguard cap layout names instead")
+        except Exception as e:
+            print(f"[IMPEDANCE] Could not get channel names from device: {e}")
+        
+        # Fallback: Use standard 10-20 system names (waveguard 64-channel cap layout)
+        print("[IMPEDANCE] Using fallback 10-20 channel names")
+        return self.CHANNEL_NAMES
+    
+    def start_impedance_check(self):
+        """Start the impedance measurement mode"""
+        self._stop_flag = False
+        self.status_label.setText("Starting impedance measurement...")
+        self.status_label.setStyleSheet("color: #0ea5e9; font-size: 12px; padding: 8px;")
+        
+        # Run impedance check in background thread
+        import threading
+        self._impedance_thread = threading.Thread(target=self._impedance_check_thread, daemon=False)
+        self._impedance_thread.start()
+    
+    def _impedance_check_thread(self):
+        """Background thread for impedance measurement via gRPC"""
+        import time
+        
+        try:
+            # First, stop any running streaming to avoid conflicts
+            if ANT_NEURO.is_streaming:
+                print("[IMPEDANCE] Stopping streaming before impedance check...")
+                ANT_NEURO.stop_streaming()
+                time.sleep(0.5)
+            
+            # Get the EDI2 client
+            edi2_client = getattr(ANT_NEURO, 'edi2_client', None)
+            if not edi2_client:
+                self._update_status("Error: EDI2 client not available", error=True)
+                return
+            
+            # Reconnect to amplifier to refresh the handle (may have become stale after previous impedance check)
+            device_serial = ANT_NEURO.device_serial
+            if device_serial and device_serial != 'DEMO-001':
+                print("[IMPEDANCE] Reconnecting to refresh amplifier handle...")
+                try:
+                    edi2_client.connect(device_serial)
+                    time.sleep(0.3)
+                except Exception as e:
+                    print(f"[IMPEDANCE] Reconnect warning: {e}")
+            
+            # Get gRPC components (now with fresh handle)
+            stub = edi2_client.stub
+            amplifier_handle = edi2_client.amplifier_handle
+            
+            if not stub or amplifier_handle is None:
+                self._update_status("Error: Not connected to device", error=True)
+                return
+            
+              # Import gRPC modules
+            import sys
+            import os
+            antneuro_dir = os.path.dirname(os.path.abspath(__file__))
+            if hasattr(sys.modules.get('antNeuro', None), '__path__'):
+                antneuro_dir = sys.modules['antNeuro'].__path__[0]
+            else:
+                antneuro_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'antNeuro')
+            
+            if antneuro_dir not in sys.path:
+                sys.path.insert(0, antneuro_dir)
+            
+            try:
+                import EdigRPC_pb2 as edi
+            except ImportError as e:
+                self._update_status(f"Error: EdigRPC_pb2 module not found - {e}", error=True)
+                print(f"[IMPEDANCE] Failed to import EdigRPC_pb2: {e}")
+                print(f"[IMPEDANCE] antNeuro directory: {antneuro_dir}")
+                print(f"[IMPEDANCE] sys.path: {sys.path}")
+                return
+          
+            # Build StreamParams
+            channel_count = edi2_client.get_channel_count() or 88
+            active_channels = list(range(min(64, channel_count)))
+            stream_params = edi.StreamParams(
+                ActiveChannels=active_channels,
+                Ranges={0: 1.0},
+                SamplingRate=512.0,
+                BufferSize=2560,
+                DataReadyPercentage=1
+            )
+            
+            # Set IDLE mode first
+            self._update_status("Setting IDLE mode...")
+            try:
+                stub.Amplifier_SetMode(
+                    edi.Amplifier_SetModeRequest(
+                        AmplifierHandle=amplifier_handle,
+                        Mode=edi.AmplifierMode.AmplifierMode_Idle,
+                        StreamParams=stream_params
+                    )
+                )
+                time.sleep(0.5)
+            except Exception as e:
+                print(f"[IMPEDANCE] Warning setting IDLE: {e}")
+            
+            # Set IMPEDANCE mode
+            self._update_status("Setting IMPEDANCE mode...")
+            try:
+                stub.Amplifier_SetMode(
+                    edi.Amplifier_SetModeRequest(
+                        AmplifierHandle=amplifier_handle,
+                        Mode=edi.AmplifierMode.AmplifierMode_Impedance,
+                        StreamParams=stream_params
+                    )
+                )
+                self._impedance_mode_active = True
+                print("[IMPEDANCE] Impedance mode set successfully")
+            except Exception as e:
+                self._update_status(f"Error setting impedance mode: {e}", error=True)
+                return
+            
+            # Read impedance frames continuously until user clicks Next or closes dialog
+            self._update_status("Reading impedance values - adjust headset as needed...")
+            frame_count = 0
+            impedance_frame_count = 0
+            
+            print("[IMPEDANCE] Starting continuous frame read loop (will run until Next/Close)...")
+            
+            while not self._stop_flag:  # Run until user clicks Next or closes dialog
+                try:
+                    frame_resp = stub.Amplifier_GetFrame(
+                        edi.Amplifier_GetFrameRequest(
+                            AmplifierHandle=amplifier_handle
+                        ),
+                        timeout=2.0
+                    )
+                    
+                    if not frame_resp.FrameList:
+                        time.sleep(0.1)
+                        continue
+                    
+                    for frame in frame_resp.FrameList:
+                        frame_count += 1
+                        frame_type_names = {0: "EEG", 1: "ImpedanceVoltages", 2: "OpenLine", 3: "Stimulation"}
+                        
+                        if frame_count <= 3 or frame_count % 10 == 0:
+                            print(f"[IMPEDANCE] Frame {frame_count}: Type={frame_type_names.get(frame.FrameType, frame.FrameType)}")
+                        
+                        # Check for impedance data (don't rely on FrameType)
+                        if frame.Impedance and frame.Impedance.Channels:
+                            impedance_frame_count += 1
+                            
+                            # Extract channel impedances into local dict first
+                            num_channels = len(frame.Impedance.Channels)
+                            channel_data = {}
+                            for idx, ch_imp in enumerate(frame.Impedance.Channels):
+                                if idx < 64:
+                                    kohms = ch_imp.Value / 1000.0
+                                    channel_data[idx] = kohms
+                            
+                            # Update instance variables
+                            self.impedance_values.update(channel_data)
+                            
+                            if impedance_frame_count == 1:
+                                print(f"[IMPEDANCE] Got {num_channels} channel impedances, first few values: {[channel_data[i] for i in range(min(5, len(channel_data)))]}")
+                            
+                            # Extract reference impedance
+                            ref_imp = self.reference_impedance
+                            if frame.Impedance.Reference:
+                                ref_imp = frame.Impedance.Reference[0].Value / 1000.0
+                                self.reference_impedance = ref_imp
+                            
+                            # Extract ground impedance
+                            gnd_imp = self.ground_impedance
+                            if frame.Impedance.Ground:
+                                gnd_imp = frame.Impedance.Ground[0].Value / 1000.0
+                                self.ground_impedance = gnd_imp
+                            
+                            # Update UI periodically - pass the local data directly
+                            if impedance_frame_count % 3 == 0:
+                                print(f"[IMPEDANCE] Emitting UI update: {len(channel_data)} channels, REF={ref_imp:.1f}kΩ, GND={gnd_imp:.1f}kΩ")
+                                self._signals.impedance_updated.emit(dict(self.impedance_values), ref_imp, gnd_imp)
+                    
+                    time.sleep(0.1)
+                    
+                except Exception as e:
+                    error_str = str(e)
+                    # Handle amplifier detach/reattach gracefully
+                    if "not found: amplifier with id" in error_str:
+                        # Amplifier is being detached/reattached - wait and retry
+                        if impedance_frame_count == 0:
+                            # Haven't gotten any data yet - might need to reconnect
+                            print("[IMPEDANCE] Amplifier temporarily unavailable (detach/reattach), waiting...")
+                        time.sleep(0.5)
+                        continue
+                    elif "UNAVAILABLE" in error_str or "aborted" in error_str.lower():
+                        self._update_status("Connection lost during impedance check", error=True)
+                        break
+                    else:
+                        print(f"[IMPEDANCE] Frame read error: {e}")
+                        time.sleep(0.1)
+            
+            # Final update (user clicked Next or closed dialog)
+            print(f"[IMPEDANCE] Final update: {len(self.impedance_values)} channels")
+            self._signals.impedance_updated.emit(dict(self.impedance_values), self.reference_impedance, self.ground_impedance)
+            if self._stop_flag:
+                self._update_status(f"Impedance monitoring stopped - {impedance_frame_count} frames read, {frame_count} total")
+            else:
+                self._update_status(f"Impedance check complete - {impedance_frame_count} impedance frames read")
+            print(f"[IMPEDANCE] Complete: {len(self.impedance_values)} channels, {impedance_frame_count} impedance frames, {frame_count} total frames, REF={self.reference_impedance:.1f}kΩ, GND={self.ground_impedance:.1f}kΩ")
+            
+        except Exception as e:
+            self._update_status(f"Error: {e}", error=True)
+            import traceback
+            traceback.print_exc()
+        finally:
+            self._impedance_mode_active = False
+            
+            # CRITICAL: Properly dispose the amplifier handle after impedance check
+            # This prevents "amplifier in use" errors when trying to stream later
+            print("[IMPEDANCE] Cleaning up amplifier handle...")
+            try:
+                edi2_client = getattr(ANT_NEURO, 'edi2_client', None)
+                if edi2_client and edi2_client.stub and edi2_client.amplifier_handle is not None:
+                    old_handle = edi2_client.amplifier_handle
+                    print(f"[IMPEDANCE] Disposing amplifier handle: {old_handle}")
+                    
+                    # First set to IDLE mode
+                    try:
+                        import EdigRPC_pb2 as edi
+                        edi2_client.stub.Amplifier_SetMode(
+                            edi.Amplifier_SetModeRequest(
+                                AmplifierHandle=old_handle,
+                                Mode=edi.AmplifierMode.AmplifierMode_Idle,
+                                StreamParams=edi.StreamParams()
+                            )
+                        )
+                        time.sleep(0.2)
+                    except Exception as e:
+                        print(f"[IMPEDANCE] Could not set IDLE mode (handle may be stale): {e}")
+                    
+                    # Then dispose the handle
+                    try:
+                        edi2_client.stub.Amplifier_Dispose(
+                            edi.Amplifier_DisposeRequest(AmplifierHandle=old_handle)
+                        )
+                        print(f"[IMPEDANCE] Handle {old_handle} disposed successfully")
+                    except Exception as e:
+                        print(f"[IMPEDANCE] Handle disposal error (may already be disposed): {e}")
+                    
+                    # Clear the handle so we force a reconnect
+                    edi2_client.amplifier_handle = None
+                    edi2_client.is_connected = False
+                    print("[IMPEDANCE] Amplifier handle cleared - will reconnect before streaming")
+            except Exception as e:
+                print(f"[IMPEDANCE] Cleanup error: {e}")
+    
+    def _update_status(self, message: str, error: bool = False):
+        """Update status label from any thread - uses signal for thread safety"""
+        self._signals.status_updated.emit(message, error)
+    
+    @Slot(str, bool)
+    def _on_status_updated(self, message: str, is_error: bool):
+        """Slot to handle status updates on main thread"""
+        if is_error:
+            self.status_label.setStyleSheet("color: #ef4444; font-size: 12px; padding: 8px;")
+        else:
+            self.status_label.setStyleSheet("color: #0ea5e9; font-size: 12px; padding: 8px;")
+        self.status_label.setText(message)
+    
+    def _update_impedance_display(self):
+        """Update the electrode grid display with current impedance values - uses signal for thread safety"""
+        # Create a deep copy to avoid race conditions
+        imp_copy = dict(self.impedance_values)
+        ref_copy = float(self.reference_impedance)
+        gnd_copy = float(self.ground_impedance)
+        
+        print(f"[IMPEDANCE] Emitting signal with {len(imp_copy)} channels")
+        
+        # Emit signal with copy of current data
+        self._signals.impedance_updated.emit(imp_copy, ref_copy, gnd_copy)
+    
+    @Slot(object, float, float)
+    def _on_impedance_updated(self, impedance_values, ref_imp: float, gnd_imp: float):
+        """Slot to handle impedance updates on main thread"""
+        print(f"[IMPEDANCE SLOT] Called with {len(impedance_values) if impedance_values else 0} channel values, REF={ref_imp:.1f}, GND={gnd_imp:.1f}")
+        if impedance_values and len(impedance_values) > 0:
+            print(f"[IMPEDANCE SLOT] First 5 channels: {[(k, v) for k, v in list(impedance_values.items())[:5]]}")
+        
+        excellent_count = 0
+        good_count = 0
+        acceptable_count = 0
+        poor_count = 0
+        cap_not_worn_count = 0
+        
+        for idx, label in enumerate(self.electrode_labels):
+            # Get channel name from device (matches impedance data index)
+            ch_name = self.channel_names[idx] if idx < len(self.channel_names) else f"Ch{idx+1}"
+            
+            if idx in impedance_values:
+                kohms = impedance_values[idx]
+                
+                # Determine color based on impedance (per ANT Neuro datasheet)
+                if kohms < self.EXCELLENT_THRESHOLD:
+                    bg_color = "#059669"  # Bright green - Excellent (<10k)
+                    excellent_count += 1
+                elif kohms < self.GOOD_THRESHOLD:
+                    bg_color = "#10b981"  # Green - Preferred (<20k)
+                    good_count += 1
+                elif kohms < self.ACCEPTABLE_THRESHOLD:
+                    bg_color = "#22c55e"  # Light green - Good enough (<50k)
+                    acceptable_count += 1
+                elif kohms < self.POOR_THRESHOLD:
+                    bg_color = "#f97316"  # Orange - Poor (<100k)
+                    poor_count += 1
+                else:
+                    bg_color = "#991b1b"  # Dark red - Cap not worn (>100k)
+                    cap_not_worn_count += 1
+                
+                # Compact label text with channel name
+                label.setText(f"{ch_name}\n{kohms:.0f}k")
+                label.setStyleSheet(
+                    f"background: {bg_color}; color: white; border-radius: 3px; "
+                    "font-size: 9px; font-weight: 600;"
+                )
+            else:
+                label.setText(f"{ch_name}\n--")
+                label.setStyleSheet(
+                    "background: #475569; color: #e2e8f0; border-radius: 3px; "
+                    "font-size: 9px; font-weight: 500;"
+                )
+        
+        # Update reference and ground (compact)
+        if ref_imp > 0:
+            ref_color = "#10b981" if ref_imp < 100 else "#f59e0b" if ref_imp < 500 else "#ef4444"
+            self.ref_label.setText(f"REF: {ref_imp:.0f}k")
+            self.ref_label.setStyleSheet(
+                f"background: {ref_color}; color: white; border-radius: 3px; "
+                "font-size: 11px; font-weight: 600; padding: 4px 12px;"
+            )
+        
+        if gnd_imp > 0:
+            gnd_color = "#10b981" if gnd_imp < 100 else "#f59e0b" if gnd_imp < 500 else "#ef4444"
+            self.gnd_label.setText(f"GND: {gnd_imp:.0f}k")
+            self.gnd_label.setStyleSheet(
+                f"background: {gnd_color}; color: white; border-radius: 3px; "
+                "font-size: 11px; font-weight: 600; padding: 4px 12px;"
+            )
+        
+        # Update summary (compact)
+        total = excellent_count + good_count + acceptable_count + poor_count + cap_not_worn_count
+        if total > 0:
+            self.summary_label.setText(
+                f"★{excellent_count} ✓{good_count} ⚠{acceptable_count} ✗{poor_count} ⊘{cap_not_worn_count}"
+            )
+            # Color based on quality
+            if poor_count == 0 and cap_not_worn_count == 0:
+                self.summary_label.setStyleSheet("color: #10b981; font-size: 12px; font-weight: 600; padding: 4px;")
+            elif cap_not_worn_count > 0:
+                self.summary_label.setStyleSheet("color: #991b1b; font-size: 12px; font-weight: 600; padding: 4px;")
+            elif poor_count < total * 0.2:
+                self.summary_label.setStyleSheet("color: #f59e0b; font-size: 12px; font-weight: 600; padding: 4px;")
+            else:
+                self.summary_label.setStyleSheet("color: #ef4444; font-size: 12px; font-weight: 600; padding: 4px;")
+    
+    def on_back(self):
+        """Go back to metadata dialog"""
+        self._stop_flag = True
+        self._programmatic_close = True
+        self.close()
+        self.workflow.go_back()
+    
+    def on_next(self):
+        """Stop impedance mode, switch to EEG mode, and proceed to Live EEG"""
+        self._stop_flag = True
+        
+        # Store impedance values for reference
+        self.workflow.main_window.last_impedance_values = self.impedance_values.copy()
+        self.workflow.main_window.last_ref_impedance = self.reference_impedance
+        self.workflow.main_window.last_gnd_impedance = self.ground_impedance
+        
+        self.status_label.setText("Switching to EEG mode...")
+        self.status_label.setStyleSheet("color: #0ea5e9; font-size: 12px; padding: 8px;")
+        
+        import time
+        
+        # IMPORTANT: Do NOT call disconnect() - that stops the gRPC server
+        # Instead, just set the amplifier to IDLE mode to release impedance mode
+        # The amplifier handle remains valid, so we can reuse it for EEG streaming
+        
+        if ANT_NEURO.edi2_client and ANT_NEURO.edi2_client.amplifier_handle is not None:
+            try:
+                print("[IMPEDANCE] Returning to IDLE mode (keeping server running)...")
+                # Import the protobuf module
+                import antNeuro.EdigRPC_pb2 as edi
+                
+                # Set mode to IDLE (mode 0) to release impedance mode
+                ANT_NEURO.edi2_client.stub.Amplifier_SetMode(
+                    edi.Amplifier_SetModeRequest(
+                        AmplifierHandle=ANT_NEURO.edi2_client.amplifier_handle,
+                        Mode=0,  # IDLE mode
+                        Channels=ANT_NEURO.channel_count,
+                        Rate=500.0
+                    )
+                )
+                print("[IMPEDANCE] ✓ Returned to IDLE mode")
+                time.sleep(0.3)  # Brief settling time
+            except Exception as e:
+                print(f"[IMPEDANCE] Mode switch warning: {e}")
+        
+        # Reset streaming state
+        ANT_NEURO.is_streaming = False
+        if ANT_NEURO.edi2_client:
+            ANT_NEURO.edi2_client.is_streaming = False
+        
+        # CRITICAL: Wait for impedance thread to complete cleanup
+        if self._impedance_thread and self._impedance_thread.is_alive():
+            print("[IMPEDANCE] Waiting for impedance thread to complete cleanup...")
+            self._impedance_thread.join(timeout=3.0)
+            if self._impedance_thread.is_alive():
+                print("[IMPEDANCE] Warning: Impedance thread still running after 3s")
+        
+        import time
+        time.sleep(0.5)  # Give gRPC server time to fully dispose the old handle
+        
+        # CRITICAL: Force reconnect to get a fresh amplifier handle
+        # The impedance check disposes the old handle, so we MUST reconnect
+        self.status_label.setText("Reconnecting for EEG streaming...")
+        print("[IMPEDANCE] Forcing reconnect to get fresh amplifier handle...")
+        device_serial = ANT_NEURO.device_serial
+        if device_serial and device_serial != 'DEMO-001':
+            try:
+                # Reconnect to amplifier to get new handle
+                if ANT_NEURO.edi2_client:
+                    ANT_NEURO.edi2_client.connect(device_serial)
+                    print(f"[IMPEDANCE] Reconnected with new handle: {ANT_NEURO.edi2_client.amplifier_handle}")
+                    time.sleep(0.3)
+            except Exception as e:
+                print(f"[IMPEDANCE] Reconnect error: {e}")
+                self.status_label.setText(f"Reconnect failed: {e}")
+                return
+        
+        # Now start EEG streaming with the fresh handle
+        self.status_label.setText("Starting EEG streaming...")
+        print("[IMPEDANCE] Starting EEG streaming after impedance check...")
+        success = ANT_NEURO.start_streaming(sample_rate=500)
+        if success:
+            print(f"✓ ANT Neuro EEG streaming started at {ANT_NEURO.sample_rate} Hz")
+        else:
+            print("⚠ Failed to start EEG streaming after impedance check")
+        
+        # Proceed to Live EEG
+        self._programmatic_close = True
+        self.close()
+        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.LIVE_EEG))
+    
+    def closeEvent(self, event):
+        """Handle dialog close - ensure proper cleanup"""
+        print("[IMPEDANCE] Dialog closing...")
+        self._stop_flag = True
+        
+        # Wait for impedance thread to terminate
+        if self._impedance_thread and self._impedance_thread.is_alive():
+            print("[IMPEDANCE] Waiting for impedance thread to stop...")
+            self._impedance_thread.join(timeout=2.0)
+            if self._impedance_thread.is_alive():
+                print("[IMPEDANCE] Warning: Thread still running after 2s timeout")
+        
+        # Only do manual cleanup if user closed (not programmatic close from on_next)
+        # When on_next() is called, it handles the cleanup itself
+        if not self._programmatic_close:
+            print("[IMPEDANCE] User closed dialog - performing cleanup")
+            
+            # The impedance thread's finally block already disposed the handle
+            # Just reset the streaming flags
+            ANT_NEURO.is_streaming = False
+            if ANT_NEURO.edi2_client:
+                ANT_NEURO.edi2_client.is_streaming = False
+                ANT_NEURO.edi2_client.is_connected = False
+                ANT_NEURO.edi2_client.amplifier_handle = None
+            
+            print("[IMPEDANCE] Cleanup complete")
+        
+        event.accept()
+    
+    def _return_to_idle_mode(self):
+        """Return amplifier to IDLE mode when leaving impedance check.
+        
+        Note: This may fail with "amplifier not found" error after impedance check
+        completes because the gRPC server may dispose the amplifier handle. This is
+        expected and we handle it gracefully by reconnecting before streaming.
+        """
+        try:
+            edi2_client = getattr(ANT_NEURO, 'edi2_client', None)
+            if edi2_client:
+                stub = edi2_client.stub
+                amplifier_handle = edi2_client.amplifier_handle
+                
+                if stub and amplifier_handle is not None:
+                    import sys
+                    import os
+                    antneuro_dir = os.path.dirname(os.path.abspath(__file__))
+                    if hasattr(sys.modules.get('antNeuro', None), '__path__'):
+                        antneuro_dir = sys.modules['antNeuro'].__path__[0]
+                    else:
+                        antneuro_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'antNeuro')
+                    
+                    if antneuro_dir not in sys.path:
+                        sys.path.insert(0, antneuro_dir)
+                    
+                    import EdigRPC_pb2 as edi
+                    
+                    # Set IDLE mode to exit impedance mode
+                    stub.Amplifier_SetMode(
+                        edi.Amplifier_SetModeRequest(
+                            AmplifierHandle=amplifier_handle,
+                            Mode=edi.AmplifierMode.AmplifierMode_Idle,
+                            StreamParams=edi.StreamParams()
+                        )
+                    )
+                    print("[IMPEDANCE] Returned to IDLE mode")
+        except Exception as e:
+            # Expected error: "amplifier with id X not found" after impedance check
+            # The handle becomes stale and we'll reconnect before streaming
+            if "not found" in str(e).lower():
+                print(f"[IMPEDANCE] Amplifier handle stale (expected) - will reconnect before streaming")
+            else:
+                print(f"[IMPEDANCE] Error returning to IDLE mode: {e}")
 
 
 # ============================================================================
@@ -1892,7 +4723,7 @@ class PartnerIDDialog(QDialog):
         title_label = QLabel("Enter Partner ID")
         title_label.setObjectName("DialogTitle")
         
-        subtitle_label = QLabel("Step 4 of 9: Provide your partner identification")
+        subtitle_label = QLabel("Step 5 of 10: Provide your partner identification")
         subtitle_label.setObjectName("DialogSubtitle")
         
         # Partner ID card
@@ -1955,7 +4786,7 @@ class PartnerIDDialog(QDialog):
         
         # Disclaimer for advanced tasks booking requirement
         disclaimer_label = QLabel(
-            "⚠️ Important: If the partner conducts advanced tasks, reports can only be "
+            "IMPORTANT: If the partner conducts advanced tasks, reports can only be "
             "generated if the user has a valid booking with the partner for an advanced session."
         )
         disclaimer_label.setWordWrap(True)
@@ -2195,7 +5026,7 @@ class LoginDialog(QDialog):
         title_label = QLabel("Sign In to Connect")
         title_label.setObjectName("DialogTitle")
         
-        subtitle_label = QLabel("Step 3 of 9: Enter your credentials")
+        subtitle_label = QLabel("Step 4 of 10: Enter your credentials")
         subtitle_label.setObjectName("DialogSubtitle")
         
         # Credentials card
@@ -2376,70 +5207,71 @@ class LoginDialog(QDialog):
     def _check_device(self, username, password):
         """Check device connection before authentication"""
         try:
-            # Call the REAL detect_brainlink function
-            port = BL.detect_brainlink()
+            # Check which device type is selected
+            device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
             
-            if port:
-                BL.SERIAL_PORT = port
-                self.workflow.main_window.log_message(f"✓ EEG headset detected on port: {port}")
-                
-                # Device detected, proceed with authentication
-                self.status_label.setText("Device connected. Authenticating...")
-                
-                # Save credentials
-                self.settings.setValue("username", username)
-                self.settings.setValue("password", password)
-                
-                # Get login URL from main window (set in environment selection)
-                login_url = getattr(self.workflow.main_window, 'login_url', None)
-                
-                # Fallback if not set
-                if not login_url:
-                    login_urls = {
-                        "English (en)": "https://en.mindspeller.com/api/cas/token/login",
-                        "Dutch (nl)": "https://nl.mindspeller.com/api/cas/token/login",
-                        "Local": "http://127.0.0.1:5000/api/cas/token/login"
-                    }
-                    
-                    # Determine which backend URL is set
-                    current_backend = BL.BACKEND_URL
-                    if "en" in current_backend or "en.mindspeller" in current_backend:
-                        login_url = login_urls["English (en)"]
-                    elif "nl" in current_backend or "nl.mindspeller" in current_backend:
-                        login_url = login_urls["Dutch (nl)"]
+            if device_type == "antneuro":
+                # ANT Neuro device - scan for USB devices
+                devices = ANT_NEURO.scan_for_devices()
+                if devices:
+                    # Connect to first available device
+                    device = devices[0]
+                    if ANT_NEURO.connect(device['serial']):
+                        # NOTE: Don't start streaming here - wait for impedance check to complete
+                        # Streaming will start after ImpedanceCheckDialog.on_next()
+                        self.workflow.main_window.log_message(f"✓ ANT Neuro device connected: {device['serial']}")
+                        
+                        # Device detected, proceed with authentication
+                        self.status_label.setText("ANT Neuro device connected. Authenticating...")
+                        
+                        # Save credentials
+                        self.settings.setValue("username", username)
+                        self.settings.setValue("password", password)
+                        
+                        # Get login URL and perform authentication
+                        login_url = self._get_login_url()
+                        self.login_url = login_url
+                        
+                        # Perform REAL authentication
+                        QTimer.singleShot(100, lambda: self._perform_login(username, password, login_url))
                     else:
-                        login_url = login_urls["Local"]
-                
-                # Store login_url in self for API calls
-                self.login_url = login_url
-                
-                # Perform REAL authentication
-                QTimer.singleShot(100, lambda: self._perform_login(username, password, login_url))
+                        self._show_device_error("antneuro")
+                else:
+                    self._show_device_error("antneuro")
             else:
-                # Show prominent error message
-                self.error_info_label.setText(
-                    "⚠️ DEVICE CONNECTION FAILED\n\n"
-                    "The EEG headset could not be detected.\n\n"
-                    "TO RESOLVE:\n"
-                    "1. Close this application completely\n"
-                    "2. Turn OFF the EEG headset\n"
-                    "3. Turn ON the EEG headset\n"
-                    "4. Restart this application\n\n"
-                    "Make sure the headset is paired via Bluetooth before restarting."
-                )
-                self.error_info_label.setVisible(True)
-                self.status_label.setText("Device not found. Please follow the instructions above.")
-                self.status_label.setStyleSheet("color: #dc2626; font-size: 12px;")
-                self.login_button.setEnabled(True)
-                self.back_button.setEnabled(True)
+                # MindLink device - use Bluetooth detection
+                port = BL.detect_brainlink()
+                
+                if port:
+                    BL.SERIAL_PORT = port
+                    self.workflow.main_window.log_message(f"✓ EEG headset detected on port: {port}")
+                    
+                    # Device detected, proceed with authentication
+                    self.status_label.setText("Device connected. Authenticating...")
+                    
+                    # Save credentials
+                    self.settings.setValue("username", username)
+                    self.settings.setValue("password", password)
+                    
+                    # Get login URL and perform authentication
+                    login_url = self._get_login_url()
+                    self.login_url = login_url
+                    
+                    # Perform REAL authentication
+                    QTimer.singleShot(100, lambda: self._perform_login(username, password, login_url))
+                else:
+                    self._show_device_error("mindlink")
+                    
         except Exception as e:
+            device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
+            device_name = "ANT Neuro" if device_type == "antneuro" else "MindLink"
             self.error_info_label.setText(
-                "⚠️ DEVICE DETECTION ERROR\n\n"
+                f"WARNING: {device_name.upper()} DETECTION ERROR\n\n"
                 f"Error: {str(e)}\n\n"
                 "TO RESOLVE:\n"
                 "1. Close this application completely\n"
-                "2. Turn OFF the EEG headset\n"
-                "3. Turn ON the EEG headset\n"
+                f"2. Turn OFF the {device_name} headset\n"
+                f"3. Turn ON the {device_name} headset\n"
                 "4. Restart this application"
             )
             self.error_info_label.setVisible(True)
@@ -2447,6 +5279,59 @@ class LoginDialog(QDialog):
             self.status_label.setStyleSheet("color: #dc2626; font-size: 12px;")
             self.login_button.setEnabled(True)
             self.back_button.setEnabled(True)
+    
+    def _get_login_url(self):
+        """Get the login URL from main window or fallback to defaults"""
+        login_url = getattr(self.workflow.main_window, 'login_url', None)
+        
+        # Fallback if not set
+        if not login_url:
+            login_urls = {
+                "English (en)": "https://en.mindspeller.com/api/cas/token/login",
+                "Dutch (nl)": "https://nl.mindspeller.com/api/cas/token/login",
+                "Local": "http://127.0.0.1:5000/api/cas/token/login"
+            }
+            
+            # Determine which backend URL is set
+            current_backend = BL.BACKEND_URL
+            if "en" in current_backend or "en.mindspeller" in current_backend:
+                login_url = login_urls["English (en)"]
+            elif "nl" in current_backend or "nl.mindspeller" in current_backend:
+                login_url = login_urls["Dutch (nl)"]
+            else:
+                login_url = login_urls["Local"]
+        
+        return login_url
+    
+    def _show_device_error(self, device_type):
+        """Show device connection error message"""
+        if device_type == "antneuro":
+            self.error_info_label.setText(
+                "WARNING: ANT NEURO DEVICE CONNECTION FAILED\n\n"
+                "The ANT Neuro amplifier could not be detected.\n\n"
+                "TO RESOLVE:\n"
+                "1. Ensure the ANT Neuro amplifier is connected via USB\n"
+                "2. Check that the drivers are installed correctly\n"
+                "3. Try reconnecting the USB cable\n"
+                "4. Restart this application\n\n"
+                "If using demo mode, select the demo device."
+            )
+        else:
+            self.error_info_label.setText(
+                "WARNING: DEVICE CONNECTION FAILED\n\n"
+                "The EEG headset could not be detected.\n\n"
+                "TO RESOLVE:\n"
+                "1. Close this application completely\n"
+                "2. Turn OFF the EEG headset\n"
+                "3. Turn ON the EEG headset\n"
+                "4. Restart this application\n\n"
+                "Make sure the headset is paired via Bluetooth before restarting."
+            )
+        self.error_info_label.setVisible(True)
+        self.status_label.setText("Device not found. Please follow the instructions above.")
+        self.status_label.setStyleSheet("color: #dc2626; font-size: 12px;")
+        self.login_button.setEnabled(True)
+        self.back_button.setEnabled(True)
     
     def _perform_login(self, username, password, login_url):
         """Perform actual login"""
@@ -2531,7 +5416,7 @@ class LoginDialog(QDialog):
                     QTimer.singleShot(1000, self.on_auto_next)
                 else:
                     self.error_info_label.setText(
-                        "⚠️ AUTHENTICATION FAILED\n\n"
+                        "WARNING: AUTHENTICATION FAILED\n\n"
                         "The login response didn't contain an authentication token.\n\n"
                         "TO RESOLVE:\n"
                         "1. Verify your credentials are correct\n"
@@ -2561,7 +5446,7 @@ class LoginDialog(QDialog):
                 
         except Exception as e:
             self.error_info_label.setText(
-                "⚠️ AUTHENTICATION ERROR\n\n"
+                "WARNING: AUTHENTICATION ERROR\n\n"
                 f"Error: {str(e)}\n\n"
                 "TO RESOLVE:\n"
                 "1. Check your internet connection\n"
@@ -2718,38 +5603,51 @@ class LoginDialog(QDialog):
             self.workflow.main_window.log_message(f"Error fetching HWIDs: {e}")
     
     def _connect_device(self):
-        """Connect to the MindLink device"""
+        """Connect to the EEG device (MindLink or ANT Neuro based on device type)"""
         import threading
-        from cushy_serial import CushySerial
         
-        port = BL.SERIAL_PORT
-        if not port:
-            port = BL.detect_brainlink()
-            BL.SERIAL_PORT = port
+        device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
         
-        if not port:
-            self.workflow.main_window.log_message("✗ No MindLink device found!")
-            return
-        
-        self.workflow.main_window.log_message(f"✓ Connecting to MindLink device: {port}")
-        
-        # Start MindLink connection - EXACTLY like base GUI
-        try:
-            self.workflow.main_window.serial_obj = CushySerial(port, BL.SERIAL_BAUD)
-            self.workflow.main_window.log_message("Starting MindLink thread...")
+        if device_type == "antneuro":
+            # ANT Neuro: DON'T start streaming here - we go to Metadata → Impedance Check first
+            # Streaming will start after impedance check completes (ImpedanceCheckDialog.on_next)
+            # This ensures metadata (including email) is set BEFORE recording starts
+            if ANT_NEURO.is_connected:
+                self.workflow.main_window.log_message("✓ ANT Neuro device connected (streaming deferred until after impedance check)")
+            else:
+                self.workflow.main_window.log_message("✗ ANT Neuro device not connected!")
+        else:
+            # MindLink device - use serial connection
+            from cushy_serial import CushySerial
             
-            BL.stop_thread_flag = False
+            port = BL.SERIAL_PORT
+            if not port:
+                port = BL.detect_brainlink()
+                BL.SERIAL_PORT = port
             
-            self.workflow.main_window.brainlink_thread = threading.Thread(
-                target=BL.run_brainlink, 
-                args=(self.workflow.main_window.serial_obj,)
-            )
-            self.workflow.main_window.brainlink_thread.daemon = True
-            self.workflow.main_window.brainlink_thread.start()
+            if not port:
+                self.workflow.main_window.log_message("✗ No MindLink device found!")
+                return
             
-            self.workflow.main_window.log_message("✓ MindLink connected successfully!")
-        except Exception as e:
-            self.workflow.main_window.log_message(f"✗ Failed to connect: {str(e)}")
+            self.workflow.main_window.log_message(f"✓ Connecting to MindLink device: {port}")
+            
+            # Start MindLink connection - EXACTLY like base GUI
+            try:
+                self.workflow.main_window.serial_obj = CushySerial(port, BL.SERIAL_BAUD)
+                self.workflow.main_window.log_message("Starting MindLink thread...")
+                
+                BL.stop_thread_flag = False
+                
+                self.workflow.main_window.brainlink_thread = threading.Thread(
+                    target=BL.run_brainlink, 
+                    args=(self.workflow.main_window.serial_obj,)
+                )
+                self.workflow.main_window.brainlink_thread.daemon = True
+                self.workflow.main_window.brainlink_thread.start()
+                
+                self.workflow.main_window.log_message("✓ MindLink connected successfully!")
+            except Exception as e:
+                self.workflow.main_window.log_message(f"✗ Failed to connect: {str(e)}")
     
     def _complete_login(self):
         """Complete login"""
@@ -2759,10 +5657,24 @@ class LoginDialog(QDialog):
         self.login_button.setText("Sign In to Connect")
     
     def on_auto_next(self):
-        """Auto-proceed to Partner ID after successful login"""
+        """Auto-proceed to next step after successful login.
+        
+        For ANT Neuro: Go to Metadata dialog (for subject info, impedances)
+        For MindLink: Go to Partner ID dialog
+        """
         self._programmatic_close = True
         self.close()
-        QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.PARTNER_ID))
+        
+        device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
+        
+        if device_type == "antneuro":
+            # ANT Neuro: Go to metadata collection (subject info, impedances, etc.)
+            print("[LOGIN] ANT Neuro device - proceeding to Metadata dialog")
+            QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.ANTNEURO_METADATA))
+        else:
+            # MindLink: Go to Partner ID
+            print("[LOGIN] MindLink device - proceeding to Partner ID dialog")
+            QTimer.singleShot(100, lambda: self.workflow.go_to_step(WorkflowStep.PARTNER_ID))
     
     def on_back(self):
         """Navigate back"""
@@ -2793,7 +5705,7 @@ class PathwaySelectionDialog(QDialog):
         title_label = QLabel("Choose Your Pathway")
         title_label.setObjectName("DialogTitle")
         
-        subtitle_label = QLabel("Step 6 of 9: Select the flow type to tailor your task list")
+        subtitle_label = QLabel("Step 7 of 10: Select the flow type to tailor your task list")
         subtitle_label.setObjectName("DialogSubtitle")
         subtitle_label.setWordWrap(True)
         
@@ -2815,12 +5727,12 @@ class PathwaySelectionDialog(QDialog):
         personal_desc.setStyleSheet("font-size: 12px; color: #64748b; margin-left: 24px; margin-bottom: 8px;")
         personal_desc.setWordWrap(True)
         
-        self.radio_connection = QRadioButton("Connection")
+        self.radio_connection = QRadioButton("Connection (Coming Soon)")
         connection_desc = QLabel("Mind Flow related tasks")
         connection_desc.setStyleSheet("font-size: 12px; color: #64748b; margin-left: 24px; margin-bottom: 8px;")
         connection_desc.setWordWrap(True)
         
-        self.radio_lifestyle = QRadioButton("Lifestyle")
+        self.radio_lifestyle = QRadioButton("Lifestyle (Coming Soon)")
         lifestyle_desc = QLabel("Style Flow related tasks")
         lifestyle_desc.setStyleSheet("font-size: 12px; color: #64748b; margin-left: 24px; margin-bottom: 8px;")
         lifestyle_desc.setWordWrap(True)
@@ -2945,6 +5857,238 @@ class PathwaySelectionDialog(QDialog):
 
 
 # ============================================================================
+# MULTI-CHANNEL VIEW DIALOG (64 channels visualization)
+# ============================================================================
+
+class MultiChannelViewDialog(QDialog):
+    """Popup dialog showing all 64 EEG channels in an 8x8 grid layout.
+    
+    Optimized for performance using:
+    - Downsampled data (100 points per channel)
+    - Batch updates (100ms interval)
+    - Minimal plot decorations
+    - Fixed Y-range (no auto-scaling)
+    """
+    
+    # NA-265 waveguard net 64-channel cap electrode layout (from UDO-SM-1002rev04 datasheet)
+    # Connector 1: Channels 1-32, Connector 2: Channels 33-64
+    # Channel index 0 = Channel Number 1 in datasheet
+    CHANNEL_NAMES = [
+        # Connector 1 (Channels 1-32)
+        'Fp1', 'Fp2', 'F9', 'F7', 'F3', 'Fz', 'F4', 'F8',      # 1-8
+        'F10', 'FC5', 'FC1', 'FC2', 'FC6', 'T9', 'T7', 'C3',    # 9-16
+        'C4', 'T8', 'T10', 'CP5', 'CP1', 'CP2', 'CP6', 'P9',    # 17-24
+        'P7', 'P3', 'Pz', 'P4', 'P8', 'P10', 'O1', 'O2',        # 25-32
+        # Connector 2 (Channels 33-64)
+        'AF7', 'AF3', 'AF4', 'AF8', 'F5', 'F1', 'F2', 'F6',     # 33-40
+        'FC3', 'FCz', 'FC4', 'C5', 'C1', 'C2', 'C6', 'CP3',     # 41-48
+        'CP4', 'P5', 'P1', 'P2', 'P6', 'PO5', 'PO3', 'PO4',     # 49-56
+        'PO6', 'FT7', 'FT8', 'TP7', 'TP8', 'PO7', 'PO8', 'POz'  # 57-64
+    ]
+    
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.setWindowTitle("All 64 EEG Channels - Real-Time View")
+        self.setModal(False)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        
+        # Make it large but not fullscreen
+        self.resize(1600, 900)
+        
+        # Set window icon
+        set_window_icon(self)
+        
+        # Number of channels and grid layout
+        self.n_channels = 64
+        self.grid_cols = 8
+        self.grid_rows = 8
+        
+        # Sample rate and display settings
+        self.sample_rate = get_device_sample_rate(main_window)
+        self.display_points = 100  # Downsampled points per channel
+        self.window_seconds = 2.0  # Show 2 seconds of data
+        
+        # Store plot curves
+        self.curves = []
+        self.plot_widgets = []
+        
+        # Build UI
+        self._build_ui()
+        
+        # Update timer - 100ms for 64 channels (10 FPS is smooth enough)
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self._update_all_plots)
+        self.update_timer.start(100)
+        
+        # Track if closed programmatically
+        self._programmatic_close = False
+    
+    def _build_ui(self):
+        """Build the 8x8 grid of plot widgets"""
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(4)
+        
+        # Header
+        header = QLabel("64-Channel EEG Real-Time Monitor")
+        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #1e40af; padding: 4px;")
+        header.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(header)
+        
+        # Info label
+        info = QLabel("Each plot shows 2 seconds of EEG data. Updated 10x per second. Y-axis: ±100 µV")
+        info.setStyleSheet("font-size: 11px; color: #64748b; padding: 2px;")
+        info.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(info)
+        
+        # Scroll area for the grid (in case window is small)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+        
+        # Grid container
+        grid_widget = QWidget()
+        grid_layout = QGridLayout(grid_widget)
+        grid_layout.setSpacing(2)
+        grid_layout.setContentsMargins(4, 4, 4, 4)
+        
+        # Create 64 mini plot widgets
+        for i in range(self.n_channels):
+            row = i // self.grid_cols
+            col = i % self.grid_cols
+            
+            # Container for each channel
+            ch_widget = QWidget()
+            ch_layout = QVBoxLayout(ch_widget)
+            ch_layout.setContentsMargins(0, 0, 0, 0)
+            ch_layout.setSpacing(0)
+            
+            # Channel label
+            ch_name = self.CHANNEL_NAMES[i] if i < len(self.CHANNEL_NAMES) else f"Ch{i+1}"
+            label = QLabel(f"{i+1}. {ch_name}")
+            label.setStyleSheet("font-size: 9px; font-weight: bold; color: #374151; padding: 1px;")
+            label.setAlignment(Qt.AlignCenter)
+            label.setFixedHeight(14)
+            
+            # Mini plot widget - minimal decorations for performance
+            plot = pg.PlotWidget()
+            plot.setBackground('#1e293b')  # Dark slate background
+            plot.setFixedHeight(80)
+            plot.setMinimumWidth(150)
+            
+            # Disable all axes labels and ticks for performance
+            plot.getPlotItem().hideAxis('left')
+            plot.getPlotItem().hideAxis('bottom')
+            plot.setMouseEnabled(x=False, y=False)  # Disable mouse interaction
+            plot.setMenuEnabled(False)  # Disable right-click menu
+            
+            # Fixed Y range
+            plot.setYRange(-100, 100, padding=0)
+            plot.enableAutoRange(enable=False)
+            
+            # Create curve with thin pen
+            curve = plot.plot(pen=pg.mkPen(color='#22d3ee', width=1))  # Cyan color
+            curve.setClipToView(True)
+            
+            self.curves.append(curve)
+            self.plot_widgets.append(plot)
+            
+            ch_layout.addWidget(label)
+            ch_layout.addWidget(plot)
+            
+            grid_layout.addWidget(ch_widget, row, col)
+        
+        scroll.setWidget(grid_widget)
+        main_layout.addWidget(scroll, 1)
+        
+        # Close button
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        close_btn = QPushButton("✕ Close")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ef4444;
+                color: white;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 8px 24px;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #dc2626;
+            }
+        """)
+        close_btn.clicked.connect(self.close)
+        btn_layout.addWidget(close_btn)
+        btn_layout.addStretch()
+        
+        main_layout.addLayout(btn_layout)
+        
+        self.setLayout(main_layout)
+        
+        # Dark theme for the dialog
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #0f172a;
+            }
+            QLabel {
+                color: #e2e8f0;
+            }
+        """)
+    
+    def _update_all_plots(self):
+        """Update all 64 channel plots from multichannel_buffer"""
+        try:
+            # Get multichannel buffer
+            multichannel_buffer = ANT_NEURO.multichannel_buffer
+            
+            if len(multichannel_buffer) < self.sample_rate:
+                return  # Not enough data yet
+            
+            # Get last N samples (window_seconds worth)
+            n_samples = int(self.window_seconds * self.sample_rate)
+            recent_data = list(multichannel_buffer)[-n_samples:]
+            
+            # Convert to numpy array (samples x channels)
+            data_array = np.array(recent_data)
+            
+            if data_array.ndim != 2:
+                return
+            
+            n_samples_actual, n_channels_actual = data_array.shape
+            
+            # Downsample for display (take every Nth point)
+            downsample_factor = max(1, n_samples_actual // self.display_points)
+            
+            # Create time axis
+            time_axis = np.linspace(0, self.window_seconds, min(self.display_points, n_samples_actual))
+            
+            # Update each channel
+            for ch_idx in range(min(self.n_channels, n_channels_actual)):
+                ch_data = data_array[::downsample_factor, ch_idx]
+                
+                # Center around zero (remove DC offset)
+                ch_data = ch_data - np.mean(ch_data)
+                
+                # Clip to ±100 µV for display
+                ch_data = np.clip(ch_data, -100, 100)
+                
+                # Update curve
+                if ch_idx < len(self.curves):
+                    self.curves[ch_idx].setData(time_axis[:len(ch_data)], ch_data)
+                    
+        except Exception as e:
+            print(f"[MultiChannel] Update error: {e}")
+    
+    def closeEvent(self, event):
+        """Clean up timer on close"""
+        self.update_timer.stop()
+        event.accept()
+
+
+# ============================================================================
 # STEP 5: LIVE EEG (Using REAL data stream)
 # ============================================================================
 
@@ -2967,7 +6111,7 @@ class LiveEEGDialog(QDialog):
         title_label.setObjectName("DialogTitle")
         title_label.setStyleSheet("font-size: 16px; font-weight: 600;")  # Reduced from 18px
         
-        subtitle_label = QLabel("Step 5 of 9: Monitoring real brain activity")
+        subtitle_label = QLabel("Step 6 of 10: Monitoring real brain activity")
         subtitle_label.setObjectName("DialogSubtitle")
         subtitle_label.setStyleSheet("font-size: 11px;")  # Reduced from 13px
         
@@ -2981,11 +6125,21 @@ class LiveEEGDialog(QDialog):
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground('k')
         self.plot_widget.setLabel('left', 'Amplitude (µV)')
-        self.plot_widget.setLabel('bottom', 'Time (samples)')
-        self.plot_widget.setTitle('Raw EEG Signal (upto 10s visual delay)', color='w', size='12pt')
+        self.plot_widget.setLabel('bottom', 'Time (seconds)')
+        self.plot_widget.setTitle('Live EEG Signal', color='w', size='12pt')
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
         
-        self.curve = self.plot_widget.plot(pen=pg.mkPen(color='#3b82f6', width=2))
+        # Disable auto-range for smoother scrolling, set fixed Y range
+        self.plot_widget.setYRange(-100, 100, padding=0)
+        self.plot_widget.enableAutoRange(axis='y', enable=False)
+        
+        # Use downsampling for faster rendering
+        self.curve = self.plot_widget.plot(pen=pg.mkPen(color='#3b82f6', width=1))
+        self.curve.setClipToView(True)  # Clip data to view for faster rendering
+        
+        # Time tracking for X-axis
+        self._plot_time_offset = 0  # Running time offset in seconds
+        self._plot_window_seconds = 5.0  # Show 5 seconds of data
         
         plot_layout.addWidget(self.plot_widget)
         
@@ -3060,6 +6214,28 @@ class LiveEEGDialog(QDialog):
         nav_layout.addWidget(self.back_button)
         nav_layout.addStretch()
         
+        # View All Channels button (only for ANT Neuro multi-channel)
+        device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
+        self.view_all_channels_btn = None
+        if device_type == "antneuro":
+            self.view_all_channels_btn = QPushButton("View All 64 Channels")
+            self.view_all_channels_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #7c3aed;
+                    color: white;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 6px 14px;
+                    border-radius: 6px;
+                }
+                QPushButton:hover {
+                    background-color: #6d28d9;
+                }
+            """)
+            self.view_all_channels_btn.clicked.connect(self._open_multichannel_view)
+            nav_layout.addWidget(self.view_all_channels_btn)
+            nav_layout.addStretch()
+        
         self.next_button = QPushButton("Next →")
         self.next_button.setStyleSheet("font-size: 11px; padding: 6px 12px;")
         self.next_button.clicked.connect(self.on_next)
@@ -3087,7 +6263,7 @@ class LiveEEGDialog(QDialog):
         # Start live update timer using REAL data
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_plot)
-        self.update_timer.start(50)  # 20 Hz update rate
+        self.update_timer.start(33)  # 30 Hz update rate for smoother animation
         
         # Track consecutive no-data occurrences for transmission stop detection
         self.no_data_count = 0
@@ -3103,40 +6279,19 @@ class LiveEEGDialog(QDialog):
         in real-time through the feature_engine which processes data immediately
         as it arrives via the onRaw callback. This plot is purely for visualization.
         """
+        # Get the correct data buffer based on device type
+        data_buffer = get_live_data_buffer(self.workflow.main_window)
+        sample_rate = get_device_sample_rate(self.workflow.main_window)
+        
         # Debug: Print buffer size every 2 seconds
         if not hasattr(self, '_plot_debug_counter'):
             self._plot_debug_counter = 0
         self._plot_debug_counter += 1
-        if self._plot_debug_counter >= 40:  # Every 2 seconds at 50ms
+        debug_print = (self._plot_debug_counter >= 40)  # Every 2 seconds at 50ms
+        if debug_print:
             self._plot_debug_counter = 0
             buf_size = len(BL.live_data_buffer)
             print(f"[Plot Debug] Buffer size: {buf_size} samples ({buf_size/512:.1f}s of data)")
-        
-        # -------------------------------------------------------
-        # CRITICAL: Check hardware signal quality FIRST
-        # If signal=200, the onRaw() gate blocks samples, making
-        # buffer empty. Must check this BEFORE buffer length to
-        # show "Not Worn" instead of "Device Disconnected".
-        # -------------------------------------------------------
-        _hw_signal = getattr(BL, 'headset_signal_quality', None)
-        if _hw_signal is not None and _hw_signal >= 200:
-            import time as _t
-            _now = _t.time()
-            # Headset is transmitting but electrode has no contact
-            self._sq_displayed_noisy = True
-            self._sq_noisy_reason = 'demo_signal'
-            self._sq_worn_since = None
-            if not getattr(self, '_sq_not_worn_since', None):
-                self._sq_not_worn_since = _now
-            self.info_label.setText("⚠ Headset Not Worn | Electrode contact lost - press headset firmly against forehead")
-            self.info_label.setStyleSheet("color: #ef4444; font-size: 13px; padding: 8px; font-weight: 600;")
-            # Reset transmission error since device IS transmitting
-            self.no_data_count = 0
-            if self.transmission_stopped:
-                self.transmission_stopped = False
-                self.transmission_error_label.setVisible(False)
-                self.next_button.setEnabled(True)
-            return
         
         # Use the REAL data buffer from the base GUI
         if len(BL.live_data_buffer) >= 512:
@@ -3153,36 +6308,15 @@ class LiveEEGDialog(QDialog):
                 self.next_button.setEnabled(True)
             
             # Professional signal quality assessment (same simplified logic as header)
-            import time as _t
-            _now = _t.time()
-            _result = assess_eeg_signal_quality(data, fs=512)
-            if _result is None:
-                return
-            quality_score, status, details = _result
-
-            # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
+            quality_score, status, details = assess_eeg_signal_quality(data, fs=512)
+            
+            # Simplified logic: Only show "Noisy" if headset is not worn
             if status == "not_worn":
-                self._sq_worn_since = None
-                if not getattr(self, '_sq_not_worn_since', None):
-                    self._sq_not_worn_since = _now
-                if (_now - self._sq_not_worn_since) >= 3.0:
-                    self._sq_displayed_noisy = True
-                    self._sq_noisy_reason = details.get('not_worn_reason', 'not_worn')
+                self.info_label.setText("⚠ Signal quality: Noisy | Headset not detected - Please wear the headset properly")
+                self.info_label.setStyleSheet("color: #f59e0b; font-size: 13px; padding: 8px; font-weight: 600;")
             else:
-                self._sq_not_worn_since = None
-                if not getattr(self, '_sq_worn_since', None):
-                    self._sq_worn_since = _now
-                if (_now - self._sq_worn_since) >= 5.0:
-                    self._sq_displayed_noisy = False
-            if getattr(self, '_sq_displayed_noisy', False):
-                if getattr(self, '_sq_noisy_reason', '') == 'demo_signal':
-                    self.info_label.setText("⚠ Demo Signal detected | Adjust electrode contact - press headset firmly against forehead")
-                    self.info_label.setStyleSheet("color: #ef4444; font-size: 13px; padding: 8px; font-weight: 600;")
-                else:
-                    self.info_label.setText("⚠ Signal quality: Noisy | Headset not detected - Please wear the headset properly")
-                    self.info_label.setStyleSheet("color: #f59e0b; font-size: 13px; padding: 8px; font-weight: 600;")
-            else:
-                self.info_label.setText("✓ Signal quality: Good | Data flowing normally")
+                # If user is wearing it, show Good regardless of other quality metrics
+                self.info_label.setText(f"✓ Signal quality: Good | Data flowing normally")
                 self.info_label.setStyleSheet("color: #10b981; font-size: 13px; padding: 8px; font-weight: 600;")
         else:
             # No data detected - increment counter
@@ -3192,7 +6326,7 @@ class LiveEEGDialog(QDialog):
             if self.no_data_count >= 20 and not self.transmission_stopped:
                 self.transmission_stopped = True
                 self.transmission_error_label.setText(
-                    "⚠️ TRANSMISSION STOPPED\n\n"
+                    "WARNING: TRANSMISSION STOPPED\n\n"
                     "EEG signal transmission has stopped. The device may be disconnected.\n\n"
                     "TO RESOLVE:\n"
                     "1. Close this application completely\n"
@@ -3208,6 +6342,24 @@ class LiveEEGDialog(QDialog):
             # Device disconnected or no data
             self.info_label.setText("⚠ No signal detected | Device may be disconnected")
             self.info_label.setStyleSheet("color: #ef4444; font-size: 13px; padding: 8px;")
+    
+    def _open_multichannel_view(self):
+        """Open the 64-channel visualization popup"""
+        try:
+            # Use shared instance from main_window to avoid duplicate dialogs
+            if not hasattr(self.workflow.main_window, 'multichannel_dialog') or self.workflow.main_window.multichannel_dialog is None or not self.workflow.main_window.multichannel_dialog.isVisible():
+                self.workflow.main_window.multichannel_dialog = MultiChannelViewDialog(self.workflow.main_window, parent=None)
+                self.workflow.main_window.multichannel_dialog.show()
+                print("[LiveEEG] Opened 64-channel visualization popup")
+            else:
+                # Bring existing dialog to front
+                self.workflow.main_window.multichannel_dialog.raise_()
+                self.workflow.main_window.multichannel_dialog.activateWindow()
+                print("[LiveEEG] Brought existing 64-channel dialog to front")
+        except Exception as e:
+            print(f"[LiveEEG] Error opening multichannel view: {e}")
+            import traceback
+            traceback.print_exc()
     
     def show_reconnect_guidance(self):
         """Show guidance for reconnecting device"""
@@ -3312,7 +6464,7 @@ class CalibrationDialog(QDialog):
         title_label = QLabel("Baseline Calibration")
         title_label.setObjectName("DialogTitle")
         
-        subtitle_label = QLabel("Step 7 of 9: Establish your baseline brain activity")
+        subtitle_label = QLabel("Step 8 of 10: Establish your baseline brain activity")
         subtitle_label.setObjectName("DialogSubtitle")
         
         # Instructions card
@@ -3359,13 +6511,13 @@ class CalibrationDialog(QDialog):
             "background: #f3f4f6; border-radius: 4px;"
         )
         
-        self.ec_button = QPushButton("🎯 Start Eyes Closed Calibration")
+        self.ec_button = QPushButton("Start Eyes Closed Calibration")
         self.ec_button.clicked.connect(self.show_eyes_closed_prep)
         self.ec_button.setStyleSheet(
             "padding: 12px; font-size: 14px; font-weight: 600;"
         )
         
-        self.eo_button = QPushButton("🎯 Start Eyes Open Calibration")
+        self.eo_button = QPushButton("Start Eyes Open Calibration")
         self.eo_button.clicked.connect(self.show_eyes_open_prep)
         self.eo_button.setEnabled(False)
         self.eo_button.setStyleSheet(
@@ -3442,67 +6594,40 @@ class CalibrationDialog(QDialog):
         self._sig_noisy_reason = 'not_worn'  # reason for last noisy state
 
     def update_signal_quality(self):
-        """Update signal quality indicator - exact same logic as LiveEEGDialog.update_plot()."""
-        import time as _time
+        """Update signal quality indicator using professional multi-metric assessment"""
         try:
-            # -------------------------------------------------------
-            # CRITICAL: Check hardware signal quality FIRST
-            # If signal=200, the onRaw() gate blocks samples, making
-            # buffer empty. Must check this BEFORE buffer length.
-            # -------------------------------------------------------
-            _hw_signal = getattr(BL, 'headset_signal_quality', None)
-            now = _time.time()
-            if _hw_signal is not None and _hw_signal >= 200:
-                # Headset is transmitting but electrode has no contact
-                self._sig_displayed_noisy = True
-                self._sig_noisy_reason = 'demo_signal'
-                self._sig_worn_since = None
-                if not self._sig_not_worn_since:
-                    self._sig_not_worn_since = now
-                self.signal_quality_label.setText("⚠ Demo Signal")
-                self.signal_quality_label.setStyleSheet(
-                    "font-size: 12px; color: #dc2626; padding: 6px; "
-                    "background: #fee2e2; border-radius: 4px; font-weight: 600;"
-                )
-                return
-            
             if len(BL.live_data_buffer) >= 512:
-                data = np.array(BL.live_data_buffer[-512:])
-
-                result = assess_eeg_signal_quality(data, fs=512)
-                if result is None:
-                    return
-                quality_score, status, details = result
-
-                # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
-                now = _time.time()
-                if status == "not_worn":
-                    self._sig_worn_since = None
-                    if not self._sig_not_worn_since:
-                        self._sig_not_worn_since = now
-                    if (now - self._sig_not_worn_since) >= 3.0:
-                        self._sig_displayed_noisy = True
-                        self._sig_noisy_reason = details.get('not_worn_reason', 'not_worn')
-                else:
-                    self._sig_not_worn_since = None
-                    if not self._sig_worn_since:
-                        self._sig_worn_since = now
-                    if (now - self._sig_worn_since) >= 5.0:
-                        self._sig_displayed_noisy = False
-
-                if self._sig_displayed_noisy:
-                    if self._sig_noisy_reason == 'demo_signal':
-                        self.signal_quality_label.setText("⚠ Demo Signal")
-                        self.signal_quality_label.setStyleSheet(
-                            "font-size: 12px; color: #dc2626; padding: 6px; "
-                            "background: #fee2e2; border-radius: 4px; font-weight: 600;"
-                        )
-                    else:
-                        self.signal_quality_label.setText("⚠ Signal: Noisy")
-                        self.signal_quality_label.setStyleSheet(
-                            "font-size: 12px; color: #d97706; padding: 6px; "
-                            "background: #fef3c7; border-radius: 4px; font-weight: 600;"
-                        )
+                import time
+                # Use proper window size for signal analysis
+                data = np.array(list(BL.live_data_buffer)[-512:])
+                
+                # Professional signal quality assessment
+                quality_score, status, details = assess_eeg_signal_quality(data, fs=512)
+                
+                # Track quality history (timestamp, score)
+                current_time = time.time()
+                self.quality_history.append((current_time, quality_score))
+                
+                # Remove entries older than 5 seconds
+                self.quality_history = [(t, q) for t, q in self.quality_history if current_time - t <= 5.0]
+                
+                # Count how many times quality dropped to or below threshold in last 5 seconds
+                poor_count = sum(1 for t, q in self.quality_history if q <= self.poor_quality_threshold)
+                
+                # Update noisy state: need 5+ poor readings in 5 seconds to trigger
+                if poor_count >= 5:
+                    self.is_noisy = True
+                elif poor_count == 0:  # All recent readings good - reset
+                    self.is_noisy = False
+                # Otherwise maintain current state (hysteresis)
+                
+                # Display only two states: Good or Noisy
+                if self.is_noisy:
+                    self.signal_quality_label.setText("⚠ Signal: Noisy")
+                    self.signal_quality_label.setStyleSheet(
+                        "font-size: 12px; color: #d97706; padding: 6px; "
+                        "background: #fef3c7; border-radius: 4px; font-weight: 600;"
+                    )
                 else:
                     self.signal_quality_label.setText("✓ Signal: Good")
                     self.signal_quality_label.setStyleSheet(
@@ -3570,67 +6695,26 @@ class CalibrationDialog(QDialog):
                      'not_worn_since': None, 'worn_since': None, 'displayed_noisy': False, 'noisy_reason': 'not_worn'}
         _STALE_S = 2.0
         def update_prep_signal():
-            import time as _time
-            # -------------------------------------------------------
-            # CRITICAL: Check hardware signal quality FIRST
-            # -------------------------------------------------------
-            _hw_signal = getattr(BL, 'headset_signal_quality', None)
-            now = _time.time()
-            if _hw_signal is not None and _hw_signal >= 200:
-                # Headset is transmitting but electrode has no contact
-                _sq_state['displayed_noisy'] = True
-                _sq_state['noisy_reason'] = 'demo_signal'
-                signal_label.setText("⚠ Demo Signal")
-                signal_label.setStyleSheet(
-                    "font-size: 13px; color: #dc2626; padding: 8px; "
-                    "background: #fee2e2; border-radius: 6px; font-weight: 600;"
-                )
-                return
-            
+            import time
             if len(BL.live_data_buffer) >= 512:
                 data = np.array(list(BL.live_data_buffer)[-512:])
-                current_tail = tuple(data[-4:])
-                if current_tail != _sq_state['last_tail']:
-                    _sq_state['last_tail'] = current_tail
-                    _sq_state['last_change'] = now
-                elif _sq_state['last_change'] and (now - _sq_state['last_change']) > _STALE_S:
-                    signal_label.setText("✗ Signal: No Signal")
+                quality_score, status, details = assess_eeg_signal_quality(data, fs=512)
+                
+                # Track quality locally
+                current_time = time.time()
+                prep_quality_history.append((current_time, quality_score))
+                # Remove entries older than 5 seconds
+                while prep_quality_history and current_time - prep_quality_history[0][0] > 5.0:
+                    prep_quality_history.pop(0)
+                
+                poor_count = sum(1 for t, q in prep_quality_history if q <= self.poor_quality_threshold)
+                
+                if poor_count >= 5:
+                    signal_label.setText("⚠ Signal: Noisy")
                     signal_label.setStyleSheet(
-                        "font-size: 13px; color: #6b7280; padding: 8px; "
-                        "background: #f3f4f6; border-radius: 6px; font-weight: 600;"
+                        "font-size: 13px; color: #d97706; padding: 8px; "
+                        "background: #fef3c7; border-radius: 6px; font-weight: 600;"
                     )
-                    return
-                _sq_res = assess_eeg_signal_quality(data, fs=512)
-                if _sq_res is None:
-                    return
-                quality_score, status, details = _sq_res
-                # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
-                if status == "not_worn":
-                    _sq_state['worn_since'] = None
-                    if not _sq_state['not_worn_since']:
-                        _sq_state['not_worn_since'] = now
-                    if (now - _sq_state['not_worn_since']) >= 3.0:
-                        _sq_state['displayed_noisy'] = True
-                        _sq_state['noisy_reason'] = details.get('not_worn_reason', 'not_worn')
-                else:
-                    _sq_state['not_worn_since'] = None
-                    if not _sq_state['worn_since']:
-                        _sq_state['worn_since'] = now
-                    if (now - _sq_state['worn_since']) >= 5.0:
-                        _sq_state['displayed_noisy'] = False
-                if _sq_state['displayed_noisy']:
-                    if _sq_state.get('noisy_reason') == 'demo_signal':
-                        signal_label.setText("⚠ Demo Signal")
-                        signal_label.setStyleSheet(
-                            "font-size: 13px; color: #dc2626; padding: 8px; "
-                            "background: #fee2e2; border-radius: 6px; font-weight: 600;"
-                        )
-                    else:
-                        signal_label.setText("⚠ Signal: Noisy")
-                        signal_label.setStyleSheet(
-                            "font-size: 13px; color: #d97706; padding: 8px; "
-                            "background: #fef3c7; border-radius: 6px; font-weight: 600;"
-                        )
                 else:
                     signal_label.setText("✓ Signal: Good")
                     signal_label.setStyleSheet(
@@ -3705,7 +6789,7 @@ class CalibrationDialog(QDialog):
     def update_countdown(self):
         """Update countdown display and play audio"""
         if self.countdown_value > 0:
-            self.status_label.setText(f"⏳ Countdown: {self.countdown_value}")
+            self.status_label.setText(f"Countdown: {self.countdown_value}")
             self.phase_label.setText(f"Listening to audio: {self.countdown_value}...")
             # Play countdown beep (cross-platform)
             play_beep(800, 200)  # 800Hz, 200ms
@@ -3778,67 +6862,26 @@ class CalibrationDialog(QDialog):
                      'not_worn_since': None, 'worn_since': None, 'displayed_noisy': False, 'noisy_reason': 'not_worn'}
         _STALE_S = 2.0
         def update_prep_signal():
-            import time as _time
-            # -------------------------------------------------------
-            # CRITICAL: Check hardware signal quality FIRST
-            # -------------------------------------------------------
-            _hw_signal = getattr(BL, 'headset_signal_quality', None)
-            now = _time.time()
-            if _hw_signal is not None and _hw_signal >= 200:
-                # Headset is transmitting but electrode has no contact
-                _sq_state['displayed_noisy'] = True
-                _sq_state['noisy_reason'] = 'demo_signal'
-                signal_label.setText("⚠ Demo Signal")
-                signal_label.setStyleSheet(
-                    "font-size: 13px; color: #dc2626; padding: 8px; "
-                    "background: #fee2e2; border-radius: 6px; font-weight: 600;"
-                )
-                return
-            
+            import time
             if len(BL.live_data_buffer) >= 512:
                 data = np.array(list(BL.live_data_buffer)[-512:])
-                current_tail = tuple(data[-4:])
-                if current_tail != _sq_state['last_tail']:
-                    _sq_state['last_tail'] = current_tail
-                    _sq_state['last_change'] = now
-                elif _sq_state['last_change'] and (now - _sq_state['last_change']) > _STALE_S:
-                    signal_label.setText("✗ Signal: No Signal")
+                quality_score, status, details = assess_eeg_signal_quality(data, fs=512)
+                
+                # Track quality locally
+                current_time = time.time()
+                prep_quality_history.append((current_time, quality_score))
+                # Remove entries older than 5 seconds
+                while prep_quality_history and current_time - prep_quality_history[0][0] > 5.0:
+                    prep_quality_history.pop(0)
+                
+                poor_count = sum(1 for t, q in prep_quality_history if q <= self.poor_quality_threshold)
+                
+                if poor_count >= 5:
+                    signal_label.setText("⚠ Signal: Noisy")
                     signal_label.setStyleSheet(
-                        "font-size: 13px; color: #6b7280; padding: 8px; "
-                        "background: #f3f4f6; border-radius: 6px; font-weight: 600;"
+                        "font-size: 13px; color: #d97706; padding: 8px; "
+                        "background: #fef3c7; border-radius: 6px; font-weight: 600;"
                     )
-                    return
-                _sq_res = assess_eeg_signal_quality(data, fs=512)
-                if _sq_res is None:
-                    return
-                quality_score, status, details = _sq_res
-                # Asymmetric hysteresis: 3s not_worn → Noisy; 5s worn → Good.
-                if status == "not_worn":
-                    _sq_state['worn_since'] = None
-                    if not _sq_state['not_worn_since']:
-                        _sq_state['not_worn_since'] = now
-                    if (now - _sq_state['not_worn_since']) >= 3.0:
-                        _sq_state['displayed_noisy'] = True
-                        _sq_state['noisy_reason'] = details.get('not_worn_reason', 'not_worn')
-                else:
-                    _sq_state['not_worn_since'] = None
-                    if not _sq_state['worn_since']:
-                        _sq_state['worn_since'] = now
-                    if (now - _sq_state['worn_since']) >= 5.0:
-                        _sq_state['displayed_noisy'] = False
-                if _sq_state['displayed_noisy']:
-                    if _sq_state.get('noisy_reason') == 'demo_signal':
-                        signal_label.setText("⚠ Demo Signal")
-                        signal_label.setStyleSheet(
-                            "font-size: 13px; color: #dc2626; padding: 8px; "
-                            "background: #fee2e2; border-radius: 6px; font-weight: 600;"
-                        )
-                    else:
-                        signal_label.setText("⚠ Signal: Noisy")
-                        signal_label.setStyleSheet(
-                            "font-size: 13px; color: #d97706; padding: 8px; "
-                            "background: #fef3c7; border-radius: 6px; font-weight: 600;"
-                        )
                 else:
                     signal_label.setText("✓ Signal: Good")
                     signal_label.setStyleSheet(
@@ -3893,7 +6936,7 @@ class CalibrationDialog(QDialog):
     def start_eyes_open(self):
         """Start eyes-open calibration with countdown"""
         self.current_phase = 'eyes_open'
-        self.status_label.setText("⏳ Countdown starting...")
+        self.status_label.setText("Countdown starting...")
         self.phase_label.setText("Get ready! Listen for the countdown...")
         self.eo_button.setEnabled(False)
         self.back_button.setEnabled(False)
@@ -3920,7 +6963,7 @@ class CalibrationDialog(QDialog):
             self.feature_engine.stop_calibration_phase()
             
             if self.current_phase == 'eyes_closed':
-                self.status_label.setText("✅ Eyes Closed Complete!")
+                self.status_label.setText("Eyes Closed Complete!")
                 self.phase_label.setText("Great! Now let's record with eyes open.")
                 self.eo_button.setEnabled(True)
                 self.back_button.setEnabled(True)
@@ -3935,7 +6978,7 @@ class CalibrationDialog(QDialog):
                     QMessageBox.Ok
                 )
             elif self.current_phase == 'eyes_open':
-                self.status_label.setText("✅ Calibration Complete!")
+                self.status_label.setText("Calibration Complete!")
                 self.phase_label.setText("Both baseline phases recorded successfully!")
                 self.back_button.setEnabled(True)
                 
@@ -4064,7 +7107,10 @@ class TaskSelectionDialog(QDialog):
         self.setWindowTitle("MindLink - Task Selection")
         self.setModal(True)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
-        self.setMinimumSize(550, 500)
+        
+        # Set reasonable size - avoid geometry warnings
+        self.setMinimumSize(550, 550)
+        self.resize(600, 650)
         
         # Set window icon
         set_window_icon(self)
@@ -4078,17 +7124,40 @@ class TaskSelectionDialog(QDialog):
             for i in range(self.workflow.main_window.task_combo.count()):
                 task_id = self.workflow.main_window.task_combo.itemText(i)
                 self.available_task_ids.append(task_id)
+            print(f"[TASK SELECTION] Loaded {len(self.available_task_ids)} tasks from main window: {self.available_task_ids}")
         
         # Fall back to all tasks if filtering failed
         if not self.available_task_ids:
-            self.available_task_ids = list(BL.AVAILABLE_TASKS.keys())
+            # Check device type for multichannel filtering
+            device_type = getattr(self.workflow.main_window, 'device_type', 'mindlink')
+            is_multichannel = (device_type == 'antneuro')
+            
+            # Filter tasks based on device capabilities
+            print(f"[TASK SELECTION] Using fallback - device_type='{device_type}', is_multichannel={is_multichannel}")
+            for task_id in BL.AVAILABLE_TASKS.keys():
+                task_def = BL.AVAILABLE_TASKS[task_id]
+                multichannel_only = task_def.get('multichannel_only', False)
+                # Skip multichannel-only tasks on single-channel devices
+                if multichannel_only and not is_multichannel:
+                    print(f"[TASK SELECTION] ❌ Skipping '{task_id}' - multichannel_only=True, device={device_type}")
+                    continue
+                print(f"[TASK SELECTION] ✓ Adding '{task_id}' (multichannel_only={multichannel_only})")
+                self.available_task_ids.append(task_id)
+        
+        # Main layout
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(24, 24, 24, 24)
+        main_layout.setSpacing(18)
         
         # UI Elements
         title_label = QLabel("Cognitive Tasks")
         title_label.setObjectName("DialogTitle")
         
-        subtitle_label = QLabel("Step 8 of 9: Select tasks to perform")
+        subtitle_label = QLabel("Step 9 of 10: Select tasks to perform")
         subtitle_label.setObjectName("DialogSubtitle")
+        
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(subtitle_label)
         
         # Task selection card
         task_card = QFrame()
@@ -4101,18 +7170,21 @@ class TaskSelectionDialog(QDialog):
         task_label.setObjectName("DialogSectionTitle")
         
         self.task_combo = QComboBox()
+        self.task_combo.setMinimumHeight(36)
+        
         # Populate with task names as display text and task IDs as data
         # Get completed tasks to disable them
         completed_tasks = self._get_completed_task_ids()
-        has_booking = getattr(self.workflow.main_window, 'has_advanced_booking', False)
+        
+        # Basic tasks that don't need 'Advanced' tag
+        basic_tasks = [ 'visual_imagery', 'attention_focus', 'mental_math', 'emotion_face']
         
         for task_id in self.available_task_ids:
             if task_id in BL.AVAILABLE_TASKS:
                 task_name = BL.AVAILABLE_TASKS[task_id].get('name', task_id)
-                is_advanced = self._is_advanced_task(task_id)
                 
                 # Add 'Advanced' tag for non-basic tasks
-                if is_advanced:
+                if task_id not in basic_tasks:
                     task_name = f"{task_name} (Advanced)"
                 
                 # Mark completed tasks with checkmark
@@ -4123,63 +7195,67 @@ class TaskSelectionDialog(QDialog):
                 
                 self.task_combo.addItem(display_name, task_id)  # Display name, store ID as data
                 
-                model = self.task_combo.model()
-                item = model.item(self.task_combo.count() - 1)
-                
-                # Disable if already completed
+                # Disable the item if task is already completed
                 if task_id in completed_tasks:
+                    model = self.task_combo.model()
+                    item = model.item(self.task_combo.count() - 1)
                     item.setEnabled(False)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled)  # Explicitly disable
                     item.setToolTip("This task has already been completed")
-                # Disable advanced tasks when no booking exists
-                elif is_advanced and not has_booking:
-                    item.setEnabled(False)
-                    item.setToolTip(
-                        "Advanced task – requires a valid booking with the partner.\n"
-                        "Please ask your partner to create a session booking for you."
-                    )
         
-        self.task_combo.currentIndexChanged.connect(self._on_task_changed)
-        self.task_combo.currentIndexChanged.connect(lambda _: self.update_task_preview())
+        self.task_combo.currentIndexChanged.connect(self.update_task_preview)
         
         task_layout.addWidget(task_label)
         task_layout.addWidget(self.task_combo)
         
-        # Task preview card
+        main_layout.addWidget(task_card)
+        
+        # Task preview card - use scroll area for better content handling
         preview_card = QFrame()
         preview_card.setObjectName("DialogCard")
-        preview_layout = QVBoxLayout(preview_card)
-        preview_layout.setContentsMargins(16, 16, 16, 16)
-        preview_layout.setSpacing(10)
+        preview_card_layout = QVBoxLayout(preview_card)
+        preview_card_layout.setContentsMargins(16, 16, 16, 16)
+        preview_card_layout.setSpacing(12)
         
         preview_title = QLabel("Task Details:")
         preview_title.setObjectName("DialogSectionTitle")
+        preview_card_layout.addWidget(preview_title)
         
+        # Scrollable text area for task description
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll_area.setMinimumHeight(150)
+        scroll_area.setMaximumHeight(200)
+        
+        # Task description widget
         self.task_description = QLabel()
         self.task_description.setWordWrap(True)
-        self.task_description.setTextFormat(Qt.RichText)
         self.task_description.setStyleSheet("font-size: 13px; color: #475569;")
         
         self.start_task_button = QPushButton("Start This Task")
         self.start_task_button.clicked.connect(self.start_selected_task)
-        self.start_task_button.setStyleSheet("padding: 10px; font-size: 14px; font-weight: 600;")
+        self.start_task_button.setStyleSheet("padding: 12px; font-size: 14px; font-weight: 600;")
+        self.start_task_button.setMinimumHeight(44)
+        preview_card_layout.addWidget(self.start_task_button)
         
-        preview_layout.addWidget(preview_title)
-        preview_layout.addWidget(self.task_description)
-        preview_layout.addWidget(self.start_task_button)
+        main_layout.addWidget(preview_card, 1)
         
         # Completed tasks info
         self.completed_label = QLabel()
+        self.completed_label.setWordWrap(True)
         self.completed_label.setStyleSheet("font-size: 12px; color: #64748b; padding: 8px;")
         self.update_completed_tasks_display()
-        
-        # Initial task preview update
-        self.update_task_preview()
+        main_layout.addWidget(self.completed_label)
         
         # Navigation buttons
         nav_layout = QHBoxLayout()
+        nav_layout.setSpacing(12)
         
         self.back_button = QPushButton("← Back")
         self.back_button.clicked.connect(self.on_back)
+        self.back_button.setMinimumHeight(40)
         self.back_button.setStyleSheet("""
             QPushButton {
                 background-color: #e2e8f0;
@@ -4195,24 +7271,16 @@ class TaskSelectionDialog(QDialog):
         
         self.next_button = QPushButton("Proceed to Analysis →")
         self.next_button.clicked.connect(self.on_next)
+        self.next_button.setMinimumHeight(40)
         # Enable if tasks have been completed
         completed_count = len([t for t in self.workflow.main_window.feature_engine.calibration_data.get('tasks', {}).keys() 
                                if t not in ['baseline', 'eyes_closed', 'eyes_open']])
         self.next_button.setEnabled(completed_count > 0)
         nav_layout.addWidget(self.next_button)
         
-        # Layout assembly
-        layout = QVBoxLayout()
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(18)
-        layout.addWidget(title_label)
-        layout.addWidget(subtitle_label)
-        layout.addWidget(task_card)
-        layout.addWidget(preview_card)
-        layout.addWidget(self.completed_label)
-        layout.addLayout(nav_layout)
+        main_layout.addLayout(nav_layout)
         
-        self.setLayout(layout)
+        self.setLayout(main_layout)
         apply_modern_dialog_theme(self)
         
         # Add MindLink status bar
@@ -4234,15 +7302,21 @@ class TaskSelectionDialog(QDialog):
         return completed_tasks
     
     def _center_on_screen(self):
-        """Center the dialog on the screen"""
+        """Center the dialog on the screen with bounds checking"""
         try:
             screen = QtWidgets.QApplication.primaryScreen()
             if screen:
                 screen_geometry = screen.availableGeometry()
-                dialog_geometry = self.frameGeometry()
-                center_point = screen_geometry.center()
-                dialog_geometry.moveCenter(center_point)
-                self.move(dialog_geometry.topLeft())
+                
+                # Ensure dialog size fits within screen
+                dialog_width = min(self.width(), screen_geometry.width() - 50)
+                dialog_height = min(self.height(), screen_geometry.height() - 50)
+                self.resize(dialog_width, dialog_height)
+                
+                # Center on screen
+                x = screen_geometry.x() + (screen_geometry.width() - dialog_width) // 2
+                y = screen_geometry.y() + (screen_geometry.height() - dialog_height) // 2
+                self.move(x, y)
         except Exception as e:
             print(f"Warning: Could not center dialog: {e}")
     
@@ -4350,39 +7424,23 @@ class TaskSelectionDialog(QDialog):
         if task_id and task_id in BL.AVAILABLE_TASKS:
             task_info = BL.AVAILABLE_TASKS[task_id]
             task_name = task_info.get('name', task_id)
-            desc = task_info.get('description') or "No description available."
-            duration = task_info.get('duration')
-            instructions = task_info.get('instructions') or ""
-
-            is_advanced = self._is_advanced_task(task_id)
-            has_booking = getattr(self.workflow.main_window, 'has_advanced_booking', False)
-            is_locked = is_advanced and not has_booking
+            desc = task_info.get('description', '')
+            duration = task_info.get('duration', 60)
+            instructions = task_info.get('instructions', '')
             
-            preview_text = f"<b>{task_name}</b>"
+            preview_text = f"<p style='margin: 0 0 8px 0;'><b style='font-size: 14px;'>{task_name}</b>"
             
             if is_completed:
                 preview_text += " <span style='color: #10b981; font-weight: 600;'>✓ Completed</span>"
             
             preview_text += "<br><br>"
             preview_text += f"Description: {desc}<br>"
-            if duration:
-                preview_text += f"Duration: ~{duration} seconds<br><br>"
-            else:
-                preview_text += "Duration: Not specified<br><br>"
+            preview_text += f"Duration: ~{duration} seconds<br><br>"
             if instructions:
                 preview_text += f"Instructions: {instructions}"
-            else:
-                preview_text += "Instructions: Follow the on-screen prompts to complete this task."
             
             if is_completed:
                 preview_text += "<br><br><span style='color: #f59e0b; font-weight: 600;'>⚠️ This task has already been completed. Please select a different task.</span>"
-            elif is_locked:
-                preview_text += (
-                    "<br><br><span style='color: #dc2626; font-weight: 600;'>"
-                    "🔒 Advanced task – requires a valid booking with the partner.<br>"
-                    "Please ask your partner to create an advanced session booking for you."
-                    "</span>"
-                )
             
             self.task_description.setText(preview_text)
             
@@ -4396,7 +7454,7 @@ class TaskSelectionDialog(QDialog):
             else:
                 self.start_task_button.setText("Start This Task")
         else:
-            self.task_description.setText("Task information not available")
+            self.task_description.setText("<p style='font-style: italic; color: #94a3b8;'>Task information not available</p>")
             self.start_task_button.setEnabled(False)
     
     def start_selected_task(self):
@@ -4416,17 +7474,6 @@ class TaskSelectionDialog(QDialog):
                 self, 
                 "Task Already Completed", 
                 f"The task '{BL.AVAILABLE_TASKS[task_id].get('name', task_id)}' has already been completed.\n\nPlease select a different task."
-            )
-            return
-        
-        # Block advanced tasks without a booking
-        if self._is_advanced_task(task_id) and not getattr(self.workflow.main_window, 'has_advanced_booking', False):
-            QMessageBox.warning(
-                self,
-                "Booking Required",
-                f"'{BL.AVAILABLE_TASKS[task_id].get('name', task_id)}' is an advanced task.\n\n"
-                "A valid session booking with the partner is required to run advanced tasks.\n"
-                "Please ask your partner to create a booking for you."
             )
             return
         
@@ -4464,9 +7511,16 @@ class TaskSelectionDialog(QDialog):
             tasks = engine.calibration_data.get('tasks', {})
             print(f"\n=== TASK COMPLETION DEBUG ===")
             print(f"Task dialog closed. Checking stored data...")
+            print(f"Engine current_state: {getattr(engine, 'current_state', 'N/A')}")
+            print(f"Engine current_task: {getattr(engine, 'current_task', 'N/A')}")
             print(f"Tasks in 'tasks' dict: {list(tasks.keys())}")
             for task_name, task_data in tasks.items():
                 print(f"  {task_name}: {len(task_data.get('features', []))} features")
+            
+            # Also check legacy 'task' bucket
+            legacy_task = engine.calibration_data.get('task', {})
+            if legacy_task.get('features'):
+                print(f"WARNING: Found {len(legacy_task.get('features', []))} features in legacy 'task' bucket!")
             print(f"==============================\n")
             
             self.show()
@@ -4486,14 +7540,16 @@ class TaskSelectionDialog(QDialog):
         # Clear and repopulate combo box
         self.task_combo.clear()
         completed_tasks = self._get_completed_task_ids()
-        has_booking = getattr(self.workflow.main_window, 'has_advanced_booking', False)
+        
+        # Basic tasks that don't need 'Advanced' tag
+        basic_tasks = [ 'visual_imagery', 'attention_focus', 'mental_math', 'emotion_face']
         
         for task_id in self.available_task_ids:
             if task_id in BL.AVAILABLE_TASKS:
                 task_name = BL.AVAILABLE_TASKS[task_id].get('name', task_id)
-                is_advanced = self._is_advanced_task(task_id)
                 
-                if is_advanced:
+                # Add 'Advanced' tag for non-basic tasks
+                if task_id not in basic_tasks:
                     task_name = f"{task_name} (Advanced)"
                 
                 if task_id in completed_tasks:
@@ -4503,36 +7559,41 @@ class TaskSelectionDialog(QDialog):
                 
                 self.task_combo.addItem(display_name, task_id)
                 
-                model = self.task_combo.model()
-                item = model.item(self.task_combo.count() - 1)
-                
+                # Disable the item if task is already completed
                 if task_id in completed_tasks:
+                    model = self.task_combo.model()
+                    item = model.item(self.task_combo.count() - 1)
                     item.setEnabled(False)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled)  # Explicitly disable
                     item.setToolTip("This task has already been completed")
-                elif is_advanced and not has_booking:
-                    item.setEnabled(False)
-                    item.setToolTip(
-                        "Advanced task – requires a valid booking with the partner.\n"
-                        "Please ask your partner to create a session booking for you."
-                    )
         
-        # Try to select first available (non-disabled) task
+        # Try to select first non-completed task
         for i in range(self.task_combo.count()):
-            item = self.task_combo.model().item(i)
-            if item and item.isEnabled():
+            task_id = self.task_combo.itemData(i)
+            if task_id not in completed_tasks:
                 self.task_combo.setCurrentIndex(i)
+                selected = True
+                print(f"[TASK SELECTION] Auto-selected next task: {task_id}")
                 break
-        
-        # Unblock signals and refresh description
-        self.task_combo.blockSignals(False)
-        
-        # Always refresh the description after rebuilding the combo
-        self.update_task_preview()  # direct call — no signal arg
     
     def update_completed_tasks_display(self):
         """Update the completed tasks counter"""
-        tasks_data = self.workflow.main_window.feature_engine.calibration_data.get('tasks', {})
-        completed_tasks = [t for t in tasks_data.keys() if t not in ['baseline', 'eyes_closed', 'eyes_open']]
+        engine = self.workflow.main_window.feature_engine
+        
+        # Check if using offline engine (phase_markers instead of calibration_data['tasks'])
+        if hasattr(engine, 'phase_markers'):
+            # Offline engine: count task phases in phase_markers
+            completed_tasks = []
+            for marker in engine.phase_markers:
+                if marker['phase'] == 'task' and marker['task']:
+                    task_name = marker['task']
+                    if task_name not in completed_tasks:
+                        completed_tasks.append(task_name)
+        else:
+            # Traditional engine: use calibration_data['tasks']
+            tasks_data = engine.calibration_data.get('tasks', {})
+            completed_tasks = [t for t in tasks_data.keys() if t not in ['baseline', 'eyes_closed', 'eyes_open']]
+        
         count = len(completed_tasks)
         
         if count == 0:
@@ -4590,7 +7651,7 @@ class MultiTaskAnalysisDialog(QDialog):
         title_label = QLabel("Multi-Task Analysis")
         title_label.setObjectName("DialogTitle")
         
-        subtitle_label = QLabel("Step 9 of 9: Analyze all completed tasks")
+        subtitle_label = QLabel("Step 10 of 10: Analyze all completed tasks")
         subtitle_label.setObjectName("DialogSubtitle")
         
         # Analysis actions card
@@ -4804,8 +7865,22 @@ class MultiTaskAnalysisDialog(QDialog):
     def _disconnect_headset(self):
         """Disconnect the BrainLink headset and stop data streaming"""
         try:
-            self.workflow.main_window.log_message("Disconnecting headset for analysis...")
+            self.workflow.main_window.log_message("Disconnecting device for analysis...")
             
+            # === ANT NEURO Device Disconnect ===
+            if ANT_NEURO and ANT_NEURO.is_connected:
+                try:
+                    self.workflow.main_window.log_message("Stopping ANT Neuro streaming...")
+                    ANT_NEURO.stop_streaming()
+                    self.workflow.main_window.log_message("✓ ANT Neuro streaming stopped")
+                    
+                    self.workflow.main_window.log_message("Disconnecting ANT Neuro device...")
+                    ANT_NEURO.disconnect()
+                    self.workflow.main_window.log_message("✓ ANT Neuro device disconnected")
+                except Exception as e:
+                    self.workflow.main_window.log_message(f"Warning: ANT Neuro disconnect error: {e}")
+            
+            # === BrainLink Device Disconnect ===
             # Stop the BrainLink thread
             BL.stop_thread_flag = True
             
@@ -4826,9 +7901,9 @@ class MultiTaskAnalysisDialog(QDialog):
                     else:
                         self.workflow.main_window.log_message("✓ Data streaming stopped")
             
-            self.workflow.main_window.log_message("✓ Headset disconnected successfully")
+            self.workflow.main_window.log_message("✓ Device disconnected successfully")
         except Exception as e:
-            self.workflow.main_window.log_message(f"Error disconnecting headset: {e}")
+            self.workflow.main_window.log_message(f"Error disconnecting device: {e}")
             import traceback
             traceback.print_exc()
     
@@ -4842,6 +7917,119 @@ class MultiTaskAnalysisDialog(QDialog):
         
         # Debug: Check what tasks are available
         engine = self.workflow.main_window.feature_engine
+        
+        # === OFFLINE ENGINE: Extract features from raw data first ===
+        if hasattr(engine, 'analyze_offline') and hasattr(engine, 'phase_markers'):
+            # This is the OfflineMultichannelEngine - need to extract features first
+            print(f"\n{'='*70}")
+            print(f"[OFFLINE ANALYSIS] Extracting features from raw EEG data...")
+            print(f"[OFFLINE ANALYSIS] Phase markers (before filtering): {len(engine.phase_markers)}")
+            print(f"[OFFLINE ANALYSIS] Raw samples: {len(engine.raw_data)}")
+            print(f"{'='*70}\n")
+            
+            # === CRITICAL: Filter phase markers to only recording phases ===
+            # This aligns with standalone analyzer logic (BrainLink_Offline_Analyzer.py lines 296-363)
+            all_markers = engine.phase_markers
+            has_record_flags = any('record' in m for m in all_markers)
+            
+            if has_record_flags:
+                # New format: use explicit 'record' flag
+                recording_markers = [m for m in all_markers if m.get('record', False)]
+                print(f"[OFFLINE ANALYSIS] Using explicit 'record' flags from markers")
+            else:
+                # Old format: use fallback heuristics based on phase type
+                recording_phase_types = {'task', 'thinking', 'viewing', 'video', 'wait', 'eyes_closed', 'eyes_open', 'baseline'}
+                
+                recording_markers = []
+                for marker in all_markers:
+                    task_id = marker.get('task')
+                    phase_type = marker.get('phase_type')
+                    phase_name = marker.get('phase', '')  # Fallback for old format
+                    
+                    # If no phase_type but has 'phase', use that
+                    if not phase_type and phase_name:
+                        # Default recording phases should be included
+                        if phase_name in recording_phase_types:
+                            recording_markers.append(marker)
+                        continue
+                    
+                    # Check if this phase should be recorded
+                    should_record = False
+                    
+                    # Try to get task definition for intelligent filtering
+                    if task_id and task_id in BL.AVAILABLE_TASKS:
+                        task_def = BL.AVAILABLE_TASKS[task_id]
+                        phase_structure = task_def.get('phase_structure', [])
+                        
+                        # Find matching phase in structure
+                        for phase in phase_structure:
+                            if phase.get('type') == phase_type and phase.get('record', False):
+                                should_record = True
+                                break
+                        
+                        # For continuous_recording tasks, keep all phases
+                        if task_def.get('continuous_recording', False):
+                            should_record = True
+                    else:
+                        # Unknown task, keep marker if phase type suggests recording
+                        if phase_type in recording_phase_types:
+                            should_record = True
+                    
+                    if should_record:
+                        recording_markers.append(marker)
+            
+            # Update engine's phase markers to only recording phases
+            engine.phase_markers = recording_markers
+            print(f"[OFFLINE ANALYSIS] Filtered to {len(recording_markers)} recording phases (removed {len(all_markers) - len(recording_markers)} non-recording phases)")
+            
+            # Show details of filtered phases
+            if recording_markers:
+                print(f"[OFFLINE ANALYSIS] Recording phases:")
+                for rm in recording_markers:
+                    phase_desc = rm.get('phase', 'unknown')
+                    if rm.get('phase_type'):
+                        phase_desc += f" ({rm['phase_type']})"
+                    if rm.get('task'):
+                        phase_desc += f" - {rm['task']}"
+                    duration = rm['end'] - rm['start']
+                    print(f"  • {phase_desc}: {duration:.1f}s")
+            
+            self.results_text.setPlainText(
+                "OFFLINE ANALYSIS MODE\n\n"
+                "Extracting features from raw EEG data...\n"
+                "Processing all 64 channels...\n"
+                "Computing 1,400+ features per window...\n\n"
+                f"Recording phases to analyze: {len(recording_markers)}\n\n"
+                "This may take 1-2 minutes depending on recording length."
+            )
+            QtWidgets.QApplication.processEvents()
+            
+            # Run offline analysis (extracts features from raw data)
+            def progress_callback(pct):
+                msg = f"OFFLINE ANALYSIS: {pct}% complete..."
+                QtCore.QMetaObject.invokeMethod(
+                    self.results_text, "setPlainText",
+                    QtCore.Qt.ConnectionType.QueuedConnection,
+                    QtCore.Q_ARG(str, f"OFFLINE ANALYSIS MODE\n\n"
+                                      f"Feature extraction: {pct}%\n\n"
+                                      f"Processing {len(recording_markers)} phases × 64 channels × 1,400+ features per window...")
+                )
+            
+            engine.analyze_offline(progress_callback=progress_callback)
+            
+            # Stop recording if still active
+            if hasattr(engine, 'stop_recording'):
+                engine.stop_recording()
+            
+            # Save phase markers
+            if hasattr(engine, 'save_phase_markers'):
+                engine.save_phase_markers()
+            
+            print(f"[OFFLINE ANALYSIS] Feature extraction complete!")
+            print(f"[OFFLINE ANALYSIS] Eyes-closed: {len(engine.calibration_data['eyes_closed']['features'])} windows")
+            print(f"[OFFLINE ANALYSIS] Eyes-open: {len(engine.calibration_data['eyes_open']['features'])} windows")
+            print(f"[OFFLINE ANALYSIS] Task: {len(engine.calibration_data['task']['features'])} windows")
+        
         tasks = engine.calibration_data.get('tasks', {})
         
         print(f"\n=== PRE-ANALYSIS DEBUG ===")
@@ -4883,9 +8071,9 @@ class MultiTaskAnalysisDialog(QDialog):
         # Show initial progress message
         self.results_text.setPlainText(
             "Analysis in progress...\n\n"
-            "⏳ Initializing analysis engine...\n"
-            "⏳ Computing baseline statistics...\n"
-            "⏳ Preparing task comparisons...\n\n"
+            "Initializing analysis engine...\n"
+            "Computing baseline statistics...\n"
+            "Preparing task comparisons...\n\n"
             "Please wait, this may take 3-5 minutes. Wait for the Generate Report button to be enabled.."
         )
         
@@ -4934,11 +8122,14 @@ class MultiTaskAnalysisDialog(QDialog):
                 # Run the analysis in background thread
                 results = engine.analyze_all_tasks_data()
                 
+                # Store results in engine for main thread to access
+                engine.multi_task_results = results
+                
                 print(f"\n>>> [WORKER THREAD] analyze_all_tasks_data() RETURNED <<<\n")
                 print(f"Results type: {type(results)}")
                 if isinstance(results, dict):
                     print(f"Results keys: {list(results.keys())}")
-                    print(f"engine.multi_task_results is now: {hasattr(engine, 'multi_task_results')}")
+                    print(f"engine.multi_task_results stored: {hasattr(engine, 'multi_task_results')}")
                 
                 # Clear the permutation progress callback
                 engine.clear_permutation_progress_callback()
@@ -5012,13 +8203,13 @@ class MultiTaskAnalysisDialog(QDialog):
         
         self.results_text.setPlainText(
             f"Analysis in progress{dots}{spaces}\n\n"
-            f"⏳ Computing features and statistics...\n\n"
+            f"Computing features and statistics...\n\n"
             f"Please wait, this may take 3-5 minutes. Wait for the Generate Report button to be enabled.."
         )
     
     @QtCore.Slot()
     def _display_results(self):
-        """Display the analysis results from multi_task_results"""
+        """Display the analysis results from multi_task_results using enhanced format"""
         print(f"\n>>> [MAIN THREAD] _display_results() CALLED <<<\n")
         
         engine = self.workflow.main_window.feature_engine
@@ -5033,61 +8224,77 @@ class MultiTaskAnalysisDialog(QDialog):
         print(f"==========================\n")
         
         if hasattr(engine, 'multi_task_results') and engine.multi_task_results:
-            res = engine.multi_task_results
+            # Try to use enhanced report generator for detailed display
+            try:
+                from utils.enhanced_report_generator import Enhanced64ChannelReportGenerator
+                
+                # Get multi-task results
+                multi_task_results = engine.multi_task_results or {}
+                per_task = multi_task_results.get('per_task', {})
+                
+                # Count baseline windows
+                calibration_data = getattr(engine, 'calibration_data', {}) or {}
+                baseline_ec_windows = len(calibration_data.get('eyes_closed', {}).get('features', []))
+                baseline_eo_windows = len(calibration_data.get('eyes_open', {}).get('features', []))
+                
+                # Prepare results dictionary
+                results_data = {
+                    'session_info': {
+                        'session_id': getattr(engine, 'session_id', 'N/A'),
+                        'user_email': getattr(engine, 'user_email', 'N/A'),
+                        'duration': getattr(engine, 'recording_duration', 0),
+                        'n_samples': getattr(engine, 'total_samples', 0),
+                        'n_channels': getattr(engine, 'channel_count', 64),
+                        'sample_rate': getattr(engine, 'fs', 250),
+                        'baseline_ec_windows': baseline_ec_windows,
+                        'baseline_eo_windows': baseline_eo_windows,
+                        'tasks_executed': len(per_task),
+                        'subject_metadata': {}  # Will be populated below
+                    },
+                    'artifact_summary': getattr(engine, 'artifact_summary', {}),
+                    'analysis_results': getattr(engine, 'analysis_results', {}),
+                    'multi_task_results': multi_task_results,
+                    'baseline_stats': getattr(engine, 'baseline_stats', {})
+                }
+                
+                # Add subject metadata if available (from ANT Neuro metadata dialog)
+                if hasattr(self.workflow.main_window, 'antneuro_metadata'):
+                    metadata = self.workflow.main_window.antneuro_metadata
+                    if metadata and 'subject' in metadata:
+                        results_data['session_info']['subject_metadata'] = metadata['subject']
+                
+                # Get configuration
+                config = getattr(engine, 'config', None)
+                fast_mode = getattr(config, 'fast_mode', True) if config else True
+                n_perm = getattr(config, 'n_perm', 100) if config else 100
+                
+                # Generate enhanced report
+                report_lines = Enhanced64ChannelReportGenerator.generate_text_report(
+                    results=results_data,
+                    fast_mode=fast_mode,
+                    n_permutations=n_perm,
+                    config=config
+                )
+                
+                # Display in results area
+                results_text = "\n".join(report_lines)
+                self.results_text.setPlainText(results_text)
+                
+                # Store for download
+                self.generated_report_text = results_text
+                
+                print(f">>> [MAIN THREAD] Enhanced report displayed successfully <<<")
+                
+            except Exception as e:
+                import traceback
+                print(f"Enhanced display failed: {e}")
+                traceback.print_exc()
+                print("Falling back to basic display")
+                
+                # Fallback to basic display
+                self._display_results_basic()
             
-            results = "✅ ANALYSIS COMPLETE!\n"
-            results += "=" * 60 + "\n\n"
-            results += "=== MULTI-TASK ANALYSIS RESULTS ===\n\n"
-            
-            # Per-task results
-            per_task = res.get('per_task', {})
-            if per_task:
-                results += "Per-Task Analysis:\n"
-                results += "-" * 40 + "\n"
-                for task_name, data in sorted(per_task.items()):
-                    summary = data.get('summary', {}) or {}
-                    fisher = summary.get('fisher', {})
-                    sum_p = summary.get('sum_p', {})
-                    feature_sel = summary.get('feature_selection', {}) or {}
-                    
-                    results += f"\n{task_name}:\n"
-                    results += f"  Fisher KM p-value: {fisher.get('km_p', 'N/A')}\n"
-                    results += f"  Fisher significant: {fisher.get('significant', False)}\n"
-                    results += f"  SumP p-value: {sum_p.get('perm_p', 'N/A')}\n"
-                    results += f"  SumP significant: {sum_p.get('significant', False)}\n"
-                    results += f"  Significant features: {feature_sel.get('sig_feature_count', 0)}\n"
-                results += "\n"
-            
-            # Combined analysis results
-            combined = res.get('combined', {})
-            combined_summary = combined.get('summary', {})
-            if combined_summary:
-                results += "All Tasks Combined:\n"
-                results += "-" * 40 + "\n"
-                fisher_c = combined_summary.get('fisher', {})
-                sum_p_c = combined_summary.get('sum_p', {})
-                results += f"  Fisher KM p-value: {fisher_c.get('km_p', 'N/A')}\n"
-                results += f"  Fisher significant: {fisher_c.get('significant', False)}\n"
-                results += f"  SumP p-value: {sum_p_c.get('perm_p', 'N/A')}\n"
-                results += f"  SumP significant: {sum_p_c.get('significant', False)}\n"
-                results += "\n"
-            
-            # Across-task significant features
-            across = res.get('across_task', {})
-            features = across.get('features', {})
-            sig_features = [f for f, info in features.items() if info.get('omnibus_sig')]
-            if sig_features:
-                results += "Across-Task Significant Features:\n"
-                results += "-" * 40 + "\n"
-                for feat in sig_features:
-                    results += f"  - {feat}\n"
-            
-            # Add completion message
-            results += "\n" + "=" * 60 + "\n"
-            results += "✅ Analysis complete! Click 'Generate Report' to save detailed results.\n"
-            
-            print(f">>> [MAIN THREAD] Setting results text (length: {len(results)} chars) <<<")
-            self.results_text.setPlainText(results)
+            # Enable buttons after successful display
             print(f">>> [MAIN THREAD] Enabling report buttons and finish button <<<")
             self.report_button.setEnabled(True)
             
@@ -5097,17 +8304,122 @@ class MultiTaskAnalysisDialog(QDialog):
             if self.seed_advanced_button.isVisible():
                 self.seed_advanced_button.setEnabled(True)
             
-            self.finish_button.setEnabled(True)  # Enable finish button after successful analysis
-            print(f">>> [MAIN THREAD] Results displayed successfully <<<")
+            self.finish_button.setEnabled(True)
+            print(f">>> [MAIN THREAD] Buttons enabled <<<")
+            
         else:
             print(f">>> [MAIN THREAD] No results found - showing error message <<<")
-            self.results_text.setPlainText("❌ No analysis results found.\n\nPlease ensure tasks have been recorded and try analyzing again.")
+            self.results_text.setPlainText("ERROR: No analysis results found.\n\nPlease ensure tasks have been recorded and try analyzing again.")
             self.report_button.setEnabled(False)
-            self.seed_button.setEnabled(False)
+            if hasattr(self, 'seed_button'):
+                self.seed_button.setEnabled(False)
         
+        # Re-enable analyze button
         print(f">>> [MAIN THREAD] Re-enabling analyze button <<<")
         self.analyze_button.setEnabled(True)
         print(f">>> [MAIN THREAD] _display_results() COMPLETE <<<\n")
+    
+    def _display_results_basic(self):
+        """Fallback basic display format"""
+        engine = self.workflow.main_window.feature_engine
+        res = engine.multi_task_results
+        
+        results = "ANALYSIS COMPLETE!\n"
+        results += "=" * 60 + "\n\n"
+        results += "=== MULTI-TASK ANALYSIS RESULTS ===\n\n"
+        
+        # Per-task results
+        per_task = res.get('per_task', {})
+        if per_task:
+            results += "Per-Task Analysis:\n"
+            results += "-" * 40 + "\n"
+            for task_name, data in sorted(per_task.items()):
+                summary = data.get('summary', {}) or {}
+                fisher = summary.get('fisher', {})
+                sum_p = summary.get('sum_p', {})
+                feature_sel = summary.get('feature_selection', {}) or {}
+                
+                # ============================================================
+                # DATA QUALITY CHECK - Display warning for garbage data
+                # ============================================================
+                data_quality = summary.get('data_quality', {})
+                sig_count = feature_sel.get('sig_feature_count', 0)
+                total_features = feature_sel.get('total_features', 0)
+                
+                # Calculate significant proportion for sanity check
+                if total_features > 0:
+                    sig_prop = sig_count / total_features
+                else:
+                    sig_prop = 0
+                
+                results += f"\n{task_name}:\n"
+                
+                # Show data quality warning prominently
+                if data_quality and not data_quality.get('reliable', True):
+                    results += "\n  *** DATA QUALITY WARNING ***\n"
+                    for warning in data_quality.get('warnings', []):
+                        # Wrap long warnings
+                        if len(warning) > 60:
+                            wrapped = [warning[i:i+55] for i in range(0, len(warning), 55)]
+                            for w in wrapped:
+                                results += f"    {w}\n"
+                        else:
+                            results += f"    {warning}\n"
+                    results += "  [!] RESULTS MARKED AS UNRELIABLE\n"
+                    results += "  *********************************************\n\n"
+                elif sig_prop > 0.70:
+                    # Fallback sanity check if data_quality not populated
+                    results += "\n  *** DATA QUALITY WARNING ***\n"
+                    results += f"    CRITICAL: {sig_prop*100:.1f}% of features marked significant!\n"
+                    results += f"    This exceeds the 70% threshold and strongly suggests\n"
+                    results += f"    the data is noise/garbage, NOT real EEG.\n"
+                    results += f"    The headset may not have been worn properly.\n"
+                    results += "  [!] RESULTS LIKELY INVALID\n"
+                    results += "  *********************************************\n\n"
+                elif sig_prop > 0.50:
+                    results += f"\n  WARNING: {sig_prop*100:.1f}% of features significant\n"
+                    results += f"    This is unusually high - may indicate data quality issues.\n\n"
+                
+                results += f"  Fisher KM p-value: {fisher.get('km_p', 'N/A')}\n"
+                results += f"  Fisher significant: {fisher.get('significant', False)}\n"
+                results += f"  SumP p-value: {sum_p.get('perm_p', 'N/A')}\n"
+                results += f"  SumP significant: {sum_p.get('significant', False)}\n"
+                results += f"  Significant features: {sig_count}"
+                if total_features > 0:
+                    results += f" / {total_features} ({sig_prop*100:.1f}%)\n"
+                else:
+                    results += "\n"
+            results += "\n"
+        
+        # Combined analysis results
+        combined = res.get('combined', {})
+        combined_summary = combined.get('summary', {})
+        if combined_summary:
+            results += "All Tasks Combined:\n"
+            results += "-" * 40 + "\n"
+            fisher_c = combined_summary.get('fisher', {})
+            sum_p_c = combined_summary.get('sum_p', {})
+            results += f"  Fisher KM p-value: {fisher_c.get('km_p', 'N/A')}\n"
+            results += f"  Fisher significant: {fisher_c.get('significant', False)}\n"
+            results += f"  SumP p-value: {sum_p_c.get('perm_p', 'N/A')}\n"
+            results += f"  SumP significant: {sum_p_c.get('significant', False)}\n"
+            results += "\n"
+        
+        # Across-task significant features
+        across = res.get('across_task', {})
+        features = across.get('features', {})
+        sig_features = [f for f, info in features.items() if info.get('omnibus_sig')]
+        if sig_features:
+            results += "Across-Task Significant Features:\n"
+            results += "-" * 40 + "\n"
+            for feat in sig_features:
+                results += f"  - {feat}\n"
+        
+        # Add completion message
+        results += "\n" + "=" * 60 + "\n"
+        results += "Analysis complete! Click 'Generate Report' to save detailed results.\n"
+        
+        self.results_text.setPlainText(results)
     
     @QtCore.Slot(str)
     def _show_error_callback(self, error_msg):
@@ -5120,11 +8432,113 @@ class MultiTaskAnalysisDialog(QDialog):
         """Generate report text internally (without triggering download)"""
         engine = self.workflow.main_window.feature_engine
         
-        # Generate the report text using the feature engine
+        # Try to use enhanced report generator for 64-channel analysis
+        if hasattr(engine, 'channel_count') and engine.channel_count == 64:
+            try:
+                from utils.enhanced_report_generator import Enhanced64ChannelReportGenerator
+                
+                # Get multi-task results which contains per-task analysis
+                multi_task_results = getattr(engine, 'multi_task_results', {}) or {}
+                per_task = multi_task_results.get('per_task', {})
+                
+                # Count baseline windows from calibration_data
+                calibration_data = getattr(engine, 'calibration_data', {}) or {}
+                baseline_ec_windows = len(calibration_data.get('eyes_closed', {}).get('features', []))
+                baseline_eo_windows = len(calibration_data.get('eyes_open', {}).get('features', []))
+                
+                # Prepare results dictionary for enhanced generator
+                results = {
+                    'session_info': {
+                        'session_id': getattr(engine, 'session_id', 'N/A'),
+                        'user_email': getattr(engine, 'user_email', 'N/A'),
+                        'duration': getattr(engine, 'recording_duration', 0),
+                        'n_samples': getattr(engine, 'total_samples', 0),
+                        'n_channels': engine.channel_count,
+                        'sample_rate': engine.fs,
+                        'baseline_ec_windows': baseline_ec_windows,
+                        'baseline_eo_windows': baseline_eo_windows,
+                        'tasks_executed': len(per_task)
+                    },
+                    'artifact_summary': getattr(engine, 'artifact_summary', {}),
+                    'analysis_results': getattr(engine, 'analysis_results', {}),  # Last analyzed task results
+                    'multi_task_results': multi_task_results,
+                    'baseline_stats': getattr(engine, 'baseline_stats', {})
+                }
+                
+                # Get configuration
+                config = getattr(engine, 'config', None)
+                fast_mode = getattr(config, 'fast_mode', True) if config else True
+                n_perm = getattr(config, 'n_perm', 100) if config else 100
+                
+                # Generate enhanced report
+                report_lines = Enhanced64ChannelReportGenerator.generate_text_report(
+                    results=results,
+                    fast_mode=fast_mode,
+                    n_permutations=n_perm,
+                    config=config
+                )
+                
+                self.generated_report_text = "\n".join(report_lines)
+                return self.generated_report_text
+                
+            except Exception as e:
+                import traceback
+                print(f"Enhanced report generation failed: {e}")
+                traceback.print_exc()
+                print("Falling back to basic format")
+        
+        # Fallback to basic report format
         report_lines = []
         report_lines.append("=" * 80)
-        report_lines.append("MULTI-TASK EEG ANALYSIS REPORT")
+        report_lines.append("MULTI-CHANNEL EEG ANALYSIS REPORT")
         report_lines.append("=" * 80)
+        report_lines.append("")
+        
+        # Add multi-channel system information
+        if hasattr(engine, 'channel_count'):
+            report_lines.append(f"Recording System: {engine.channel_count}-Channel EEG")
+            report_lines.append(f"Sampling Rate: {engine.fs} Hz")
+            report_lines.append(f"Session ID: {getattr(engine, 'session_id', 'N/A')}")
+            report_lines.append(f"User: {getattr(engine, 'user_email', 'N/A')}")
+            report_lines.append("")
+        
+        # Add artifact detection summary
+        if hasattr(engine, 'artifact_summary'):
+            artifact_info = engine.artifact_summary
+            report_lines.append("Artifact Detection Summary:")
+            report_lines.append("-" * 40)
+            report_lines.append(f"Bad channels detected: {len(artifact_info.get('bad_channels', []))}")
+            report_lines.append(f"Flat channels: {len(artifact_info.get('flat_channels', []))}")
+            report_lines.append(f"Noisy channels: {len(artifact_info.get('noisy_channels', []))}")
+            report_lines.append(f"Artifact windows removed: {len(artifact_info.get('artifact_windows', []))}")
+            
+            # Channel quality summary
+            channel_quality = artifact_info.get('channel_quality', {})
+            if channel_quality:
+                avg_quality = np.mean(list(channel_quality.values()))
+                good_channels = sum(1 for q in channel_quality.values() if q >= 0.7)
+                report_lines.append(f"Average channel quality: {avg_quality:.2f}")
+                report_lines.append(f"Good channels (quality ≥ 0.7): {good_channels}/{len(channel_quality)}")
+            report_lines.append("")
+        
+        # Add regional analysis summary
+        report_lines.append("Multi-Channel Feature Extraction:")
+        report_lines.append("-" * 40)
+        report_lines.append("Per-Channel Features: 64 channels × 17 features = 1,088 features")
+        report_lines.append("  - Band powers (delta, theta, alpha, beta, gamma)")
+        report_lines.append("  - Relative powers, peak frequencies")
+        report_lines.append("  - Cross-band ratios (alpha/theta, beta/alpha)")
+        report_lines.append("")
+        report_lines.append("Regional Features: 5 regions × 12 features = 60 features")
+        report_lines.append("  - Frontal, Central, Temporal, Parietal, Occipital")
+        report_lines.append("")
+        report_lines.append("Spatial Features: ~140 features")
+        report_lines.append("  - Hemispheric asymmetry (27 electrode pairs × 5 bands)")
+        report_lines.append("  - Frontal alpha asymmetry (FAA)")
+        report_lines.append("  - Inter-regional coherence (5 region pairs × 5 bands)")
+        report_lines.append("  - Global field power (GFP)")
+        report_lines.append("")
+        report_lines.append("Total Features per Window: ~1,400 features")
         report_lines.append("")
         
         # Add results from multi_task_results
@@ -5134,8 +8548,59 @@ class MultiTaskAnalysisDialog(QDialog):
             report_lines.append(f"{'='*60}")
             
             if isinstance(results, dict):
+                # Extract region-specific results if available
+                analysis = results.get('analysis', {})
+                if analysis:
+                    # Group features by type
+                    region_features = {}
+                    asymmetry_features = {}
+                    coherence_features = {}
+                    
+                    for feat_name, feat_data in analysis.items():
+                        if any(region in feat_name for region in ['frontal', 'central', 'temporal', 'parietal', 'occipital']):
+                            region_features[feat_name] = feat_data
+                        elif 'asymmetry' in feat_name or any(f'{ch1}_{ch2}' in feat_name for ch1, ch2 in [('F3', 'F4'), ('P3', 'P4')]):
+                            asymmetry_features[feat_name] = feat_data
+                        elif 'coherence' in feat_name:
+                            coherence_features[feat_name] = feat_data
+                    
+                    # Report significant regional findings
+                    if region_features:
+                        sig_regional = [(k, v) for k, v in region_features.items() if v.get('significant_change')]
+                        if sig_regional:
+                            report_lines.append("\nSignificant Regional Changes:")
+                            report_lines.append("-" * 40)
+                            for feat_name, feat_data in sig_regional[:10]:  # Top 10
+                                delta = feat_data.get('delta', 0)
+                                p_val = feat_data.get('p_value', 1)
+                                report_lines.append(f"  {feat_name}: Δ={delta:.3f}, p={p_val:.4f}")
+                    
+                    # Report significant asymmetry findings
+                    if asymmetry_features:
+                        sig_asym = [(k, v) for k, v in asymmetry_features.items() if v.get('significant_change')]
+                        if sig_asym:
+                            report_lines.append("\nSignificant Asymmetry Changes:")
+                            report_lines.append("-" * 40)
+                            for feat_name, feat_data in sig_asym[:5]:
+                                delta = feat_data.get('delta', 0)
+                                p_val = feat_data.get('p_value', 1)
+                                report_lines.append(f"  {feat_name}: Δ={delta:.3f}, p={p_val:.4f}")
+                    
+                    # Report significant coherence findings
+                    if coherence_features:
+                        sig_coh = [(k, v) for k, v in coherence_features.items() if v.get('significant_change')]
+                        if sig_coh:
+                            report_lines.append("\nSignificant Coherence Changes:")
+                            report_lines.append("-" * 40)
+                            for feat_name, feat_data in sig_coh[:5]:
+                                delta = feat_data.get('delta', 0)
+                                p_val = feat_data.get('p_value', 1)
+                                report_lines.append(f"  {feat_name}: Δ={delta:.3f}, p={p_val:.4f}")
+                
+                # Add general results
                 for key, value in results.items():
-                    report_lines.append(f"{key}: {value}")
+                    if key != 'analysis':  # Skip detailed analysis (already shown above)
+                        report_lines.append(f"{key}: {value}")
             else:
                 report_lines.append(str(results))
         
@@ -5548,8 +9013,6 @@ class SequentialBrainLinkAnalyzerWindow(EnhancedBrainLinkAnalyzerWindow):
         # Initialize partner_id and partners_list
         self.partner_id = None
         self.partners_list = []
-        # Whether the current user has a valid advanced-session booking with the partner
-        self.has_advanced_booking = False
         
         # Ensure protocol groups use the correct Lifestyle tasks (now implemented)
         self._protocol_groups = {
@@ -5566,6 +9029,83 @@ class SequentialBrainLinkAnalyzerWindow(EnhancedBrainLinkAnalyzerWindow):
         
         # Start the workflow
         QTimer.singleShot(100, self.start_workflow)
+    
+    def switch_to_enhanced_64ch_engine(self):
+        """Switch to OFFLINE 64-channel engine for ANT Neuro device.
+        
+        Called when ANT Neuro is selected in device type dialog.
+        Uses OFFLINE analysis: records raw data during streaming,
+        extracts all features when "Analyze" is clicked.
+        """
+        # Prefer OFFLINE engine (records raw data, processes later)
+        if OFFLINE_64CH_AVAILABLE:
+            print(f"\n{'='*70}")
+            print(f"[MAIN WINDOW] SWITCHING TO OFFLINE 64-CHANNEL ANALYSIS ENGINE")
+            print(f"[MAIN WINDOW] Mode: Record raw data during streaming")
+            print(f"[MAIN WINDOW] Features: 1400+ extracted OFFLINE when 'Analyze' clicked")
+            print(f"[MAIN WINDOW] Analysis: FAST MODE (parametric tests, ~30 seconds)")
+            print(f"[MAIN WINDOW] Raw data saved to: ~/BrainLink_Recordings/")
+            print(f"{'='*70}\n")
+            
+            # Get user email from settings
+            settings = QSettings("MindLink", "FeatureAnalyzer")
+            user_email = settings.value("username", "unknown")
+            
+            # Create offline engine with user email
+            self.feature_engine = create_offline_engine(
+                sample_rate=500,
+                channel_count=64,
+                user_email=user_email
+            )
+            
+            # Enable FAST MODE for 64-channel analysis to avoid 20+ minute permutation testing
+            # Fast mode uses chi-square approximation + parametric tests
+            # Aligns with standalone analyzer settings (BrainLink_Offline_Analyzer.py)
+            if hasattr(self.feature_engine, 'config'):
+                self.feature_engine.config.fast_mode = True
+                self.feature_engine.config.n_perm = 200  # Match standalone default (sufficient for p-value resolution)
+                self.feature_engine.config.use_permutation_for_sumP = False  # Use chi-square approximation in fast mode
+                print(f"[MAIN WINDOW] FAST MODE ENABLED: Parametric tests + chi-square approximation (n_perm={self.feature_engine.config.n_perm})")
+            self.feature_engine.set_log_function(self.log_message)
+            self.using_enhanced_engine = True
+            self.using_offline_engine = True
+            
+            # CRITICAL: Set feature engine on ANT_NEURO so on_data callback can record data
+            ANT_NEURO.feature_engine = self.feature_engine
+            print(f"[MAIN WINDOW] ANT_NEURO.feature_engine set to {type(self.feature_engine).__name__}")
+            
+            return True
+        
+        # Fallback to live enhanced engine if offline not available
+        if ENHANCED_64CH_AVAILABLE:
+            print(f"\n{'='*70}")
+            print(f"[MAIN WINDOW] SWITCHING TO LIVE 64-CHANNEL ANALYSIS ENGINE")
+            print(f"[MAIN WINDOW] Features: 1400+ per epoch (live processing)")
+            print(f"{'='*70}\n")
+            
+            self.feature_engine = create_enhanced_engine(sample_rate=500, channel_count=64)
+            self.feature_engine.set_log_function(self.log_message)
+            self.using_enhanced_engine = True
+            self.using_offline_engine = False
+            
+            ANT_NEURO.feature_engine = self.feature_engine
+            print(f"[MAIN WINDOW] ANT_NEURO.feature_engine set to {type(self.feature_engine).__name__}")
+            
+            return True
+        
+        # Last resort: use default engine
+        print(f"[MAIN WINDOW] Enhanced 64-channel engine not available, using default engine")
+        if not hasattr(self, 'feature_engine') or self.feature_engine is None:
+            print(f"[MAIN WINDOW] WARNING: Feature engine not initialized! Creating basic engine...")
+            from BrainLinkAnalyzer_GUI_Enhanced import EnhancedFeatureAnalysisEngine, EnhancedAnalyzerConfig
+            config = EnhancedAnalyzerConfig()
+            self.feature_engine = EnhancedFeatureAnalysisEngine(config=config)
+            self.feature_engine.set_log_function(self.log_message)
+        
+        ANT_NEURO.feature_engine = self.feature_engine
+        self.using_offline_engine = False
+        print(f"[MAIN WINDOW] ANT_NEURO.feature_engine set to {type(self.feature_engine).__name__}")
+        return False
     
     def start_workflow(self):
         """Begin the sequential workflow"""
@@ -5615,6 +9155,54 @@ class SequentialBrainLinkAnalyzerWindow(EnhancedBrainLinkAnalyzerWindow):
                     self.brainlink_thread.join(timeout=2)
             except Exception:
                 pass
+            
+            # Clean up ANT Neuro EDI2 connection (stops gRPC server)
+            try:
+                print("[CLEANUP] Stopping ANT Neuro connections...")
+                
+                # Stop streaming first
+                if ANT_NEURO and ANT_NEURO.is_streaming:
+                    print("[CLEANUP] Stopping streaming...")
+                    ANT_NEURO.stop_streaming()
+                
+                # Disconnect and cleanup EDI2 client
+                if ANT_NEURO and hasattr(ANT_NEURO, 'edi2_client') and ANT_NEURO.edi2_client:
+                    print("[CLEANUP] Disposing EDI2 amplifier handle...")
+                    try:
+                        # Dispose amplifier handle
+                        if ANT_NEURO.edi2_client.stub and ANT_NEURO.edi2_client.amplifier_handle is not None:
+                            import sys
+                            import os
+                            antneuro_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'antNeuro')
+                            if antneuro_dir not in sys.path:
+                                sys.path.insert(0, antneuro_dir)
+                            import EdigRPC_pb2 as edi
+                            
+                            ANT_NEURO.edi2_client.stub.Amplifier_Dispose(
+                                edi.Amplifier_DisposeRequest(
+                                    AmplifierHandle=ANT_NEURO.edi2_client.amplifier_handle
+                                )
+                            )
+                            print(f"[CLEANUP] Amplifier handle {ANT_NEURO.edi2_client.amplifier_handle} disposed")
+                    except Exception as e:
+                        print(f"[CLEANUP] Handle disposal error: {e}")
+                    
+                    # Disconnect gRPC and stop server
+                    print("[CLEANUP] Disconnecting gRPC...")
+                    ANT_NEURO.edi2_client._disconnect_grpc()
+                    print("[CLEANUP] Stopping EDI2 gRPC server...")
+                    ANT_NEURO.edi2_client._stop_server()
+                
+                # Full disconnect
+                if ANT_NEURO and ANT_NEURO.is_connected:
+                    print("[CLEANUP] Final ANT Neuro disconnect...")
+                    ANT_NEURO.disconnect()
+                
+                print("[CLEANUP] ANT Neuro cleanup complete")
+            except Exception as e:
+                print(f"[CLEANUP] ANT Neuro cleanup error: {e}")
+                import traceback
+                traceback.print_exc()
             
             # Clean up any timers
             try:

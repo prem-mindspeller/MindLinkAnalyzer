@@ -67,6 +67,7 @@ class AntNeuroDevice:
         
         self.factory = None
         self.amplifier = None
+        self.amplifier_objects = []  # Cache of discovered amplifier objects
         self.stream = None
         self.channels: List[ChannelInfo] = []
         self.sampling_rate = 0
@@ -94,18 +95,35 @@ class AntNeuroDevice:
         try:
             amplifiers = self.factory.getAmplifiers()
             
+            # Convert to list first to avoid iterator issues
+            amp_list = list(amplifiers)
+            print(f"getAmplifiers returned {len(amp_list)} items")
+            
+            # Store the amplifier objects and build info list
+            self.amplifier_objects = []
             amp_info_list = []
-            for amp in amplifiers:
+            
+            for amp in amp_list:
+                # Store the amplifier object
+                self.amplifier_objects.append(amp)
+                
+                # Get channel count from channel list
+                channels = amp.getChannelList()
+                
                 info = AmplifierInfo(
-                    serial=amp.getSerial(),
+                    serial=amp.getSerialNumber(),
                     type=amp.getType(),
-                    channel_count=amp.getChannelCount()
+                    channel_count=len(channels),
+                    firmware_version=amp.getFirmwareVersion()
                 )
                 amp_info_list.append(info)
             
+            print(f"Discovered {len(amp_info_list)} amplifier(s)")
             return amp_info_list
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             raise RuntimeError(f"Failed to discover amplifiers: {e}")
     
     def connect(self, amplifier_serial: Optional[str] = None) -> AmplifierInfo:
@@ -121,28 +139,40 @@ class AntNeuroDevice:
         Raises:
             RuntimeError: If connection fails
         """
-        amplifiers = self.discover_amplifiers()
-        
-        if not amplifiers:
-            raise RuntimeError("No amplifiers found. Check device connection.")
-        
-        # Select amplifier
-        if amplifier_serial:
-            selected = next((a for a in amplifiers if a.serial == amplifier_serial), None)
-            if not selected:
-                raise RuntimeError(f"Amplifier with serial {amplifier_serial} not found")
-        else:
-            selected = amplifiers[0]
-        
-        # Get the actual amplifier object
-        amp_objects = self.factory.getAmplifiers()
-        self.amplifier = next(a for a in amp_objects if a.getSerial() == selected.serial)
-        
-        print(f"Connected to amplifier: {selected.serial}")
-        print(f"  Type: {selected.type}")
-        print(f"  Channels: {selected.channel_count}")
-        
-        return selected
+        try:
+            amplifiers = self.discover_amplifiers()
+            
+            if not amplifiers:
+                raise RuntimeError("No amplifiers found. Check device connection.")
+            
+            print(f"Found {len(amplifiers)} amplifier(s), {len(self.amplifier_objects)} objects cached")
+            
+            # Select amplifier
+            if amplifier_serial:
+                selected_idx = next((i for i, a in enumerate(amplifiers) if a.serial == amplifier_serial), None)
+                if selected_idx is None:
+                    raise RuntimeError(f"Amplifier with serial {amplifier_serial} not found")
+                selected = amplifiers[selected_idx]
+            else:
+                selected_idx = 0
+                selected = amplifiers[0]
+            
+            # Use the cached amplifier object
+            if selected_idx >= len(self.amplifier_objects):
+                raise RuntimeError(f"Amplifier object cache mismatch")
+            
+            self.amplifier = self.amplifier_objects[selected_idx]
+            
+            print(f"Connected to amplifier: {selected.serial}")
+            print(f"  Type: {selected.type}")
+            print(f"  Channels: {selected.channel_count}")
+            
+            return selected
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Failed to connect: {e}")
     
     def start_streaming(self, sample_rate: int = 500) -> None:
         """
@@ -161,11 +191,66 @@ class AntNeuroDevice:
             raise RuntimeError("Already streaming. Stop current stream first.")
         
         try:
-            # Open stream with specified sample rate
-            self.stream = self.amplifier.OpenStream(sample_rate)
-            self.sampling_rate = sample_rate
+            # Ensure any previous stream is closed
+            if self.stream is not None:
+                try:
+                    self.stream = None
+                    print("Closed previous stream")
+                except:
+                    pass
             
-            # Get channel information
+            # Check and wait for power state to be ready
+            import time
+            try:
+                max_retries = 20
+                for i in range(max_retries):
+                    power_state = self.amplifier.getPowerState()
+                    print(f"Power state check {i+1}/{max_retries}: {power_state}")
+                    if power_state:  # True means powered on
+                        print(f"✓ Amplifier powered on")
+                        # Wait additional time for amplifier to stabilize
+                        print("Waiting 2 seconds for amplifier to stabilize...")
+                        time.sleep(2.0)
+                        break
+                    print(f"  Waiting for amplifier to power on...")
+                    time.sleep(0.5)
+                else:
+                    raise RuntimeError("Amplifier did not power on within timeout period")
+                    
+            except Exception as e:
+                print(f"Power state check error: {e}")
+                raise RuntimeError(f"Cannot verify amplifier power state: {e}")
+            
+            # Get available sampling rates
+            available_rates = self.amplifier.getSamplingRatesAvailable()
+            print(f"Available sampling rates: {available_rates}")
+            if sample_rate not in available_rates:
+                print(f"Warning: {sample_rate} Hz not available. Using {available_rates[0]} Hz")
+                sample_rate = available_rates[0]
+            
+            # Get available voltage ranges
+            ref_ranges = self.amplifier.getReferenceRangesAvailable()
+            bipolar_ranges = self.amplifier.getBipolarRangesAvailable()
+            
+            print(f"Available reference ranges: {ref_ranges}")
+            print(f"Available bipolar ranges: {bipolar_ranges}")
+            
+            # Use first available range (typically the default)
+            ref_range = ref_ranges[0] if ref_ranges else 1.0
+            bipolar_range = bipolar_ranges[0] if bipolar_ranges else 1.0
+            
+            print(f"Attempting to open stream...")
+            print(f"  Sample rate: {sample_rate} Hz")
+            print(f"  Reference range: {ref_range}")
+            print(f"  Bipolar range: {bipolar_range}")
+            
+            # Open EEG stream with all required parameters
+            # OpenEegStream(sample_rate, reference_range, bipolar_range)
+            self.stream = self.amplifier.OpenEegStream(sample_rate, ref_range, bipolar_range)
+            self.sampling_rate = sample_rate
+            print("✓ Stream opened successfully!")
+            
+            # Get channel information from stream
             channel_list = self.stream.getChannelList()
             self.channels = []
             
@@ -173,7 +258,7 @@ class AntNeuroDevice:
                 ch_info = ChannelInfo(
                     index=idx,
                     label=f"Ch{idx+1}",  # Default label
-                    type=str(ch.getType()) if hasattr(ch, 'getType') else 'EEG',
+                    type='EEG',
                     unit='μV',  # Standard unit for EEG
                     sampling_rate=sample_rate
                 )
@@ -205,35 +290,67 @@ class AntNeuroDevice:
             raise RuntimeError("Not streaming. Call start_streaming() first.")
         
         try:
-            # Get data from stream
+            # Get data from stream - returns a buffer object
             buffer = self.stream.getData()
             
-            if not buffer or buffer.size() == 0:
+            if buffer is None:
                 return None
             
-            # Convert to numpy array
-            # Format: [sample0_ch0, sample0_ch1, ..., sample1_ch0, sample1_ch1, ...]
+            # Get the data as a flat list/array
+            # The SDK returns data in channel-major format:
+            # [ch0_sample0, ch0_sample1, ..., ch1_sample0, ch1_sample1, ...]
             num_channels = len(self.channels)
-            data_list = []
             
-            for i in range(buffer.size()):
-                sample = buffer.getSample(i)
-                data_list.append(sample)
-            
-            if not data_list:
-                return None
-            
-            # Reshape to (samples, channels)
-            data_array = np.array(data_list).reshape(-1, num_channels)
-            
-            # Return requested number of samples
-            if data_array.shape[0] >= num_samples:
-                return data_array[:num_samples, :]
-            else:
-                return data_array
+            # Try to get the size and samples
+            try:
+                size = buffer.size()
+                if size == 0:
+                    return None
+                
+                # Extract samples from buffer
+                # buffer.getSample(channel_idx) returns all samples for that channel
+                channel_data = []
+                for ch_idx in range(num_channels):
+                    ch_samples = buffer.getSample(ch_idx)
+                    # Convert to list if it's not already
+                    if hasattr(ch_samples, '__iter__'):
+                        channel_data.append(list(ch_samples))
+                    else:
+                        channel_data.append([ch_samples])
+                
+                # Transpose to get (samples, channels) format
+                max_samples = max(len(ch) for ch in channel_data)
+                data_array = np.zeros((max_samples, num_channels))
+                
+                for ch_idx, ch_samples in enumerate(channel_data):
+                    data_array[:len(ch_samples), ch_idx] = ch_samples
+                
+                # Return requested number of samples
+                if data_array.shape[0] >= num_samples:
+                    return data_array[:num_samples, :]
+                else:
+                    return data_array
+                    
+            except AttributeError:
+                # Alternative: buffer might be a simple array
+                # Try to reshape directly
+                data_flat = np.array(buffer)
+                if len(data_flat) == 0:
+                    return None
+                
+                # Assume channel-major format
+                samples_per_channel = len(data_flat) // num_channels
+                data_array = data_flat.reshape(num_channels, samples_per_channel).T
+                
+                if data_array.shape[0] >= num_samples:
+                    return data_array[:num_samples, :]
+                else:
+                    return data_array
             
         except Exception as e:
             print(f"Error reading samples: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def get_channel_info(self) -> List[ChannelInfo]:

@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>ES.EdiInterface_Release</id>
+    <version>2.0.2.1355</version>
+    <authors>eemagine Medical Imaging Solutions GmbH</authors>
+    <description>Package Description</description>
+    <repository type="git" commit="547a23ec4c5a3104ac9f140b0377c6f7438c2dac" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="ES.CtkInterface_Release" version="2.0.2.1355" exclude="Build,Analyzers" />
+        <dependency id="ES.DeviceDataModel_Release" version="2.0.2.1355" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="ES.CtkInterface_Release" version="2.0.2.1355" exclude="Build,Analyzers" />
+        <dependency id="ES.DeviceDataModel_Release" version="2.0.2.1355" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>
