@@ -154,7 +154,12 @@
         "infoConnected": "Do NOT proceed until you see Signal quality: Good in the header above.",
         "infoDisconnected": "Click on the Reconnect button above to connect to the device before proceeding",
         "noDeviceDetected": "No EEG device detected. Make sure the device is switched on, then try again.",
-        "waitForGoodSignal": "Wait for good signal quality before proceeding."
+        "waitForGoodSignal": "Wait for good signal quality before proceeding.",
+        "troubleTitle": "Having trouble connecting?",
+        "troubleBody": "Try restarting the application and ensure the device is paired before trying to connect.",
+        "troubleRetry": "Try again",
+        "troubleDismiss": "Close",
+        "troubleCloseAriaLabel": "Close dialog"
     },
     "loggedInHeader": {
         "device": "Device:",
@@ -614,6 +619,7 @@
         "seedingFailedStatus": "Upload failed ({{status}}): {{message}}",
         "unexpectedError": "Unexpected error: {{status}}",
         "connectionFailed": "Connection failed.",
+        "connectionTimedOut": "Could not connect. Check that the device is switched on and in range, then press Reconnect to try again.",
         "qrStartFailed": "Could not start sign-in. Please try again.",
         "qrStartFailedStatus": "Could not start sign-in ({{status}}).",
         "qrRenderFailed": "Could not display the QR code. Use the link below instead.",
