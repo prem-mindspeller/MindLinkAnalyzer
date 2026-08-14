@@ -477,3 +477,89 @@ main {
     color: #e67e22;
 
 }
+/* ── "Having trouble connecting?" dialog ───────────────────────────────────── */
+/* Builds on the shared .step-info-overlay / .step-info-modal shell in main.css;
+   only the alert-specific parts are defined here. */
+.trouble-modal {
+    text-align: center;
+}
+
+.trouble-modal-icon {
+    width: 56px;
+    height: 56px;
+    margin: 4px auto 18px;
+    border-radius: 50%;
+    background: #fff4e5;
+    color: #e67e22;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.trouble-modal .step-info-body {
+    text-align: center;
+}
+
+.trouble-modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.trouble-btn-primary,
+.trouble-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.trouble-btn-primary {
+    background: #6c63ff;
+    color: white;
+    border: none;
+    box-shadow: 0 4px 16px rgba(108, 99, 255, 0.3);
+}
+
+.trouble-btn-primary:hover {
+    background: #574fd6;
+    box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4);
+}
+
+.trouble-btn-primary:active {
+    transform: translateY(1px);
+}
+
+.trouble-btn-secondary {
+    background: transparent;
+    color: #555;
+    border: 1px solid #ddd;
+}
+
+.trouble-btn-secondary:hover {
+    background: #f5f5f5;
+    color: #1a1a2e;
+}
+
+.trouble-modal-actions button:focus-visible {
+    outline: 2px solid #6c63ff;
+    outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+    .trouble-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .trouble-modal-actions button {
+        width: 100%;
+    }
+}

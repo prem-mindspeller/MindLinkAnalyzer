@@ -109,6 +109,15 @@ _active_connection_target: Optional[str]  = None
 _stop_event:    threading.Event            = threading.Event()
 _status:        str                        = "disconnected"
 _battery_level: Optional[int]             = None    # last known battery % from 0x85 packet
+
+# A connect attempt must always reach a terminal state. Without this budget a
+# reader thread that wedges before reporting leaves _status pinned at
+# "connecting", and the frontend spins forever with nothing to retry against.
+_CONNECT_TIMEOUT_S = float(os.getenv("EEG_CONNECT_TIMEOUT_S", "60") or "60")
+_connect_started_at: Optional[float]      = None    # monotonic; set when entering "connecting"
+_last_connect_error: Optional[Dict]       = None    # surfaced via GET /status
+_watchdog_thread: Optional[threading.Thread] = None
+_watchdog_stop:  threading.Event           = threading.Event()
 _EEG_LOGS_ENABLED = os.getenv("EEG_DEBUG_LOGS", "1").strip().lower() not in ("0", "false", "no", "off")
 _EEG_ANALYSIS_VERBOSE = os.getenv("EEG_ANALYSIS_VERBOSE", "0").strip().lower() in ("1", "true", "yes", "on")
 # "Worn" = enough electrodes carry real signal (per-channel variance inside a
@@ -333,6 +342,79 @@ def _enqueue(message: dict) -> None:
         )
 
 
+# ─── Connect watchdog ─────────────────────────────────────────────────────────
+
+def _record_connect_failure(code: str, message: str) -> None:
+    """
+    Record why a connection ended and tell every client.
+
+    Without this the reason only ever reached the WebSocket, so anything that
+    polled GET /status after the fact saw a bare "disconnected" with no cause.
+    """
+    global _last_connect_error
+    _last_connect_error = {
+        "code": code,
+        "message": message,
+        "target": _active_connection_target,
+        "at": time.time(),
+    }
+    _enqueue({"type": "error", "code": code, "message": message})
+
+
+def _abandon_stalled_connect(waited_s: float) -> None:
+    """
+    Tear down a connect attempt that never reached "connected".
+
+    Leaves the backend in "disconnected" so the frontend can drop its spinner
+    and offer a retry, and records why so the UI can say more than "failed".
+    """
+    global _status, _device_session, _active_connection_target
+    global _connect_started_at, _last_connect_error
+
+    target = _active_connection_target
+    _eeg_log("Connect", f"timeout after {waited_s:.1f}s target={target}; abandoning attempt")
+
+    _stop_event.set()
+    if _reader_thread and _reader_thread.is_alive():
+        _reader_thread.join(timeout=2.0)
+        if _reader_thread.is_alive():
+            # Blocked inside a device SDK call; it cannot be killed from here.
+            # It exits on its own once the SDK returns, and the next /connect
+            # refuses to start a second reader while it is still alive.
+            _eeg_log("Connect", "reader thread still alive after join; it will exit on its own")
+
+    if _device_session is not None:
+        try:
+            _device_session.disconnect()
+        except Exception:
+            pass
+        _device_session = None
+
+    _record_connect_failure(
+        "connect_timeout",
+        f"The device did not connect within {int(_CONNECT_TIMEOUT_S)} seconds.",
+    )
+    _active_connection_target = None
+    _connect_started_at = None
+    _stop_event.clear()
+    _status = "disconnected"
+    _enqueue({"type": "status", "value": "disconnected"})
+
+
+def _connect_watchdog() -> None:
+    """Enforces _CONNECT_TIMEOUT_S so "connecting" can never become permanent."""
+    while not _watchdog_stop.wait(1.0):
+        started = _connect_started_at
+        if _status != "connecting" or started is None:
+            continue
+        waited = time.monotonic() - started
+        if waited >= _CONNECT_TIMEOUT_S:
+            try:
+                _abandon_stalled_connect(waited)
+            except Exception as exc:
+                _eeg_log("Connect", f"watchdog error: {exc}")
+
+
 # ─── Serial reader (runs in a daemon thread) ──────────────────────────────────
 
 def _mindrove_reader_worker() -> None:
@@ -363,6 +445,9 @@ def _mindrove_reader_worker() -> None:
     last_data_time = time.monotonic()
     FLUSH_INTERVAL = 0.016
     SILENCE_TIMEOUT = 5.0
+    # Budget for the very first sample after the stream opens, before the
+    # device is considered present at all.
+    FIRST_DATA_TIMEOUT = 5.0
 
     def _flush_raw_batches() -> None:
         nonlocal raw_batch, raw_multi_batch, raw_multi_next_sample_index, last_flush
@@ -407,8 +492,13 @@ def _mindrove_reader_worker() -> None:
             f"battery_channel={device.battery_channel}",
         )
 
-        _status = "connected"
-        _enqueue({"type": "status", "value": "connected"})
+        # Opening a MindRove Wi-Fi stream is connectionless (UDP), so
+        # prepare_session()/start_stream() succeed whether or not a headset is
+        # actually there. Reporting "connected" here told the UI a phantom
+        # device was live for the ~6 s it took the silence timeout to notice.
+        # Stay in "connecting" until real samples prove otherwise.
+        stream_live = False
+        last_data_time = time.monotonic()
         _enqueue({
             "type": "device_info",
             "device": "mindrove",
@@ -423,6 +513,11 @@ def _mindrove_reader_worker() -> None:
             samples = device.read_samples(max_samples=None)
             if samples:
                 last_data_time = time.monotonic()
+                if not stream_live:
+                    stream_live = True
+                    _status = "connected"
+                    _eeg_log("MindRove", "first samples received; status=connected")
+                    _enqueue({"type": "status", "value": "connected"})
             if device.battery_level is not None:
                 _set_battery_level(device.battery_level, "mindrove")
 
@@ -505,9 +600,24 @@ def _mindrove_reader_worker() -> None:
                     "bandPower": None,
                     "battery": _battery_level,
                 })
-            if time.monotonic() - last_data_time > SILENCE_TIMEOUT:
+            # "Never started" and "stopped mid-stream" are different failures
+            # and deserve different messages.
+            idle_for = time.monotonic() - last_data_time
+            if not stream_live:
+                if idle_for > FIRST_DATA_TIMEOUT:
+                    _eeg_log("MindRove", f"no samples within {FIRST_DATA_TIMEOUT:.0f}s; treating as absent")
+                    _record_connect_failure(
+                        "no_device_data",
+                        f"No data from the MindRove device within {int(FIRST_DATA_TIMEOUT)} seconds. "
+                        "Check that it is switched on and joined to its Wi-Fi network.",
+                    )
+                    break
+            elif idle_for > SILENCE_TIMEOUT:
                 _eeg_log("MindRove", "device silent for 5 s; stopping reader")
-                _enqueue({"type": "error", "message": "MindRove device silent for 5 s."})
+                _record_connect_failure(
+                    "device_silent",
+                    f"The MindRove device stopped sending data for {int(SILENCE_TIMEOUT)} seconds.",
+                )
                 break
 
             if not samples:
@@ -544,6 +654,41 @@ def _reader_worker(port_path: str) -> None:
     last_data_time = time.monotonic()
     FLUSH_INTERVAL = 0.016
     SILENCE_TIMEOUT = 3.0
+    # An open port proves the adapter exists, not that a powered headset is on
+    # the other end — so "connected" waits for bytes, as on the MindRove path.
+    FIRST_DATA_TIMEOUT = 5.0
+    stream_live = False
+
+    def _mark_stream_live() -> None:
+        """Promote to "connected" on the first real bytes from the device."""
+        nonlocal stream_live
+        global _status
+        if stream_live:
+            return
+        stream_live = True
+        _status = "connected"
+        _eeg_log("Serial", "first data received; status=connected")
+        _enqueue({"type": "status", "value": "connected"})
+
+    def _check_data_flow() -> Optional[str]:
+        """Returns a failure code once the device has been quiet too long."""
+        idle_for = time.monotonic() - last_data_time
+        if not stream_live:
+            if idle_for > FIRST_DATA_TIMEOUT:
+                _record_connect_failure(
+                    "no_device_data",
+                    f"No data from the device within {int(FIRST_DATA_TIMEOUT)} seconds. "
+                    "Check that it is switched on and paired.",
+                )
+                return "no_device_data"
+            return None
+        if idle_for > SILENCE_TIMEOUT:
+            _record_connect_failure(
+                "device_silent",
+                f"The device stopped sending data for {int(SILENCE_TIMEOUT)} seconds.",
+            )
+            return "device_silent"
+        return None
 
     def _run_cushy_parser(parse_message) -> None:
         nonlocal last_data_time
@@ -560,17 +705,17 @@ def _reader_worker(port_path: str) -> None:
             def handle_serial_message(msg: bytes):
                 nonlocal last_data_time
                 last_data_time = time.monotonic()
+                _mark_stream_live()
                 parse_message(msg)
 
-            _status = "connected"
-            _enqueue({"type": "status", "value": "connected"})
+            # Port is open, but stay "connecting" until bytes actually arrive.
+            last_data_time = time.monotonic()
 
             while not _stop_event.is_set():
                 now = time.monotonic()
                 if now - last_flush >= FLUSH_INTERVAL:
                     _flush_raw_batch()
-                if now - last_data_time > SILENCE_TIMEOUT:
-                    _enqueue({"type": "error", "message": "Device silent for 3 s — disconnecting."})
+                if _check_data_flow():
                     break
                 time.sleep(0.02)
 
@@ -598,6 +743,7 @@ def _reader_worker(port_path: str) -> None:
     def _on_raw(raw):
         nonlocal last_data_time
         last_data_time = time.monotonic()
+        _mark_stream_live()
         raw_batch.append(round(eeg_filter(float(raw))))
         now = time.monotonic()
         if now - last_flush >= FLUSH_INTERVAL:
@@ -606,6 +752,7 @@ def _reader_worker(port_path: str) -> None:
     def _on_eeg(data):
         nonlocal last_data_time
         last_data_time = time.monotonic()
+        _mark_stream_live()
         poor = getattr(data, 'poorSignal', getattr(data, 'signalLevel', getattr(data, 'signal', 200)))
         attn = getattr(data, 'attention',  0)
         med  = getattr(data, 'meditation', 0)
@@ -654,21 +801,21 @@ def _reader_worker(port_path: str) -> None:
 
         try:
             _serial_port = serial.Serial(port_path, baudrate=115200, timeout=0.02)
-            _status = "connected"
-            _enqueue({"type": "status", "value": "connected"})
+            # Port open, but stay "connecting" until bytes actually arrive.
+            last_data_time = time.monotonic()
 
             while not _stop_event.is_set():
                 chunk = _serial_port.read(64)
                 if chunk:
                     last_data_time = time.monotonic()
+                    _mark_stream_live()
                     _parse_sdk_chunk(chunk)
 
                 now = time.monotonic()
                 if now - last_flush >= FLUSH_INTERVAL:
                     _flush_raw_batch()
 
-                if time.monotonic() - last_data_time > SILENCE_TIMEOUT:
-                    _enqueue({"type": "error", "message": "Device silent for 3 s — disconnecting."})
+                if _check_data_flow():
                     break
 
         except (serial.SerialException, OSError) as exc:
@@ -723,14 +870,15 @@ def _reader_worker(port_path: str) -> None:
 
     try:
         _serial_port = serial.Serial(port_path, baudrate=115200, timeout=0.02)
-        _status = "connected"
-        _enqueue({"type": "status", "value": "connected"})
+        # Port open, but stay "connecting" until bytes actually arrive.
+        last_data_time = time.monotonic()
 
         while not _stop_event.is_set():
             chunk = _serial_port.read(64)
 
             if chunk:
                 last_data_time = time.monotonic()
+                _mark_stream_live()
                 for byte in chunk:
                     tgam_parser.feed(byte)
 
@@ -740,8 +888,7 @@ def _reader_worker(port_path: str) -> None:
                 raw_batch.clear()
                 last_flush = now
 
-            if time.monotonic() - last_data_time > SILENCE_TIMEOUT:
-                _enqueue({"type": "error", "message": "Device silent for 3 s — disconnecting."})
+            if _check_data_flow():
                 break
 
     except (serial.SerialException, OSError) as exc:
@@ -763,14 +910,25 @@ def _reader_worker(port_path: str) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _broadcast_queue, _broadcaster_task, _event_loop
+    global _broadcast_queue, _broadcaster_task, _event_loop, _watchdog_thread
     _event_loop       = asyncio.get_running_loop()
     _broadcast_queue  = asyncio.Queue()
     _broadcaster_task = asyncio.create_task(_broadcaster())
+
+    _watchdog_stop.clear()
+    _watchdog_thread = threading.Thread(
+        target=_connect_watchdog,
+        daemon=True,
+        name="connect-watchdog",
+    )
+    _watchdog_thread.start()
+    _eeg_log("Connect", f"watchdog started timeout={_CONNECT_TIMEOUT_S:.0f}s")
+
     yield
     # Cleanup on shutdown
     if _broadcaster_task:
         _broadcaster_task.cancel()
+    _watchdog_stop.set()
     _stop_event.set()
     if _reader_thread and _reader_thread.is_alive():
         _reader_thread.join(timeout=2.0)
@@ -829,9 +987,15 @@ def list_ports() -> Dict:
 @app.get("/status")
 def status() -> Dict:
     """Return current device connection status and last known battery level."""
+    connecting_for = None
+    if _status == "connecting" and _connect_started_at is not None:
+        connecting_for = round(time.monotonic() - _connect_started_at, 1)
     return {
-        "status":  _status,
-        "battery": _battery_level,
+        "status":        _status,
+        "battery":       _battery_level,
+        "connectingFor": connecting_for,
+        "connectTimeout": _CONNECT_TIMEOUT_S,
+        "lastError":     _last_connect_error,
     }
 
 
@@ -844,6 +1008,7 @@ def connect(body: Dict) -> Dict:
     Response: { "success": true } | { "success": false, "error": "..." }
     """
     global _reader_thread, _status, _active_connection_target
+    global _connect_started_at, _last_connect_error
 
     body = body or {}
     port_path = str(body.get("port", "mindrove://wifi")).strip()
@@ -880,6 +1045,11 @@ def connect(body: Dict) -> Dict:
     _stop_event.clear()
 
     _status = "connecting"
+    # Starts the watchdog budget. Deliberately not re-stamped by the idempotent
+    # branch above, so repeat calls extend nothing — the minute is measured from
+    # the first request, not the latest retry.
+    _connect_started_at = time.monotonic()
+    _last_connect_error = None
     _enqueue({"type": "status", "value": "connecting"})
 
     target = _mindrove_reader_worker if use_mindrove else _reader_worker
@@ -902,8 +1072,9 @@ def connect(body: Dict) -> Dict:
 @app.post("/disconnect")
 def disconnect() -> Dict:
     """Close the active EEG device connection."""
-    global _status, _device_session, _active_connection_target
+    global _status, _device_session, _active_connection_target, _connect_started_at
     _eeg_log("Connect", f"disconnect request status={_status} target={_active_connection_target}")
+    _connect_started_at = None
     _stop_event.set()
     if _reader_thread and _reader_thread.is_alive():
         _reader_thread.join(timeout=2.0)

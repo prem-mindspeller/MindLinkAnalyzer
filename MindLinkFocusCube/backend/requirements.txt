@@ -1,5 +1,0 @@
-numpy>=1.24
-scipy>=1.10
-pytest>=8.0
-mindrove>=5.3.0
-websockets>=12.0
