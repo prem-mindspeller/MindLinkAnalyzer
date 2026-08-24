@@ -554,13 +554,11 @@
             "tip": "<0>Tip:</0> Proper positioning ensures accurate EEG readings. Take a moment to adjust the headset before starting calibration."
         },
         "charging": {
-            "title": "4. Removing the Amplifier for Charging",
-            "intro": "To charge the amplifier, you need to remove it from the clip:",
-            "step1": "Locate the clip that holds the amplifier to the headband.",
-            "step2": "Gently pull the amplifier <1>out of the clip</1>.",
-            "step3": "Connect the charging cable to the amplifier.",
-            "step4": "Charge until the indicator shows a full battery.",
-            "note": "<0>Note:</0> The amplifier cannot be charged while attached to the headset clip."
+            "title": "4. Chargiing the Amplifier",
+            "intro": "To charge the amplifier, you need a usb type C cable:",
+            "step1": "Locate the charging port on the right side of teh device",
+            "step2": "Plug in the cable and let it charge ",
+            "note": "The amplifier should not be used while it is charging."
         },
         "reinsert": {
             "title": "5. Inserting the Amplifier Back into the Clip",

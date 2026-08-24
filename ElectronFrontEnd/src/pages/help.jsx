@@ -82,10 +82,9 @@ const buildSections = (t) => [
                 <ol className="help-list-gap">
                     <li>{t('gettingStarted.charging.step1')}</li>
                     <li>{t('gettingStarted.charging.step2')}</li>
-                    <li>{t('gettingStarted.charging.step3')}</li>
                 </ol>
                 <p className="help-note help-note--yellow">
-                    <strong>{t('gettingStarted.charging.noteLabel')}</strong> {t('gettingStarted.charging.noteText')}
+                    <strong>{t('gettingStarted.charging.note')}</strong>
                 </p>
             </>
         ),
