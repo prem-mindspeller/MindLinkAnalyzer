@@ -285,12 +285,48 @@ export function resolveSessionDepth(storage = globalThis.sessionStorage) {
   return 'session_1';
 }
 
-export function taskSequenceForSession(sessionDepth) {
-  return [...(SESSION_SEQUENCES[sessionDepth] || SESSION_SEQUENCES.session_1)];
+export const SESSION_NUMBER_BY_DEPTH = Object.freeze({
+  session_1: 1,
+  session_2: 2,
+  session_3: 3,
+});
+
+export function sessionNumberForDepth(sessionDepth) {
+  return SESSION_NUMBER_BY_DEPTH[sessionDepth] ?? 1;
 }
 
-export function taskIdsForSession(sessionDepth) {
-  return taskSequenceForSession(sessionDepth).filter((id) => id !== EYES_OPEN_BASELINE_CHECKPOINT);
+/**
+ * The battery normally carries every earlier session's tasks forward so the
+ * same measurements repeat across runs. `newTasksOnly` drops that carry-over
+ * and keeps just the tasks this session introduces, which is what the
+ * participant's "disable repetition" choice selects.
+ */
+export function taskSequenceForSession(sessionDepth, { newTasksOnly = false } = {}) {
+  const sequence = [...(SESSION_SEQUENCES[sessionDepth] || SESSION_SEQUENCES.session_1)];
+  if (!newTasksOnly) return sequence;
+
+  const sessionNumber = sessionNumberForDepth(sessionDepth);
+  return sequence.filter((id) => (
+    // The eyes-open checkpoint is a matched reference for this run's own
+    // recordings, not a repeated task, so it survives the filter.
+    id === EYES_OPEN_BASELINE_CHECKPOINT
+    || (FIRST_SESSION_BY_TASK[id] || 1) === sessionNumber
+  ));
+}
+
+export function taskIdsForSession(sessionDepth, options) {
+  return taskSequenceForSession(sessionDepth, options)
+    .filter((id) => id !== EYES_OPEN_BASELINE_CHECKPOINT);
+}
+
+/** Tasks carried forward from an earlier session purely to repeat them. */
+export function carriedOverTaskIds(sessionDepth) {
+  const introduced = new Set(taskIdsForSession(sessionDepth, { newTasksOnly: true }));
+  return taskIdsForSession(sessionDepth).filter((id) => !introduced.has(id));
+}
+
+export function firstSessionForTask(taskId) {
+  return FIRST_SESSION_BY_TASK[taskId] || 1;
 }
 
 const FIRST_SESSION_BY_TASK = Object.freeze({

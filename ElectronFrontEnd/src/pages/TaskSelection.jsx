@@ -13,6 +13,8 @@ import {
     faPlay,
     faRotate,
     faSpinner,
+    faToggleOff,
+    faToggleOn,
     faTriangleExclamation,
     faVolumeHigh,
 } from '@fortawesome/free-solid-svg-icons';
@@ -36,6 +38,12 @@ import {
     commitTaskAttempt,
     isRepeatSignalReady,
 } from '../service/taskQualityGate.mjs';
+import {
+    canDisableRepetition,
+    clearRepetitionPreference,
+    isRepetitionDisabled,
+    saveRepetitionPreference,
+} from '../service/repetitionPreference.mjs';
 import {
     BASELINE_PHASE_REQUEST_KEY,
     BASELINE_RECORDING_PHASE,
@@ -170,13 +178,91 @@ const TaskQualityModal = ({
     );
 };
 
+const DisableRepetitionModal = ({ open, onConfirm, onCancel, t }) => {
+    if (!open) return null;
+
+    return (
+        <div className="ts-quality-modal-backdrop" role="presentation">
+            <div
+                className="ts-quality-modal ts-repetition-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="disable-repetition-title"
+            >
+                <div className="ts-quality-modal-header">
+                    <div>
+                        <p className="ts-quality-kicker">
+                            {t('taskSelection.repetitionKicker', { defaultValue: 'Session setting' })}
+                        </p>
+                        <h2 id="disable-repetition-title">
+                            {t('taskSelection.repetitionConfirmTitle', { defaultValue: 'Skip the repeated tasks for this session?' })}
+                        </h2>
+                    </div>
+                    <div className="ts-quality-signal-pill">
+                        <FontAwesomeIcon icon={faCircleInfo} />
+                        <span>{t('taskSelection.repetitionPillOneAttempt', { defaultValue: 'New tasks only' })}</span>
+                    </div>
+                </div>
+
+                <p className="ts-quality-modal-body">
+                    {t('taskSelection.repetitionConfirmBody', { defaultValue: 'Only the tasks this session introduces will be recorded. The tasks you already completed in earlier sessions will not be repeated in this run, and your session data is still collected and analysed without them.' })}
+                </p>
+
+                <div className="ts-repetition-why">
+                    <h3>{t('taskSelection.repetitionWhyTitle', { defaultValue: 'Why repetition normally matters' })}</h3>
+                    <ul>
+                        <li>{t('taskSelection.repetitionWhyReliability', { defaultValue: 'Repeating the same tasks in every session is what makes a change in your neural profile reliable. With one recording per task there is nothing to confirm it against, so an unusual result cannot be told apart from normal day-to-day variation.' })}</li>
+                        <li>{t('taskSelection.repetitionWhyConsistency', { defaultValue: 'Repeated tasks are what make sessions comparable. Without them this run is scored on its own and cannot be lined up against your earlier sessions.' })}</li>
+                        <li>{t('taskSelection.repetitionWhyQuality', { defaultValue: 'Fewer recordings per task means less data behind each result, so the confidence reported for this session will be lower than for a full run.' })}</li>
+                    </ul>
+                </div>
+
+                <p className="ts-repetition-scope">
+                    {t('taskSelection.repetitionScopeNote', { defaultValue: 'This applies to the current session only. Future sessions start with repetition enabled again, and you can turn it back on at any time.' })}
+                </p>
+
+                <div className="ts-quality-actions">
+                    <button className="ts-quality-secondary" onClick={onCancel}>
+                        {t('taskSelection.repetitionCancel', { defaultValue: 'Keep repetition enabled' })}
+                    </button>
+                    <button className="ts-quality-primary" onClick={onConfirm}>
+                        <FontAwesomeIcon icon={faToggleOff} />
+                        {t('taskSelection.repetitionConfirm', { defaultValue: 'Continue without repetition' })}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const TaskSelection = () => {
     const navigate = useNavigate();
     const { t } = useTranslation();
     const sessionDepth = useMemo(() => resolveSessionDepth(sessionStorage), []);
     const protocolSession = useMemo(() => deriveProtocolSession(sessionStorage), []);
-    const sequence = useMemo(() => taskSequenceForSession(sessionDepth), [sessionDepth]);
-    const enabledTaskIds = useMemo(() => taskIdsForSession(sessionDepth), [sessionDepth]);
+    const repetitionChoiceAvailable = canDisableRepetition(protocolSession);
+    const [repetitionDisabled, setRepetitionDisabled] = useState(
+        () => isRepetitionDisabled(sessionStorage, protocolSession),
+    );
+    const [repetitionDialogOpen, setRepetitionDialogOpen] = useState(false);
+
+    // Disabling repetition drops the tasks this session only carries forward to
+    // repeat, leaving the ones it introduces.
+    const taskScope = useMemo(
+        () => ({ newTasksOnly: repetitionDisabled }),
+        [repetitionDisabled],
+    );
+    const sequence = useMemo(
+        () => taskSequenceForSession(sessionDepth, taskScope),
+        [sessionDepth, taskScope],
+    );
+    const enabledTaskIds = useMemo(
+        () => taskIdsForSession(sessionDepth, taskScope),
+        [sessionDepth, taskScope],
+    );
+    // Booking tier, independent of the repetition choice: it still decides
+    // which rows read "Booking required" rather than "Not required".
+    const bookedTaskIds = useMemo(() => taskIdsForSession(sessionDepth), [sessionDepth]);
     const allTaskIds = useMemo(() => taskIdsForSession('session_3'), []);
 
     const [completedIds, setCompletedIds] = useState(() => {
@@ -187,6 +273,9 @@ const TaskSelection = () => {
             && storedProtocolSession === protocolSession
         );
         const completed = sameRunContract ? readCompletedTasks() : [];
+        // A new battery contract is a new run: its tasks have not been recorded
+        // yet, so an earlier waiver must not silently carry over to them.
+        if (!sameRunContract) clearRepetitionPreference(sessionStorage);
         sessionStorage.setItem('taskBatteryVersion', BATTERY_VERSION);
         sessionStorage.setItem('taskBatteryProtocolSession', String(protocolSession));
         sessionStorage.setItem('completedTasks', JSON.stringify(completed));
@@ -316,6 +405,27 @@ const TaskSelection = () => {
         if (next) setSelectedId(next);
     }, [eyesOpenBaselineDone, sequence]);
 
+    // Turning repetition back on is the stricter direction and needs no
+    // confirmation; only the waiver is gated behind the informational popup.
+    const handleRepetitionToggle = useCallback(() => {
+        if (!repetitionChoiceAvailable) return;
+        if (repetitionDisabled) {
+            clearRepetitionPreference(sessionStorage);
+            setRepetitionDisabled(isRepetitionDisabled(sessionStorage, protocolSession));
+            return;
+        }
+        setRepetitionDialogOpen(true);
+    }, [protocolSession, repetitionChoiceAvailable, repetitionDisabled]);
+
+    const confirmDisableRepetition = useCallback(() => {
+        // The persisted value is authoritative: a rejected write leaves
+        // repetition on rather than showing a waiver that is not in effect.
+        setRepetitionDisabled(saveRepetitionPreference(true, protocolSession, sessionStorage));
+        setRepetitionDialogOpen(false);
+    }, [protocolSession]);
+
+    const cancelDisableRepetition = useCallback(() => setRepetitionDialogOpen(false), []);
+
     const handleTaskComplete = useCallback(async (taskId, samples, signalStats, metadata) => {
         setActiveTaskId(null);
         setQualityCheckTaskId(taskId);
@@ -434,9 +544,34 @@ const TaskSelection = () => {
                             <strong>{allEnabledCompleted ? 'All required blocks are complete.' : 'One uninterrupted block per task'}</strong>
                             <p>{allEnabledCompleted
                                 ? 'The matched baselines and every task required for this session are ready for analysis.'
+                                : repetitionDisabled
+                                ? 'The device remains connected between tasks. Repetition is off, so only this session’s new tasks are required; earlier sessions’ tasks are not repeated in this run.'
                                 : 'The device remains connected between tasks. Responses are collected only after EEG scoring ends; a task with less than 20 contiguous clean seconds must be repeated.'}</p>
                         </div>
                     </div>
+
+                    {repetitionChoiceAvailable && (
+                        <div className={`ts-repetition-row${repetitionDisabled ? ' is-disabled-repetition' : ''}`}>
+                            <div className="ts-repetition-copy">
+                                <strong>{t('taskSelection.repetitionToggleLabel', { defaultValue: 'Disable repetition' })}</strong>
+                                <p>{repetitionDisabled
+                                    ? t('taskSelection.repetitionToggleOn', { defaultValue: 'Only the tasks introduced in this session are required. Tasks already completed in earlier sessions are not repeated.', count: enabledTaskIds.length })
+                                    : t('taskSelection.repetitionToggleOff', { defaultValue: 'Tasks from earlier sessions are repeated alongside this session’s new tasks, which is what keeps the profile comparable across runs.' })}</p>
+                            </div>
+                            <button
+                                type="button"
+                                className="ts-repetition-toggle"
+                                role="switch"
+                                aria-checked={repetitionDisabled}
+                                onClick={handleRepetitionToggle}
+                            >
+                                <FontAwesomeIcon icon={repetitionDisabled ? faToggleOn : faToggleOff} />
+                                <span>{repetitionDisabled
+                                    ? t('taskSelection.repetitionStateOn', { defaultValue: 'Repetition off' })
+                                    : t('taskSelection.repetitionStateOff', { defaultValue: 'Repetition on' })}</span>
+                            </button>
+                        </div>
+                    )}
 
                     <div className="ts-layout">
                         <div className="ts-task-list optimized-sequence-list">
@@ -468,7 +603,10 @@ const TaskSelection = () => {
                                 }
                                 const meta = TASK_DEFINITIONS[item];
                                 const done = completedIds.includes(item);
-                                const booked = enabledTaskIds.includes(item);
+                                const booked = bookedTaskIds.includes(item);
+                                // Unlocked by the booking tier but dropped from this
+                                // run because repetition is off.
+                                const notRepeated = booked && !enabledTaskIds.includes(item);
                                 const unlocked = taskIsUnlocked(item);
                                 const audioRequired = taskRequiresAudio(item, sessionDepth);
                                 return (
@@ -480,7 +618,7 @@ const TaskSelection = () => {
                                         )}
                                     <button
                                         key={item}
-                                        className={`ts-task-item${selectedId === item ? ' selected' : ''}${done ? ' done' : ''}${!unlocked ? ' locked' : ''}`}
+                                        className={`ts-task-item${selectedId === item ? ' selected' : ''}${done ? ' done' : ''}${!unlocked ? ' locked' : ''}${notRepeated ? ' not-repeated' : ''}`}
                                         onClick={() => unlocked && setSelectedId(item)}
                                         disabled={!unlocked}
                                     >
@@ -490,7 +628,7 @@ const TaskSelection = () => {
                                         </span>
                                         <span className="ts-task-item-name">{meta.shortName}</span>
                                         {audioRequired && <span className="ts-task-item-audio" title="Audio required" aria-label="Audio required"><FontAwesomeIcon icon={faVolumeHigh} /></span>}
-                                        <span className="ts-task-item-dur">{booked ? `${meta.duration}s` : 'Booking required'}</span>
+                                        <span className="ts-task-item-dur">{notRepeated ? t('taskSelection.repetitionNotRepeated', { defaultValue: 'Not repeated' }) : booked ? `${meta.duration}s` : 'Booking required'}</span>
                                     </button>
                                     </>
                                 );
@@ -566,6 +704,12 @@ const TaskSelection = () => {
                     </div>
                 </div>
             )}
+            <DisableRepetitionModal
+                open={repetitionDialogOpen}
+                onConfirm={confirmDisableRepetition}
+                onCancel={cancelDisableRepetition}
+                t={t}
+            />
             <TaskQualityModal
                 taskName={qualityDialog ? TASK_DEFINITIONS[qualityDialog.taskId]?.name || qualityDialog.taskId : ''}
                 signalStatus={signalStatus}

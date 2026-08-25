@@ -464,7 +464,24 @@
         "qualityStageStabilizingBody": "Keep the signal good for {{seconds}} more seconds. The repeat button unlocks after 5 continuous seconds of good signal.",
         "qualityStabilizingButton": "Hold good signal for {{seconds}}s",
         "qualityBlockingTitle": "Checking task signal quality",
-        "qualityBlockingBody": "Please wait while the recording is checked. Analysis and navigation are blocked until this finishes."
+        "qualityBlockingBody": "Please wait while the recording is checked. Analysis and navigation are blocked until this finishes.",
+        "repetitionToggleLabel": "Disable repetition",
+        "repetitionToggleOff": "Tasks from earlier sessions are repeated alongside this session’s new tasks, which is what keeps the profile comparable across runs.",
+        "repetitionToggleOn": "Only the tasks introduced in this session are required. Tasks already completed in earlier sessions are not repeated.",
+        "repetitionStateOff": "Repetition on",
+        "repetitionStateOn": "Repetition off",
+        "repetitionKicker": "Session setting",
+        "repetitionPillOneAttempt": "New tasks only",
+        "repetitionConfirmTitle": "Skip the repeated tasks for this session?",
+        "repetitionConfirmBody": "Only the tasks this session introduces will be recorded. The tasks you already completed in earlier sessions will not be repeated in this run, and your session data is still collected and analysed without them.",
+        "repetitionWhyTitle": "Why repetition normally matters",
+        "repetitionWhyReliability": "Repeating the same tasks in every session is what makes a change in your neural profile reliable. With one recording per task there is nothing to confirm it against, so an unusual result cannot be told apart from normal day-to-day variation.",
+        "repetitionWhyConsistency": "Repeated tasks are what make sessions comparable. Without them this run is scored on its own and cannot be lined up against your earlier sessions.",
+        "repetitionWhyQuality": "Fewer recordings per task means less data behind each result, so the confidence reported for this session will be lower than for a full run.",
+        "repetitionScopeNote": "This applies to the current session only. Future sessions start with repetition enabled again, and you can turn it back on at any time.",
+        "repetitionCancel": "Keep repetition enabled",
+        "repetitionConfirm": "Continue without repetition",
+        "repetitionNotRepeated": "Not repeated"
     },
     "manual": {
         "0": {

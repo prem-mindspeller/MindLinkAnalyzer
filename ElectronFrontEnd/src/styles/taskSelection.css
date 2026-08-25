@@ -1310,3 +1310,134 @@
         height: 170px;
     }
 }
+
+
+.ts-repetition-row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+}
+
+.ts-repetition-row.is-disabled-repetition {
+    background: #fefce8;
+    border-color: #fde68a;
+}
+
+.ts-repetition-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.875rem;
+    line-height: 1.55;
+}
+
+.ts-repetition-copy strong {
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.ts-repetition-copy p {
+    margin: 0;
+    color: #64748b;
+}
+
+.is-disabled-repetition .ts-repetition-copy p {
+    color: #92400e;
+}
+
+.ts-repetition-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    flex-shrink: 0;
+    min-height: 40px;
+    padding: 0 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #334155;
+    font-weight: 800;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.ts-repetition-toggle svg {
+    font-size: 1.35rem;
+}
+
+.ts-repetition-toggle[aria-checked="true"] {
+    border-color: #d97706;
+    color: #92400e;
+}
+
+.ts-repetition-toggle[aria-checked="true"] svg {
+    color: #d97706;
+}
+
+.ts-repetition-modal {
+    width: min(620px, 100%);
+    overflow-y: auto;
+}
+
+.ts-repetition-why {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.ts-repetition-why h3 {
+    margin: 0 0 8px;
+    color: #0f172a;
+    font-size: 0.92rem;
+    font-weight: 800;
+}
+
+.ts-repetition-why ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.ts-repetition-why li {
+    color: #475569;
+    font-size: 0.86rem;
+    line-height: 1.5;
+}
+
+.ts-repetition-scope {
+    margin: 10px 0 0;
+    color: #64748b;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+    .ts-repetition-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .ts-repetition-toggle {
+        justify-content: center;
+    }
+}
+
+/* Carried-over tasks that this run does not repeat. */
+.ts-task-item.not-repeated {
+    opacity: 0.55;
+}
+
+.ts-task-item.not-repeated .ts-task-item-dur {
+    font-style: italic;
+    color: #94a3b8;
+}

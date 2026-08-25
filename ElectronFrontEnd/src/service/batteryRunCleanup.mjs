@@ -3,6 +3,7 @@ import {
   RECORDING_STORE_SESSION_KEY,
 } from './recordingStore.mjs';
 import { BASELINE_PHASE_REQUEST_KEY } from './baselineSessionFlow.mjs';
+import { REPETITION_PREFERENCE_KEY } from './repetitionPreference.mjs';
 
 export const BATTERY_RUN_STORAGE_KEYS = Object.freeze([
   'calibrationData_eyes_closed',
@@ -12,6 +13,7 @@ export const BATTERY_RUN_STORAGE_KEYS = Object.freeze([
   BASELINE_PHASE_REQUEST_KEY,
   'taskBatteryVersion',
   'taskBatteryProtocolSession',
+  REPETITION_PREFERENCE_KEY,
   RECORDING_STORE_SESSION_KEY,
   'selectedPathway',
   // These values select a participant's protocol depth and must not cross a

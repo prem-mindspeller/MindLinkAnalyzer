@@ -15,14 +15,9 @@ function _doUpdateToken() {
   const jwtToken = getStorageItem(STORAGE_KEYS.JWT_TOKEN);
   const refreshToken = getStorageItem(STORAGE_KEYS.JWT_REFRESH_TOKEN);
 
-  // PRIORITY FIX: Protection against transitions to anonymous state during username changes
-  // If we have valid tokens but somehow the anonymous flag is true, this is a critical error
-  if (jwtToken && refreshToken && isAnonymous === 'true') {
-    // Fix the inconsistent state by setting anonymous to false
-    setStorageItem(STORAGE_KEYS.IS_ANONYMOUS, 'false');
 
-    // Check if this error occurred on My Account page during/after username change
-    // Proceed with normal user token refresh, using the refresh token we already have
+  if (jwtToken && refreshToken && isAnonymous === 'true') {
+    setStorageItem(STORAGE_KEYS.IS_ANONYMOUS, 'false');
     return refreshUserToken(refreshToken);
   }
 

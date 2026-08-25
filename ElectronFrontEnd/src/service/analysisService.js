@@ -25,6 +25,7 @@ import {
     loadTaskRecording,
 } from './recordingStore.mjs';
 import {
+    expectedTaskIdsForSession,
     missingExpectedTaskIds,
     missingOrEmptyTaskRecordings,
     requiredBaselineConditionsForSession,
@@ -32,7 +33,9 @@ import {
 import {
     BATTERY_VERSION,
     resolveSessionDepth,
+    sessionNumberForDepth,
 } from '../components/tasks/optimizedBatteryConfig.mjs';
+import { isRepetitionDisabled } from './repetitionPreference.mjs';
 import { PROTOCOL_PROFILE_METADATA } from '../components/tasks/optimizedBatteryProfile.mjs';
 
 const BACKEND_HTTP = 'http://localhost:8000';
@@ -105,6 +108,11 @@ export async function runAnalysis({
 } = {}) {
     const completedIds = _loadCompletedIds(storage);
     const sessionDepth = resolveSessionDepth(storage);
+    // A participant who disabled repetition is not expected to re-record the
+    // tasks carried forward from earlier sessions, so those absences must not
+    // be reported as an incomplete battery.
+    const newTasksOnly = isRepetitionDisabled(storage, sessionNumberForDepth(sessionDepth));
+    const taskScope = { newTasksOnly };
 
     // Collect matched baseline samples from the same durable run namespace as
     // task recordings. loadBaselineRecording also migrates legacy Web Storage
@@ -122,7 +130,7 @@ export async function runAnalysis({
         throw new Error(i18n.t('errors.noBaselineData'));
     }
 
-    const missingBaselines = requiredBaselineConditionsForSession(sessionDepth)
+    const missingBaselines = requiredBaselineConditionsForSession(sessionDepth, taskScope)
         .filter((condition) => !Array.isArray(baseline[condition]) || baseline[condition].length === 0);
     if (missingBaselines.length > 0) {
         throw new Error(`Matched baseline recording(s) are missing: ${missingBaselines.join(', ')}.`);
@@ -137,7 +145,7 @@ export async function runAnalysis({
             ? { eyes_open: eyesOpenRecord?.metadata || manifestMetadata.eyes_open }
             : {}),
     };
-    const incompatibleBaselines = requiredBaselineConditionsForSession(sessionDepth)
+    const incompatibleBaselines = requiredBaselineConditionsForSession(sessionDepth, taskScope)
         .filter((condition) => baselineMetadata[condition]?.battery_version !== BATTERY_VERSION);
     if (incompatibleBaselines.length > 0) {
         throw new Error(
@@ -145,7 +153,7 @@ export async function runAnalysis({
         );
     }
 
-    const missingExpected = missingExpectedTaskIds(completedIds, sessionDepth);
+    const missingExpected = missingExpectedTaskIds(completedIds, sessionDepth, taskScope);
     if (missingExpected.length > 0) {
         throw new Error(
             `Task battery is incomplete for ${sessionDepth}: missing completed task(s): ${missingExpected.join(', ')}.`,
@@ -181,6 +189,15 @@ export async function runAnalysis({
         baseline,
         tasks,
         protocol_profile: PROTOCOL_PROFILE_METADATA,
+        // A run without repeated tasks carries no within-participant repeat
+        // measurements, so the report must be able to tell it apart from a
+        // full battery rather than infer it from the task count.
+        session_scope: {
+            session_depth: sessionDepth,
+            protocol_session: sessionNumberForDepth(sessionDepth),
+            repetition_disabled: newTasksOnly,
+            expected_task_ids: expectedTaskIdsForSession(sessionDepth, taskScope),
+        },
     };
     if (Object.keys(baselineMetadata).length > 0) {
         analysisPayload.baseline_metadata = baselineMetadata;
