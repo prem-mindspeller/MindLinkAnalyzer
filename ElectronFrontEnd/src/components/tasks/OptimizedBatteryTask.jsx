@@ -1307,7 +1307,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
   if (runState === 'idle') {
     return (
       <div className="task-runner-card optimized-task-card">
-        <p className="optimized-task-kicker">{t('optimizedBattery.runner.candidateKicker', { defaultValue: 'Candidate/pilot · Task {{number}} · {{formId}}', number: definition.number, formId: form.id })}</p>
+        <p className="optimized-task-kicker">{t('optimizedBattery.runner.candidateKicker', { defaultValue: 'Candidate/pilot · Mind Mission {{number}} · {{formId}}', number: definition.number, formId: form.id })}</p>
         <h2 className="task-runner-name">{t('taskRunner.readInstruction')}</h2>
         <div className="task-runner-badges">
           <span className={`task-eyes-badge eyes-${definition.eyeState}`}>{t('optimizedBattery.runner.eyesBadge', { defaultValue: 'Eyes {{eyeState}}', eyeState })}</span>
@@ -1320,7 +1320,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
             {introductions.map((line) => <li key={line}>{renderRuleWithOrderEmphasis(line)}</li>)}
           </ul>
         </div>
-        <p className="optimized-guardrail">{t('optimizedBattery.runner.guardrail', { defaultValue: 'EEG features are task-contextual candidate evidence. Behavioral validity and signal quality are checked separately.' })}</p>
+        <p className="optimized-guardrail">{t('optimizedBattery.runner.guardrail', { defaultValue: 'EEG features are Mind-Mission-contextual candidate evidence. Behavioral validity and signal quality are checked separately.' })}</p>
         <div className="task-runner-actions">
           <button type="button" className="task-runner-btn-back" onClick={onBack}>{t('taskRunner.cancel')}</button>
           <button type="button" className="task-runner-btn-back" onClick={listenToInstructions}>{t('optimizedBattery.listen', { defaultValue: 'Listen to instructions' })}</button>
@@ -1335,7 +1335,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
       <div className="task-runner-card task-runner-countdown-screen">
         <p className="task-runner-get-ready">{t('optimizedBattery.runner.getReady', { defaultValue: 'Get ready · Eyes {{eyeState}}', eyeState })}</p>
         <div className="task-runner-big-countdown">{countdown}</div>
-        <p className="task-runner-countdown-caption">{t('optimizedBattery.runner.countdownCaption', { defaultValue: 'The uninterrupted scoring block begins after the final beep.' })}</p>
+        <p className="task-runner-countdown-caption">{t('optimizedBattery.runner.countdownCaption', { defaultValue: 'The uninterrupted Mind Mission begins after the final beep.' })}</p>
       </div>
     );
   }

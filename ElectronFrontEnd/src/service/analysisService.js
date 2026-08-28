@@ -36,6 +36,7 @@ import {
     sessionNumberForDepth,
 } from '../components/tasks/optimizedBatteryConfig.mjs';
 import { isRepetitionDisabled } from './repetitionPreference.mjs';
+import { fetchPreviousReport } from './previousReport.mjs';
 import { PROTOCOL_PROFILE_METADATA } from '../components/tasks/optimizedBatteryProfile.mjs';
 
 const BACKEND_HTTP = 'http://localhost:8000';
@@ -206,6 +207,29 @@ export async function runAnalysis({
         analysisPayload.task_metadata = taskMetadata;
     }
 
+    if (newTasksOnly) {
+        const carried = await fetchPreviousReport({
+
+            baseUrl: loginService.getApiBase(loginService.getRegion()),
+            token: loginService.getToken(),
+            refreshToken: async () => {
+                await loginService.refreshToken();
+                return loginService.getToken();
+            },
+        });
+
+
+        if (!carried) {
+            throw new Error(
+                'Repetition was skipped for this session, but no previous report was found to '
+                + 'carry the earlier tasks forward. Re-run this session with repetition enabled.',
+            );
+        }
+
+        analysisPayload.carried_report = carried.report;
+        analysisPayload.carried_report_meta = carried.meta;
+    }
+
     const res = await fetchImpl(`${BACKEND_HTTP}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -234,13 +258,7 @@ export async function runAnalysis({
     return { ...data, per_task: enriched };
 }
 
-/**
- * Run a quick evidence check for one just-completed task.
- *
- * This reuses POST /analyze with the current baseline and only the new task
- * attempt. It does not write report data and does not alter the final upload
- * envelope.
- */
+
 export async function runSingleTaskQualityCheck(taskId, samples = null, {
     signalStats = null,
     metadata = undefined,

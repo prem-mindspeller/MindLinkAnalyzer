@@ -89,6 +89,7 @@ from neuroprofile_traceability import (
     TASK_BASELINE_CONDITIONS,
     TASK_RECORDING_DURATIONS_SECONDS,
     build_neuroprofile_export,
+    merge_carried_forward_tasks,
     normalize_protocol_profile,
     normalize_protocol_validation_status,
     protocol_profile_reference,
@@ -5177,6 +5178,25 @@ def analyze(body: Dict) -> Dict:
         response["neuroprofile_feature_export"].update(
             _montage_export_fields(montage_summary)
         )
+        # Fold in the previous upload's tasks when this run waived repetition.
+        # Applied after the montage update so the per-recording-session fields
+        # the merge deliberately keeps from this run are already in place.
+        carried_export = body.get("carried_report")
+        if isinstance(carried_export, dict):
+            _merged = merge_carried_forward_tasks(
+                response["neuroprofile_feature_export"],
+                carried_export,
+                body.get("carried_report_meta"),
+            )
+            _composition = _merged.get("composition") or {}
+            if _composition.get("merged"):
+                _eeg_log(
+                    "AnalyzeExport",
+                    f"carried_forward tasks={_composition.get('carried_task_ids')} "
+                    f"depth={_merged.get('protocol_session_depth')} "
+                    f"reliability={_merged.get('global_reliability')}",
+                )
+            response["neuroprofile_feature_export"] = _merged
         export_keys = sorted(response["neuroprofile_feature_export"].keys())
         _eeg_log(
             "AnalyzeExport",

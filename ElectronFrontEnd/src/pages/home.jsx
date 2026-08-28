@@ -48,7 +48,7 @@ const HomePage = () => {
                         <p className="home-hero-eyebrow">{t('home.eyebrow')}</p>
                         <h1 className="home-hero-title">
                             {t('home.title')}<br />
-                            <span className="home-hero-accent">{t('home.titleAccent')}</span>
+                            {/* <span className="home-hero-accent">{t('home.titleAccent')}</span> */}
                         </h1>
                         <p className="home-hero-subtitle">{t('home.subtitle')}</p>
                         <div className="home-hero-actions">

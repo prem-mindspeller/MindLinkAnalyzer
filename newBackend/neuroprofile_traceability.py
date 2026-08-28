@@ -1731,3 +1731,194 @@ def _build_all_task_entries(
         blocked_unsupported,
         all_canonical_ids,
     )
+
+
+# ---------------------------------------------------------------------------
+# Carried-forward task merge (repetition-waived runs)
+# ---------------------------------------------------------------------------
+#
+# When a participant waives repetition in Session 2/3 the battery records only
+# the tasks that session introduces, so the run on its own is a partial
+# battery. The client fetches the previous upload and passes it here as
+# ``carried_export`` so the tasks it already measured are folded back in,
+# restoring the coverage the session depth claims.
+#
+# The merge is deliberately narrow. Everything derived from the task list is
+# recomputed by set union over the corresponding per-task slices, which is
+# exact because the builders accumulate per task. Everything describing the
+# *recording session* (baseline QC, montage, channel quality) stays with the
+# current run, because it measures headset fit on one day and cannot be
+# combined across sittings.
+
+REPORT_MERGE_VERSION = "mindspeller_carried_forward_merge_v1"
+
+# Ascending quality. "unknown" sits at the bottom with "low": both cap
+# confidence at weak, and neither can be trusted to raise a merged report.
+_RELIABILITY_ORDER = ["unknown", "low", "medium", "high"]
+
+# Fields owned by a single recording session. Listed so the merge is explicit
+# about what it declines to combine rather than silently keeping one side.
+_PER_RECORDING_SESSION_FIELDS = (
+    "baseline_qc",
+    "global_quality",
+    "montage",
+    "channel_quality",
+    "regional_reliability",
+    "primary_evidence_region",
+    "multi_channel_gain",
+    "spatial_evidence",
+    "headset_scope",
+)
+
+
+def _weakest_reliability(*values: str) -> str:
+    """Return the lowest reliability among the arguments.
+
+    A merged report is only as trustworthy as its weakest contributing run, so
+    this takes the floor rather than the current run's value.
+    """
+    ranked = [
+        _RELIABILITY_ORDER.index(v)
+        for v in values
+        if isinstance(v, str) and v in _RELIABILITY_ORDER
+    ]
+    if not ranked:
+        return "unknown"
+    return _RELIABILITY_ORDER[min(ranked)]
+
+
+def _union_preserving_order(primary: Any, secondary: Any) -> List[Any]:
+    """Concatenate two sequences, dropping repeats, current run's order first."""
+    out: List[Any] = []
+    for seq in (primary, secondary):
+        if not isinstance(seq, list):
+            continue
+        for item in seq:
+            if item not in out:
+                out.append(item)
+    return out
+
+
+def _task_sort_key(task: Dict[str, Any]) -> Tuple[int, str]:
+    number = task.get("task_number")
+    if not isinstance(number, int):
+        number = canonical_task_number(task.get("canonical_task_id", "")) or 99
+    return (number, str(task.get("canonical_task_id", "")))
+
+
+def merge_carried_forward_tasks(
+    current_export: Dict[str, Any],
+    carried_export: Optional[Dict[str, Any]],
+    carried_meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Fold a previous upload's tasks into this run's export.
+
+    Args:
+        current_export: the export built from this run's recordings.
+        carried_export: the participant's previous feature report, already
+            decoded. ``None``, an errored report, or one whose tasks this run
+            already covers returns ``current_export`` unchanged.
+        carried_meta: provenance for the carried report (session id, sha256,
+            recorded_at) recorded verbatim in the ``composition`` block.
+
+    Returns:
+        A new export dict. ``current_export`` is not mutated.
+    """
+    if not isinstance(current_export, dict) or current_export.get("error"):
+        return current_export
+    if not isinstance(carried_export, dict) or carried_export.get("error"):
+        return current_export
+
+    current_tasks = current_export.get("tasks")
+    carried_tasks = carried_export.get("tasks") or carried_export.get("tasks_detected")
+    if not isinstance(current_tasks, list) or not isinstance(carried_tasks, list):
+        return current_export
+
+    current_ids = {
+        t.get("canonical_task_id")
+        for t in current_tasks
+        if isinstance(t, dict) and t.get("canonical_task_id")
+    }
+
+    # A task measured in this run always wins: it is the fresher measurement,
+    # and its confidence is capped by this run's reliability rather than an
+    # older sitting's.
+    carried_only = [
+        t for t in carried_tasks
+        if isinstance(t, dict)
+        and t.get("canonical_task_id")
+        and t["canonical_task_id"] not in current_ids
+    ]
+    if not carried_only:
+        return current_export
+
+    carried_ids = [t["canonical_task_id"] for t in carried_only]
+    carried_id_set = set(carried_ids)
+
+    merged_tasks = sorted(list(current_tasks) + carried_only, key=_task_sort_key)
+
+    # feature_rows are a flat denormalization of tasks, so the carried slice is
+    # exactly the rows belonging to the carried tasks. Filtering them out of
+    # the previous report is equivalent to rebuilding, without re-grading
+    # evidence that was already graded under its own session's reliability.
+    carried_rows = [
+        row for row in (carried_export.get("feature_rows") or [])
+        if isinstance(row, dict) and row.get("canonical_task_id") in carried_id_set
+    ]
+    merged_rows = list(current_export.get("feature_rows") or []) + carried_rows
+
+    merged_reliability = _weakest_reliability(
+        current_export.get("global_reliability"),
+        carried_export.get("global_reliability"),
+    )
+    merged_depth = _infer_session_depth(
+        [t.get("canonical_task_id", "") for t in merged_tasks]
+    )
+
+    merged = dict(current_export)
+    merged.update({
+        "protocol_session_depth": merged_depth,
+        "global_reliability": merged_reliability,
+        "session_confidence_cap": _compute_session_confidence_cap(
+            merged_depth, merged_reliability
+        ),
+        "allowed_ability_pool": _union_preserving_order(
+            current_export.get("allowed_ability_pool"),
+            carried_export.get("allowed_ability_pool"),
+        ),
+        "theoretical_ability_pool": _union_preserving_order(
+            current_export.get("theoretical_ability_pool"),
+            carried_export.get("theoretical_ability_pool"),
+        ),
+        "moderator_only_characteristics": _union_preserving_order(
+            current_export.get("moderator_only_characteristics"),
+            carried_export.get("moderator_only_characteristics"),
+        ),
+        "blocked_unsupported_labels": _union_preserving_order(
+            current_export.get("blocked_unsupported_labels"),
+            carried_export.get("blocked_unsupported_labels"),
+        ),
+        "feature_rows": merged_rows,
+        "tasks": merged_tasks,
+        "tasks_detected": merged_tasks,
+        "composition": {
+            "merge_version": REPORT_MERGE_VERSION,
+            "merged": True,
+            "reason": "repetition_waived",
+            "current_run_task_ids": sorted(current_ids),
+            "carried_task_ids": sorted(carried_ids),
+            # Stated so a consumer never reads the QC blocks as describing the
+            # carried tasks -- they describe this run's sitting only.
+            "per_recording_session_fields_from_current_run": list(
+                _PER_RECORDING_SESSION_FIELDS
+            ),
+            "current_run_reliability": current_export.get("global_reliability"),
+            "carried_reliability": carried_export.get("global_reliability"),
+            "carried_source": dict(carried_meta or {}),
+            "carried_traceability_version": carried_export.get("traceability_version"),
+            "carried_feature_report_version": carried_export.get(
+                "feature_report_version"
+            ),
+        },
+    })
+    return merged

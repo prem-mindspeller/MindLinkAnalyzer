@@ -110,15 +110,15 @@ const TaskQualityModal = ({
             <div className="ts-quality-modal" role="dialog" aria-modal="true" aria-labelledby="task-quality-title">
                 <div className="ts-quality-modal-header">
                     <div>
-                        <p className="ts-quality-kicker">{t('taskSelection.qualityKicker', { defaultValue: 'Task signal check' })}</p>
+                        <p className="ts-quality-kicker">{t('taskSelection.qualityKicker', { defaultValue: 'Mind Mission signal check' })}</p>
                         <h2 id="task-quality-title">
                             {baselineFailure
                                 ? 'The matched baseline must be recorded again'
                                 : checkError
                                 ? t('taskSelection.qualityCheckErrorTitle', { defaultValue: 'The signal check could not validate this recording' })
-                                : t('taskSelection.qualityRepeatTitle', { defaultValue: 'Repeat this task after improving the signal' })}
+                                : t('taskSelection.qualityRepeatTitle', { defaultValue: 'Repeat this Mind Mission after improving the signal' })}
                         </h2>
-                        <p>{t('taskSelection.qualityTaskName', { defaultValue: 'Task: {{taskName}}', taskName })}</p>
+                        <p>{t('taskSelection.qualityTaskName', { defaultValue: 'Mind Mission: {{taskName}}', taskName })}</p>
                     </div>
                     <div className={`ts-quality-signal-pill ${signal.cls}`}>
                         <FontAwesomeIcon icon={signal.good ? faCircleCheck : faTriangleExclamation} />
@@ -128,9 +128,9 @@ const TaskQualityModal = ({
 
                 <p className="ts-quality-modal-body">
                     {baselineFailure
-                        ? 'The task attempt was not saved because its matched baseline does not retain 20 contiguous clean seconds. Re-record that baseline before repeating the task.'
+                        ? 'The Mind Mission attempt was not saved because its matched baseline does not retain 20 contiguous clean seconds. Re-record that baseline before repeating the Mind Mission.'
                         : checkError
-                        ? 'The attempt was not saved because its required quality check did not complete. Repeat the task after the signal is stable.'
+                        ? 'The attempt was not saved because its required quality check did not complete. Repeat the Mind Mission after the signal is stable.'
                         : 'At least 20 contiguous clean seconds are required. This attempt was not saved and cannot be stitched together from shorter clean fragments.'}
                     {backendReason ? ` ${backendReason}` : ''}
                 </p>
@@ -151,7 +151,7 @@ const TaskQualityModal = ({
                     <div className={`ts-quality-stage ${repeatSignalReady ? 'ready' : ''}`}>
                         <span className="ts-stage-number">3</span>
                         <div>
-                            <strong>Repeat the full continuous block</strong>
+                            <strong>Repeat the full continuous Mind Mission</strong>
                             <p>{repeatSignalReady
                                 ? 'The signal is ready. The same session form can now be repeated.'
                                 : isGoodSignal
@@ -169,7 +169,7 @@ const TaskQualityModal = ({
                     ) : (
                         <button className="ts-quality-primary" onClick={onRepeat} disabled={!repeatSignalReady}>
                             <FontAwesomeIcon icon={faRotate} />
-                            {repeatSignalReady ? 'Repeat task now' : isGoodSignal ? `Hold good signal for ${stableSecondsRemaining}s` : 'Waiting for good signal'}
+                            {repeatSignalReady ? 'Repeat Mind Mission now' : isGoodSignal ? `Hold good signal for ${stableSecondsRemaining}s` : 'Waiting for good signal'}
                         </button>
                     )}
                 </div>
@@ -195,35 +195,35 @@ const DisableRepetitionModal = ({ open, onConfirm, onCancel, t }) => {
                             {t('taskSelection.repetitionKicker', { defaultValue: 'Session setting' })}
                         </p>
                         <h2 id="disable-repetition-title">
-                            {t('taskSelection.repetitionConfirmTitle', { defaultValue: 'Skip the repeated tasks for this session?' })}
+                            {t('taskSelection.repetitionConfirmTitle', { defaultValue: 'Skip repeated Mind Missions for this session?' })}
                         </h2>
                     </div>
                     <div className="ts-quality-signal-pill">
                         <FontAwesomeIcon icon={faCircleInfo} />
-                        <span>{t('taskSelection.repetitionPillOneAttempt', { defaultValue: 'New tasks only' })}</span>
+                        <span>{t('taskSelection.repetitionPillOneAttempt', { defaultValue: 'New Mind Missions only' })}</span>
                     </div>
                 </div>
 
                 <p className="ts-quality-modal-body">
-                    {t('taskSelection.repetitionConfirmBody', { defaultValue: 'Only the tasks this session introduces will be recorded. The tasks you already completed in earlier sessions will not be repeated in this run, and your session data is still collected and analysed without them.' })}
+                    {t('taskSelection.repetitionConfirmBody', { defaultValue: 'Only new Mind Missions will be recorded. Mind Missions you completed in earlier sessions will be skipped. Your other session data will still be collected and analyzed.' })}
                 </p>
 
                 <div className="ts-repetition-why">
-                    <h3>{t('taskSelection.repetitionWhyTitle', { defaultValue: 'Why repetition normally matters' })}</h3>
+                    <h3>{t('taskSelection.repetitionWhyTitle', { defaultValue: 'Why repetition matters' })}</h3>
                     <ul>
-                        <li>{t('taskSelection.repetitionWhyReliability', { defaultValue: 'Repeating the same tasks in every session is what makes a change in your neural profile reliable. With one recording per task there is nothing to confirm it against, so an unusual result cannot be told apart from normal day-to-day variation.' })}</li>
-                        <li>{t('taskSelection.repetitionWhyConsistency', { defaultValue: 'Repeated tasks are what make sessions comparable. Without them this run is scored on its own and cannot be lined up against your earlier sessions.' })}</li>
-                        <li>{t('taskSelection.repetitionWhyQuality', { defaultValue: 'Fewer recordings per task means less data behind each result, so the confidence reported for this session will be lower than for a full run.' })}</li>
+                        <li>{t('taskSelection.repetitionWhyReliability', { defaultValue: 'Repeating Mind Missions helps us reliably track changes in your brain activity.' })}</li>
+                        <li>{t('taskSelection.repetitionWhyConsistency', { defaultValue: 'It lets us compare this session with your earlier sessions.' })}</li>
+                        <li>{t('taskSelection.repetitionWhyQuality', { defaultValue: 'Skipping repeated Mind Missions means less data, so your results may be less reliable.' })}</li>
                     </ul>
                 </div>
 
                 <p className="ts-repetition-scope">
-                    {t('taskSelection.repetitionScopeNote', { defaultValue: 'This applies to the current session only. Future sessions start with repetition enabled again, and you can turn it back on at any time.' })}
+                    {t('taskSelection.repetitionScopeNote', { defaultValue: 'This change applies only to this session. Repetition will be turned on again for your next session.' })}
                 </p>
 
                 <div className="ts-quality-actions">
                     <button className="ts-quality-secondary" onClick={onCancel}>
-                        {t('taskSelection.repetitionCancel', { defaultValue: 'Keep repetition enabled' })}
+                        {t('taskSelection.repetitionCancel', { defaultValue: 'Keep repetition on' })}
                     </button>
                     <button className="ts-quality-primary" onClick={onConfirm}>
                         <FontAwesomeIcon icon={faToggleOff} />
@@ -505,7 +505,7 @@ const TaskSelection = () => {
                     <div className="task-selection-page">
                         <div className="ts-task-exec-header">
                             <h1 className="ts-page-title">{t(`optimizedBattery.taskNames.${activeTaskId}`, { defaultValue: task.name })}</h1>
-                            <p className="ts-page-subtitle">{t('optimizedBattery.runner.sessionBlock', { defaultValue: 'Continuous task block · Session {{session}}', session: protocolSession })}</p>
+                            <p className="ts-page-subtitle">{t('optimizedBattery.runner.sessionBlock', { defaultValue: 'Continuous Mind Mission · Session {{session}}', session: protocolSession })}</p>
                         </div>
                         <OptimizedBatteryTask
                             key={`${activeTaskId}:${sessionDepth}`}
@@ -534,19 +534,19 @@ const TaskSelection = () => {
             <main className="app-main">
                 <div className="task-selection-page">
                     <div className="ts-page-header">
-                        <h1 className="ts-page-title">Optimized Cognitive Task Battery</h1>
-                        <p className="ts-page-subtitle">Session {protocolSession} · {sessionLabel} · Complete the required blocks in any order</p>
+                        <h1 className="ts-page-title">Optimized Cognitive Mind Mission Battery</h1>
+                        <p className="ts-page-subtitle">Session {protocolSession} · {sessionLabel} · Complete the required Mind Missions in any order</p>
                     </div>
 
                     <div className={`ts-repeatability-notice${allEnabledCompleted ? ' ts-notice-complete' : ''}`}>
                         <FontAwesomeIcon icon={allEnabledCompleted ? faCircleCheck : faCircleInfo} className="ts-notice-icon" />
                         <div className="ts-notice-content">
-                            <strong>{allEnabledCompleted ? 'All required blocks are complete.' : 'One uninterrupted block per task'}</strong>
+                            <strong>{allEnabledCompleted ? 'All required Mind Missions are complete.' : 'One uninterrupted Mind Mission recording'}</strong>
                             <p>{allEnabledCompleted
-                                ? 'The matched baselines and every task required for this session are ready for analysis.'
+                                ? 'The matched baselines and every Mind Mission required for this session are ready for analysis.'
                                 : repetitionDisabled
-                                ? 'The device remains connected between tasks. Repetition is off, so only this session’s new tasks are required; earlier sessions’ tasks are not repeated in this run.'
-                                : 'The device remains connected between tasks. Responses are collected only after EEG scoring ends; a task with less than 20 contiguous clean seconds must be repeated.'}</p>
+                                ? 'The device remains connected between Mind Missions. Repetition is off, so only this session’s new Mind Missions are required; earlier sessions’ Mind Missions are not repeated in this run.'
+                                : 'The device remains connected between Mind Missions. Responses are collected only after EEG scoring ends; a Mind Mission with less than 20 contiguous clean seconds must be repeated.'}</p>
                         </div>
                     </div>
 
@@ -555,8 +555,8 @@ const TaskSelection = () => {
                             <div className="ts-repetition-copy">
                                 <strong>{t('taskSelection.repetitionToggleLabel', { defaultValue: 'Disable repetition' })}</strong>
                                 <p>{repetitionDisabled
-                                    ? t('taskSelection.repetitionToggleOn', { defaultValue: 'Only the tasks introduced in this session are required. Tasks already completed in earlier sessions are not repeated.', count: enabledTaskIds.length })
-                                    : t('taskSelection.repetitionToggleOff', { defaultValue: 'Tasks from earlier sessions are repeated alongside this session’s new tasks, which is what keeps the profile comparable across runs.' })}</p>
+                                    ? t('taskSelection.repetitionToggleOn', { defaultValue: 'Only Mind Missions introduced in this session are required. Mind Missions you already completed in earlier sessions are not repeated.', count: enabledTaskIds.length })
+                                    : t('taskSelection.repetitionToggleOff', { defaultValue: 'Mind Missions from earlier sessions are repeated alongside this session’s new Mind Missions, which is what keeps the profile comparable across runs.' })}</p>
                             </div>
                             <button
                                 type="button"
@@ -576,7 +576,7 @@ const TaskSelection = () => {
                     <div className="ts-layout">
                         <div className="ts-task-list optimized-sequence-list">
                             <p className="ts-group-label">
-                                Session tasks
+                                Session Mind Missions
                                 <span className="ts-group-progress">{completedEnabledCount}/{enabledTaskIds.length}</span>
                             </p>
                             {allTaskIds.slice().sort((left, right) => TASK_DEFINITIONS[left].number - TASK_DEFINITIONS[right].number).map((item, index) => {
@@ -613,7 +613,7 @@ const TaskSelection = () => {
                                     <>
                                         {[1, 5, 10].includes(meta.number) && (
                                             <p className="ts-group-label">
-                                                {meta.number === 1 ? 'Session 1 - Tasks 1-4' : meta.number === 5 ? 'Session 2 - Tasks 5-9 - 1+ booking required' : 'Session 3 - Tasks 10-12 - 2+ bookings required'}
+                                                {meta.number === 1 ? 'Session 1 - Mind Missions 1-4' : meta.number === 5 ? 'Session 2 - Mind Missions 5-9 - 1+ booking required' : 'Session 3 - Mind Missions 10-12 - 2+ bookings required'}
                                             </p>
                                         )}
                                     <button
@@ -643,7 +643,7 @@ const TaskSelection = () => {
                                         <span className="ts-tag tag-eo"><FontAwesomeIcon icon={faEye} /> Eyes open</span>
                                         <span className="ts-tag tag-dur"><FontAwesomeIcon icon={faClock} /> 60s</span>
                                     </div>
-                                    <p className="ts-detail-desc">Record a low-demand central-fixation reference immediately before the visual task block. Visual tasks are never compared only with the eyes-closed baseline.</p>
+                                    <p className="ts-detail-desc">Record a low-demand central-fixation reference immediately before the visual Mind Missions. Visual Mind Missions are never compared only with the eyes-closed baseline.</p>
                                     <button
                                         className="ts-start-btn"
                                         onClick={startSelected}
@@ -661,7 +661,7 @@ const TaskSelection = () => {
                                 <>
                                     <h2 className="ts-detail-name">
                                         {completedIds.includes(selectedId) && <span className="ts-done-badge"><FontAwesomeIcon icon={faCircleCheck} /> Completed</span>}
-                                        Task {selectedMeta.number}: {selectedMeta.name}
+                                        Mind Mission {selectedMeta.number}: {selectedMeta.name}
                                     </h2>
                                     <div className="ts-detail-tags">
                                         <span className={`ts-tag tag-${selectedMeta.eyeState === 'closed' ? 'ec' : 'eo'}`}>
@@ -676,7 +676,7 @@ const TaskSelection = () => {
                                         onClick={startSelected}
                                         disabled={(completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS) || !taskIsUnlocked(selectedId) || !isGoodSignal}
                                     >
-                                        <FontAwesomeIcon icon={completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? faCircleCheck : faPlay} /> {completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? 'Completed · accepted attempt locked' : !isGoodSignal ? 'Wait for good signal' : completedIds.includes(selectedId) ? 'Re-run task · replace accepted data' : 'Read task instructions'}
+                                        <FontAwesomeIcon icon={completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? faCircleCheck : faPlay} /> {completedIds.includes(selectedId) && !ALLOW_RERUN_COMPLETED_TASKS ? 'Completed · accepted attempt locked' : !isGoodSignal ? 'Wait for good signal' : completedIds.includes(selectedId) ? 'Re-run Mind Mission · replace accepted data' : 'Read Mind Mission instructions'}
                                     </button>
                                 </>
                             ) : null}
@@ -700,7 +700,7 @@ const TaskSelection = () => {
                     <div className="ts-quality-blocking-panel">
                         <FontAwesomeIcon icon={faSpinner} spin />
                         <strong>Checking contiguous clean EEG</strong>
-                        <span>The recording cannot be saved until task-level signal quality is validated.</span>
+                        <span>The recording cannot be saved until Mind Mission-level signal quality is validated.</span>
                     </div>
                 </div>
             )}
