@@ -14,6 +14,7 @@ import {
   TASK_IDS,
   audioProfileForTask,
   closureRevealState,
+  isLanguageNoticeSection,
   pacedPassageChunk,
   resolveSessionDepth,
   scoringRubricFor,
@@ -170,15 +171,19 @@ test('declared load boundaries coincide with the first higher-load stimulus', ()
 
 test('pre-recording instructions do not leak Task-2 encoding and fully state Task-7 rules', () => {
   for (const taskId of Object.keys(TASK_DEFINITIONS)) {
-    assert.ok(taskIntroduction(taskId, FORM_REGISTRY_FOR_TESTS[taskId][0]).length >= 4, taskId);
+    const sections = taskIntroduction(taskId, FORM_REGISTRY_FOR_TESTS[taskId][0]);
+    // mission + after + duringRecording + starting, at minimum.
+    assert.ok(sections.length >= 4, taskId);
+    assert.deepEqual(sections.slice(0, 2).map((section) => section.id), ['mission', 'after'], taskId);
+    assert.deepEqual(sections.slice(-2).map((section) => section.id), ['duringRecording', 'starting'], taskId);
   }
 
   const memory = FORM_REGISTRY_FOR_TESTS[TASK_IDS.WORKING_MEMORY][0];
-  const memoryIntro = taskIntroduction(TASK_IDS.WORKING_MEMORY, memory).join(' ');
+  const memoryIntro = taskIntroduction(TASK_IDS.WORKING_MEMORY, memory).map((section) => section.body).join(' ');
   assert.equal(memoryIntro.includes(memory.initial.join(' – ')), false);
 
   const dual = FORM_REGISTRY_FOR_TESTS[TASK_IDS.DUAL_TASK][0];
-  const dualIntro = taskIntroduction(TASK_IDS.DUAL_TASK, dual).join(' ');
+  const dualIntro = taskIntroduction(TASK_IDS.DUAL_TASK, dual).map((section) => section.body).join(' ');
   assert.match(dualIntro, new RegExp(String(Math.abs(dual.beforeDelta))));
   assert.match(dualIntro, new RegExp(String(Math.abs(dual.afterDelta))));
   assert.equal(dual.spokenEvents.some((event) => event.at === 0), false);
@@ -193,16 +198,30 @@ test('pre-recording instructions use localized keys while retaining form values'
   const numerical = FORM_REGISTRY_FOR_TESTS[TASK_IDS.NUMERICAL][0];
   const localized = taskIntroduction(TASK_IDS.NUMERICAL, numerical, (key, options) => {
     if (key.includes('.words.')) return options.defaultValue;
-    if (key.endsWith('.common.block')) return `${key}:${options.duration}`;
-    if (key.endsWith('.common.eyes')) return `${key}:${options.eyeState}`;
-    return `${key}:${options.startValue}`;
+    if (key.endsWith('.common.duringRecordingBody')) return `${key}:${options.eyeState}`;
+    if (key.endsWith('.mission')) return `${key}:${options.startValue}`;
+    return options.defaultValue;
   });
+  const byId = Object.fromEntries(localized.map((section) => [section.id, section.body]));
   assert.equal(
-    localized[0],
-    `optimizedBattery.instructions.${TASK_IDS.NUMERICAL}:${numerical.startValue}`,
+    byId.mission,
+    `optimizedBattery.instructions.${TASK_IDS.NUMERICAL}.mission:${numerical.startValue}`,
   );
-  assert.equal(localized.at(-3), `optimizedBattery.instructions.common.block:${TASK_DEFINITIONS[TASK_IDS.NUMERICAL].duration}`);
-  assert.equal(localized.at(-2), 'optimizedBattery.instructions.common.eyes:closed');
+  assert.equal(
+    byId.duringRecording,
+    'optimizedBattery.instructions.common.duringRecordingBody:closed',
+  );
+});
+
+test('language-notice sections exist only for the tasks whose stimulus can stay English', () => {
+  const ideation = taskIntroduction(TASK_IDS.IDEATION, FORM_REGISTRY_FOR_TESTS[TASK_IDS.IDEATION][0]);
+  assert.ok(ideation.some((section) => section.id === 'promptLanguageNotice'));
+
+  const speech = taskIntroduction(TASK_IDS.SPEECH_NOISE, FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE][0]);
+  assert.ok(speech.some((section) => section.id === 'englishStimulusNotice'));
+
+  const numerical = taskIntroduction(TASK_IDS.NUMERICAL, FORM_REGISTRY_FOR_TESTS[TASK_IDS.NUMERICAL][0]);
+  assert.equal(numerical.some((section) => isLanguageNoticeSection(section.id)), false);
 });
 
 test('every visuospatial turn changes position and orientation without leaving the grid', () => {

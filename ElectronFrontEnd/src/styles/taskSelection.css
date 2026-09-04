@@ -386,6 +386,37 @@
     gap: 6px;
 }
 
+.task-runner-intro-section {
+    margin-bottom: 14px;
+}
+
+.task-runner-intro-section:last-child {
+    margin-bottom: 0;
+}
+
+.task-runner-intro-section p {
+    margin: 0 0 6px;
+}
+
+.task-runner-intro-section p:last-child {
+    margin-bottom: 0;
+}
+
+.task-runner-intro-title {
+    margin: 0 0 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.task-runner-intro-notice {
+    font-size: 0.85rem;
+    font-style: italic;
+    color: #64748b;
+}
+
 .task-runner-countdown-hint {
     font-size: 0.85rem;
     color: #94a3b8;
@@ -649,13 +680,24 @@
 
 .optimized-guardrail {
     max-width: 680px;
-    margin: 0;
+    margin: 8px 0 0;
     padding: 10px 14px;
     border-left: 3px solid #94a3b8;
     color: #64748b;
     background: #f8fafc;
     font-size: 0.82rem;
     line-height: 1.5;
+}
+
+.optimized-guardrail-details {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.optimized-guardrail-details summary {
+    cursor: pointer;
+    color: #475569;
+    font-weight: 600;
 }
 
 .optimized-running-header {

@@ -1056,49 +1056,108 @@ export function pacedPassageChunk(form, elapsedSeconds, options = {}) {
   return words.slice(chunkIndex * chunkSize, (chunkIndex + 1) * chunkSize).join(' ');
 }
 
+// Section ids that carry a language callout rather than task content — hidden
+// entirely when the participant's own UI language is already English, since
+// telling an English-reading participant "this is in English" is noise.
+const LANGUAGE_NOTICE_SECTION_IDS = new Set(['promptLanguageNotice', 'englishStimulusNotice']);
+
 function taskIntroductionEnglish(taskId, form) {
   const definition = TASK_DEFINITIONS[taskId];
-  const common = [
-    `This is one uninterrupted ${definition.duration}-second EEG scoring block.`,
-    `Keep your eyes ${definition.eyeState} and minimise blinking, jaw tension, and movement.`,
-    'Do not speak or type until the recording has ended and the response form appears.',
-  ];
-  const specificFactory = {
-    [TASK_IDS.NUMERICAL]: () => [`Start at ${form.startValue}; follow every spoken operation silently and give only the final value.`],
-    [TASK_IDS.WORKING_MEMORY]: () => ['The initial sequence is presented only after EEG scoring starts. Encode it then, maintain every spoken update, and report only the final order.'],
-    [TASK_IDS.AUDITORY_COUNT]: () => ['Count every high tone silently and ignore the low tones. Report one count afterward.'],
-    [TASK_IDS.SEMANTIC]: () => ['Infer the organising principle of the first word stream and the new principle after the seamless switch.'],
-    [TASK_IDS.VISUOSPATIAL]: () => [`Start at row ${form.start.y + 1}, column ${form.start.x + 1}, facing ${form.start.orientation}. Every displayed turn changes both direction and grid position. Row numbers run top to bottom and columns left to right.`],
-    [TASK_IDS.IDEATION]: () => [`Prompt: ${form.prompt}`, 'Generate ideas silently; you will capture each idea on a separate line afterward.'],
-    [TASK_IDS.DUAL_TASK]: () => [`Start at ${form.startValue}. Before the switch, ${form.beforeDelta < 0 ? `subtract ${Math.abs(form.beforeDelta)}` : `add ${form.beforeDelta}`} at every “Update” cue. After “Switch”, ${form.afterDelta < 0 ? `subtract ${Math.abs(form.afterDelta)}` : `add ${form.afterDelta}`} at every “Update” cue. Count high tones throughout.`],
-    [TASK_IDS.ANOMALY]: () => [form.rule, 'Silently count anomalies and remember their types; do not click during the stream.'],
-    [TASK_IDS.VISUAL_COMPARISON]: () => ['Maintain central gaze while both code strings update in synchrony. Press DETECT once, as soon as one gradual mismatch appears, then remain still until the timed block ends.'],
-    [TASK_IDS.CLOSURE]: () => ['A fragmented target will emerge gradually from dense visual noise. Press RECOGNIZED once when you know what it is, then remain still until the timed block ends.'],
-    [TASK_IDS.SPEECH_NOISE]: () => ['Listen to the entire passage in moderate background noise. Answer only after the sound and EEG scoring stop.'],
-    [TASK_IDS.WRITTEN]: () => ['Read each centrally paced section. Then plan a concise synthesis silently; typing begins only after EEG stops.'],
+  const afterTitleDefault = {
+    [TASK_IDS.VISUAL_COMPARISON]: 'After detection',
+    [TASK_IDS.CLOSURE]: 'After recognition',
+  }[taskId] || 'After the beep';
+
+  const missionFactory = {
+    [TASK_IDS.NUMERICAL]: () => `Keep a running number in your head. Start with ${form.startValue} and mentally apply each instruction you hear.`,
+    [TASK_IDS.WORKING_MEMORY]: () => 'A sequence will appear when the recording starts. Remember it and mentally apply each change you hear while keeping track of the latest order.',
+    [TASK_IDS.AUDITORY_COUNT]: () => 'Listen to the tones and silently count only the high tones. Ignore the low tones.',
+    [TASK_IDS.SEMANTIC]: () => 'Listen to the words and work out what they have in common. At some point, that common theme may change. Keep thinking silently.',
+    [TASK_IDS.VISUOSPATIAL]: () => `Imagine yourself on the grid at row ${form.start.y + 1}, column ${form.start.x + 1}, facing ${form.start.orientation}. Follow each turn mentally and keep track of both your new position and the direction you are facing.\n\nRows run from top to bottom. Columns run from left to right.`,
+    [TASK_IDS.IDEATION]: () => 'Think of as many different ideas as you can in response to the prompt you hear or see. Keep the ideas in mind and do not say or type them yet.',
+    [TASK_IDS.DUAL_TASK]: () => {
+      const beforeText = form.beforeDelta < 0 ? `subtract ${Math.abs(form.beforeDelta)}` : `add ${form.beforeDelta}`;
+      const afterText = form.afterDelta < 0 ? `subtract ${Math.abs(form.afterDelta)}` : `add ${form.afterDelta}`;
+      return `You have two things to track at the same time:\n\nKeep a running number in your head. Start at ${form.startValue}. At each Update cue, apply the instructed change (${beforeText} before the switch, ${afterText} after). After you hear Switch, use the new rule for every following Update.\n\nAt the same time, silently count every high tone you hear.`;
+    },
+    [TASK_IDS.ANOMALY]: () => 'Each code should follow this rule: one letter, then a hyphen, then two digits. Watch the codes and silently count every code that breaks the rule. Also remember what was wrong with the codes you noticed.',
+    [TASK_IDS.VISUAL_COMPARISON]: () => 'Keep looking at the centre while the two code strings change. As soon as you notice that they no longer match, press DETECT once.',
+    [TASK_IDS.CLOSURE]: () => 'An image will gradually become recognizable through visual noise. Press RECOGNIZED once as soon as you know what the image is.',
+    [TASK_IDS.SPEECH_NOISE]: () => 'Listen carefully to the entire passage, even when the background noise makes parts difficult to hear. Do not answer while the passage is playing.',
+    [TASK_IDS.WRITTEN]: () => 'Read each section carefully as it appears. Keep the main ideas in mind and silently plan a short summary. Do not type while the recording is running.',
   }[taskId];
-  const specific = specificFactory ? specificFactory() : [];
-  return [...specific, ...common];
+
+  const afterFactory = {
+    [TASK_IDS.NUMERICAL]: () => "Don't say anything yet. When the recording ends, we will ask for your final number.",
+    [TASK_IDS.WORKING_MEMORY]: () => 'When the recording ends, enter the final sequence in the correct order.',
+    [TASK_IDS.AUDITORY_COUNT]: () => 'When the recording ends, enter the number of high tones you counted.',
+    [TASK_IDS.SEMANTIC]: () => 'When the recording ends, we will ask what the first and second themes were.',
+    [TASK_IDS.VISUOSPATIAL]: () => 'When the recording ends, we will ask for your final row, column and direction.',
+    [TASK_IDS.IDEATION]: () => 'When the recording ends, enter each idea on a separate line.',
+    [TASK_IDS.DUAL_TASK]: () => 'When the recording ends, we will ask for your final number and your high-tone count.',
+    [TASK_IDS.ANOMALY]: () => 'Do not click during the task. When the recording ends, we will ask how many anomalies you noticed and what types they were.',
+    [TASK_IDS.VISUAL_COMPARISON]: () => 'After pressing DETECT, keep looking at the screen and remain still until the recording ends.',
+    [TASK_IDS.CLOSURE]: () => 'After pressing RECOGNIZED, remain still until the recording ends. We will ask what you recognized afterward.',
+    [TASK_IDS.SPEECH_NOISE]: () => 'When the sound and recording have ended, answer the questions about what you heard.',
+    [TASK_IDS.WRITTEN]: () => 'When the recording ends, write the requested summary.',
+  }[taskId];
+
+  const sections = [
+    { id: 'mission', titleDefault: 'Your mission', body: missionFactory ? missionFactory() : '' },
+    { id: 'after', titleDefault: afterTitleDefault, body: afterFactory ? afterFactory() : '' },
+  ];
+
+  if (taskId === TASK_IDS.IDEATION) {
+    sections.push({ id: 'promptLanguageNotice', titleDefault: null, body: 'The prompt for this task is presented in English.' });
+  }
+  if (taskId === TASK_IDS.SPEECH_NOISE) {
+    sections.push({ id: 'englishStimulusNotice', titleDefault: null, body: 'This listening task is presented in English.' });
+  }
+
+  sections.push(
+    {
+      id: 'duringRecording',
+      titleDefault: 'During the recording',
+      body: `Keep your eyes ${definition.eyeState} and stay as still as you comfortably can. Relax your jaw and forehead. Think silently and do not speak or type until the recording ends.`,
+    },
+    {
+      id: 'starting',
+      titleDefault: 'Starting',
+      body: 'You will hear a 5-second countdown. Your Mind Mission starts after the final beep. A double beep tells you when the recording has ended.',
+    },
+  );
+
+  return sections;
 }
 
+const bodyKeyFor = (taskId, id) => {
+  if (id === 'duringRecording') return 'optimizedBattery.instructions.common.duringRecordingBody';
+  if (id === 'starting') return 'optimizedBattery.instructions.common.startingBody';
+  return `optimizedBattery.instructions.${taskId}.${id}`;
+};
+
+const titleKeyFor = (taskId, id) => {
+  if (id === 'mission') return 'optimizedBattery.instructions.missionTitle';
+  if (id === 'duringRecording') return 'optimizedBattery.instructions.common.duringRecordingTitle';
+  if (id === 'starting') return 'optimizedBattery.instructions.common.startingTitle';
+  if (id === 'after') return `optimizedBattery.instructions.${taskId}.afterTitle`;
+  return null;
+};
+
+/**
+ * Returns the pre-task instruction copy as an ordered list of sections
+ * ({ id, title, body }): the task's own mission and after-recording note,
+ * an optional stimulus-language notice, then the shared "during the
+ * recording" / "starting" reminders. Language-notice sections are only
+ * meaningful once `translate` resolves the participant's own locale, so
+ * without a `translate` function they're included with their English body
+ * and the caller is responsible for locale-based filtering (see
+ * LANGUAGE_NOTICE_SECTION_IDS).
+ */
 export function taskIntroduction(taskId, form, translate = null) {
-  const instructions = taskIntroductionEnglish(taskId, form);
-  if (!translate) return instructions;
-  const specificKeys = {
-    [TASK_IDS.NUMERICAL]: [TASK_IDS.NUMERICAL],
-    [TASK_IDS.WORKING_MEMORY]: [TASK_IDS.WORKING_MEMORY],
-    [TASK_IDS.AUDITORY_COUNT]: [TASK_IDS.AUDITORY_COUNT],
-    [TASK_IDS.SEMANTIC]: [TASK_IDS.SEMANTIC],
-    [TASK_IDS.VISUOSPATIAL]: [TASK_IDS.VISUOSPATIAL],
-    [TASK_IDS.IDEATION]: [`${TASK_IDS.IDEATION}.prompt`, `${TASK_IDS.IDEATION}.response`],
-    [TASK_IDS.DUAL_TASK]: [TASK_IDS.DUAL_TASK],
-    [TASK_IDS.ANOMALY]: [`${TASK_IDS.ANOMALY}.rule`, `${TASK_IDS.ANOMALY}.response`],
-    [TASK_IDS.VISUAL_COMPARISON]: [TASK_IDS.VISUAL_COMPARISON],
-    [TASK_IDS.CLOSURE]: [TASK_IDS.CLOSURE],
-    [TASK_IDS.SPEECH_NOISE]: [TASK_IDS.SPEECH_NOISE],
-    [TASK_IDS.WRITTEN]: [TASK_IDS.WRITTEN],
-  }[taskId] || [];
-  const keys = [...specificKeys, 'common.block', 'common.eyes', 'common.response'];
+  const sections = taskIntroductionEnglish(taskId, form);
+  if (!translate) return sections;
+
   const eyeState = TASK_DEFINITIONS[taskId]?.eyeState;
   const beforeOperation = form.beforeDelta < 0 ? 'subtract' : 'add';
   const afterOperation = form.afterDelta < 0 ? 'subtract' : 'add';
@@ -1117,10 +1176,19 @@ export function taskIntroduction(taskId, form, translate = null) {
     afterOperation: translate(`optimizedBattery.words.operations.${afterOperation}`, { defaultValue: afterOperation }),
     afterDelta: Math.abs(form.afterDelta || 0),
   };
-  return instructions.map((instruction, index) => translate(
-    `optimizedBattery.instructions.${keys[index]}`,
-    { ...variables, defaultValue: instruction },
-  ));
+
+  return sections.map((section) => {
+    const titleKey = titleKeyFor(taskId, section.id);
+    return {
+      id: section.id,
+      title: titleKey ? translate(titleKey, { defaultValue: section.titleDefault }) : null,
+      body: translate(bodyKeyFor(taskId, section.id), { ...variables, defaultValue: section.body }),
+    };
+  });
+}
+
+export function isLanguageNoticeSection(sectionId) {
+  return LANGUAGE_NOTICE_SECTION_IDS.has(sectionId);
 }
 
 export function countWords(value) {

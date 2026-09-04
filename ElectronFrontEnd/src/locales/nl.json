@@ -652,6 +652,7 @@
             "durationBadge": "⏱ {{duration}} s EEG",
             "stimulusLanguage": "Stimulus: {{language}}",
             "guardrail": "EEG-kenmerken zijn kandidaatbewijs binnen de taakcontext. Gedragsvaliditeit en signaalkwaliteit worden afzonderlijk gecontroleerd.",
+            "aboutMeasurementLabel": "Over deze meting",
             "getReady": "Maak u klaar · Ogen {{eyeState}}",
             "countdownCaption": "Het ononderbroken meetblok begint na de laatste piep.",
             "continuousEeg": "● Doorlopende EEG",
@@ -683,28 +684,74 @@
             "directions": { "north": "het noorden", "east": "het oosten", "south": "het zuiden", "west": "het westen" }
         },
         "instructions": {
-            "adaptive_numerical_reasoning": "Begin bij {{startValue}}; volg elke gesproken bewerking in stilte en geef alleen de eindwaarde.",
-            "working_memory_manipulation": "De eerste reeks wordt pas getoond nadat de EEG-meting begint. Onthoud deze, volg elke gesproken wijziging en rapporteer alleen de uiteindelijke volgorde.",
-            "auditory_target_counting": "Tel elke hoge toon in stilte en negeer de lage tonen. Rapporteer daarna één aantal.",
-            "semantic_induction_category_switching": "Leid het organiserende principe af uit de eerste woordenreeks en het nieuwe principe na de naadloze wissel.",
-            "visuospatial_transformation_orientation": "Begin op rij {{row}}, kolom {{column}}, gericht naar {{orientation}}. Elke getoonde draai verandert zowel richting als positie in het rooster. Rijen lopen van boven naar beneden en kolommen van links naar rechts.",
+            "missionTitle": "Jouw opdracht",
+            "adaptive_numerical_reasoning": {
+                "mission": "Houd één getal in gedachten. Start met {{startValue}} en voer elke instructie die u hoort in gedachten uit.",
+                "afterTitle": "Na de piep",
+                "after": "Zeg nog niets. Na de opname vragen we naar uw eindgetal."
+            },
+            "working_memory_manipulation": {
+                "mission": "Wanneer de opname start, verschijnt een reeks. Onthoud die en pas elke wijziging die u hoort in gedachten toe. Houd steeds de meest recente volgorde bij.",
+                "afterTitle": "Na de piep",
+                "after": "Voer na de opname de uiteindelijke reeks in de juiste volgorde in."
+            },
+            "auditory_target_counting": {
+                "mission": "Luister naar de tonen en tel in stilte alleen de hoge tonen. Negeer de lage tonen.",
+                "afterTitle": "Na de piep",
+                "after": "Voer na de opname in hoeveel hoge tonen u hebt geteld."
+            },
+            "semantic_induction_category_switching": {
+                "mission": "Luister naar de woorden en probeer te ontdekken wat ze met elkaar gemeen hebben. Op een bepaald moment kan dat gemeenschappelijke thema veranderen. Denk in stilte verder.",
+                "afterTitle": "Na de piep",
+                "after": "Na de opname vragen we naar het eerste en het tweede thema."
+            },
+            "visuospatial_transformation_orientation": {
+                "mission": "Stel u voor dat u op het rooster staat op rij {{row}}, kolom {{column}}, gericht naar {{orientation}}. Volg elke draai in gedachten en houd zowel uw nieuwe positie als uw kijkrichting bij.\n\nRijen lopen van boven naar beneden. Kolommen lopen van links naar rechts.",
+                "afterTitle": "Na de piep",
+                "after": "Na de opname vragen we naar uw laatste rij, kolom en kijkrichting."
+            },
             "divergent_ideation": {
-                "prompt": "Engelse prompt: {{prompt}}",
-                "response": "Bedenk ideeën in stilte; daarna noteert u elk idee op een aparte regel."
+                "mission": "Bedenk zoveel mogelijk verschillende ideeën als antwoord op de opdracht die u hoort of ziet. Houd ze in gedachten en spreek of typ ze nog niet.",
+                "afterTitle": "Na de piep",
+                "after": "Voer na de opname elk idee op een aparte regel in.",
+                "promptLanguageNotice": "De opdracht voor deze taak wordt in het Engels aangeboden."
             },
-            "dual_task_rule_switching": "Begin bij {{startValue}}. Vóór de wissel: {{beforeOperation}} {{beforeDelta}} bij elk ‘Werk bij’-signaal. Na ‘Wissel’: {{afterOperation}} {{afterDelta}} bij elk ‘Werk bij’-signaal. Tel de hoge tonen voortdurend.",
+            "dual_task_rule_switching": {
+                "mission": "U volgt twee dingen tegelijk:\n\nHoud één getal in gedachten. Start bij {{startValue}}. Pas bij elk 'Werk bij'-signaal de aangegeven wijziging toe ({{beforeOperation}} {{beforeDelta}} vóór de wissel, {{afterOperation}} {{afterDelta}} erna). Zodra u 'Wissel' hoort, gebruikt u vanaf dan de nieuwe regel bij elk volgend 'Werk bij'-signaal.\n\nTel tegelijk in stilte elke hoge toon die u hoort.",
+                "afterTitle": "Na de piep",
+                "after": "Na de opname vragen we naar uw eindgetal en het aantal hoge tonen."
+            },
             "rule_based_anomaly_detection": {
-                "rule": "Elke code moet precies één letter, een koppelteken en twee cijfers in diezelfde volgorde bevatten.",
-                "response": "Tel afwijkingen in stilte en onthoud hun typen; klik niet tijdens de stroom."
+                "mission": "Elke code moet deze regel volgen: één letter, daarna een koppelteken en daarna twee cijfers. Bekijk de codes en tel in stilte elke code die niet aan deze regel voldoet. Onthoud ook wat er fout was aan de codes die u opmerkte.",
+                "afterTitle": "Na de piep",
+                "after": "Klik niet tijdens de taak. Na de opname vragen we hoeveel afwijkingen u hebt gezien en welke soorten het waren."
             },
-            "rapid_visual_comparison": "Blijf centraal kijken terwijl beide tekenreeksen synchroon veranderen. Druk één keer op DETECT zodra één geleidelijke afwijking verschijnt en blijf daarna stil tot het tijdsblok eindigt.",
-            "pattern_closure_visual_noise": "Een gefragmenteerd doel verschijnt geleidelijk uit dichte visuele ruis. Druk één keer op RECOGNIZED zodra u weet wat het is en blijf daarna stil tot het tijdsblok eindigt.",
-            "speech_in_noise_comprehension": "Luister naar de volledige passage met matig achtergrondgeluid. Antwoord pas nadat het geluid en de EEG-meting zijn gestopt.",
-            "written_comprehension_synthesis": "Lees elk centraal getoond Engels deel. Plan daarna in stilte een beknopte samenvatting; typen begint pas nadat de EEG-meting stopt.",
+            "rapid_visual_comparison": {
+                "mission": "Blijf naar het midden kijken terwijl de twee tekenreeksen veranderen. Zodra u merkt dat ze niet langer hetzelfde zijn, drukt u één keer op DETECT.",
+                "afterTitle": "Na detectie",
+                "after": "Blijf daarna naar het scherm kijken en stil zitten tot de opname is afgelopen."
+            },
+            "pattern_closure_visual_noise": {
+                "mission": "Een beeld wordt geleidelijk herkenbaar doorheen visuele ruis. Druk één keer op RECOGNIZED zodra u weet wat het beeld voorstelt.",
+                "afterTitle": "Na herkenning",
+                "after": "Blijf daarna stil zitten tot de opname is afgelopen. Na de opname vragen we wat u hebt herkend."
+            },
+            "speech_in_noise_comprehension": {
+                "mission": "Luister aandachtig naar de volledige tekst, ook wanneer het achtergrondgeluid sommige delen moeilijk hoorbaar maakt. Antwoord nog niet terwijl de tekst wordt afgespeeld.",
+                "afterTitle": "Na de piep",
+                "after": "Beantwoord de vragen over wat u hebt gehoord nadat het geluid en de opname zijn gestopt.",
+                "englishStimulusNotice": "Deze luistertaak wordt in het Engels aangeboden."
+            },
+            "written_comprehension_synthesis": {
+                "mission": "Lees elk deel aandachtig wanneer het verschijnt. Houd de belangrijkste ideeën in gedachten en bereid in stilte een korte samenvatting voor. Typ nog niet tijdens de opname.",
+                "afterTitle": "Na de piep",
+                "after": "Schrijf de gevraagde samenvatting nadat de opname is gestopt."
+            },
             "common": {
-                "block": "Dit is één ononderbroken EEG-meetblok van {{duration}} seconden.",
-                "eyes": "Houd uw ogen {{eyeState}} en beperk knipperen, kaakspanning en beweging.",
-                "response": "Spreek of typ niet voordat de opname is beëindigd en het antwoordformulier verschijnt."
+                "duringRecordingTitle": "Tijdens de opname",
+                "duringRecordingBody": "Houd uw ogen {{eyeState}} en blijf zo comfortabel mogelijk stil zitten. Ontspan uw kaak en voorhoofd. Denk in stilte en spreek of typ niet voordat de opname is afgelopen.",
+                "startingTitle": "Start",
+                "startingBody": "U hoort eerst een aftelling van 5 seconden. Uw Mind Mission begint na de laatste piep. Een dubbele piep geeft aan wanneer de opname is afgelopen."
             }
         }
     }

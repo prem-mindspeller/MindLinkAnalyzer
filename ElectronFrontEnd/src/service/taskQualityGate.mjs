@@ -59,7 +59,7 @@ function baselineMetadata(storage) {
   return Object.keys(metadata).length > 0 ? metadata : null;
 }
 
-function evaluateRecordingSignal(signalStats = null) {
+export function evaluateRecordingSignal(signalStats = null) {
   const total = Number(signalStats?.total || 0);
   const noisyCount = Number(signalStats?.noisy || 0);
   const notWornCount = Number(signalStats?.notWorn || 0);

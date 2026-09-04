@@ -15,6 +15,7 @@ import {
   closureRevealState,
   countWords,
   inTaskAudioLocalization,
+  isLanguageNoticeSection,
   pacedPassageChunk,
   profileComponentRefs,
   protocolProfileRefForTask,
@@ -1088,7 +1089,9 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
     try {
       if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
       window.speechSynthesis.cancel();
-      const utterance = new window.SpeechSynthesisUtterance(introductions.join(' '));
+      const utterance = new window.SpeechSynthesisUtterance(
+        introductions.map((section) => section.body).join(' '),
+      );
       utterance.lang = i18n.resolvedLanguage || i18n.language || 'en';
       utterance.rate = 0.9;
       window.speechSynthesis.speak(utterance);
@@ -1316,11 +1319,24 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
         </div>
         <div className="task-runner-sound-notice">🔊 {t('taskRunner.soundNotice')}</div>
         <div className="task-runner-intro">
-          <ul className="task-runner-intro-bullets">
-            {introductions.map((line) => <li key={line}>{renderRuleWithOrderEmphasis(line)}</li>)}
-          </ul>
+          {introductions
+            .filter((section) => !isLanguageNoticeSection(section.id) || selectedLanguage !== 'en')
+            .map((section) => (
+              <div
+                key={section.id}
+                className={`task-runner-intro-section${isLanguageNoticeSection(section.id) ? ' task-runner-intro-notice' : ''}`}
+              >
+                {section.title && <h3 className="task-runner-intro-title">{section.title}</h3>}
+                {String(section.body || '').split('\n\n').map((paragraph, index) => (
+                  <p key={index}>{renderRuleWithOrderEmphasis(paragraph)}</p>
+                ))}
+              </div>
+            ))}
         </div>
-        <p className="optimized-guardrail">{t('optimizedBattery.runner.guardrail', { defaultValue: 'EEG features are Mind-Mission-contextual candidate evidence. Behavioral validity and signal quality are checked separately.' })}</p>
+        <details className="optimized-guardrail-details">
+          <summary>{t('optimizedBattery.runner.aboutMeasurementLabel', { defaultValue: 'About this measurement' })}</summary>
+          <p className="optimized-guardrail">{t('optimizedBattery.runner.guardrail', { defaultValue: 'EEG features are Mind-Mission-contextual candidate evidence. Behavioral validity and signal quality are checked separately.' })}</p>
+        </details>
         <div className="task-runner-actions">
           <button type="button" className="task-runner-btn-back" onClick={onBack}>{t('taskRunner.cancel')}</button>
           <button type="button" className="task-runner-btn-back" onClick={listenToInstructions}>{t('optimizedBattery.listen', { defaultValue: 'Listen to instructions' })}</button>

@@ -677,6 +677,7 @@
             "durationBadge": "⏱ {{duration}}s EEG",
             "stimulusLanguage": "Stimulus: {{language}}",
             "guardrail": "EEG features are Mind-Mission-contextual candidate evidence. Behavioral validity and signal quality are checked separately.",
+            "aboutMeasurementLabel": "About this measurement",
             "getReady": "Get ready · Eyes {{eyeState}}",
             "countdownCaption": "The uninterrupted Mind Mission begins after the final beep.",
             "continuousEeg": "● Continuous EEG",
@@ -708,28 +709,74 @@
             "directions": { "north": "north", "east": "east", "south": "south", "west": "west" }
         },
         "instructions": {
-            "adaptive_numerical_reasoning": "Start at {{startValue}}; follow every spoken operation silently and give only the final value.",
-            "working_memory_manipulation": "The initial sequence is presented only after EEG scoring starts. Encode it then, maintain every spoken update, and report only the final order.",
-            "auditory_target_counting": "Count every high tone silently and ignore the low tones. Report one count afterward.",
-            "semantic_induction_category_switching": "Infer the organising principle of the first word stream and the new principle after the seamless switch.",
-            "visuospatial_transformation_orientation": "Start at row {{row}}, column {{column}}, facing {{orientation}}. Every displayed turn changes both direction and grid position. Row numbers run top to bottom and columns left to right.",
+            "missionTitle": "Your mission",
+            "adaptive_numerical_reasoning": {
+                "mission": "Keep a running number in your head. Start with {{startValue}} and mentally apply each instruction you hear.",
+                "afterTitle": "After the beep",
+                "after": "Don't say anything yet. When the recording ends, we will ask for your final number."
+            },
+            "working_memory_manipulation": {
+                "mission": "A sequence will appear when the recording starts. Remember it and mentally apply each change you hear while keeping track of the latest order.",
+                "afterTitle": "After the beep",
+                "after": "When the recording ends, enter the final sequence in the correct order."
+            },
+            "auditory_target_counting": {
+                "mission": "Listen to the tones and silently count only the high tones. Ignore the low tones.",
+                "afterTitle": "After the beep",
+                "after": "When the recording ends, enter the number of high tones you counted."
+            },
+            "semantic_induction_category_switching": {
+                "mission": "Listen to the words and work out what they have in common. At some point, that common theme may change. Keep thinking silently.",
+                "afterTitle": "After the beep",
+                "after": "When the recording ends, we will ask what the first and second themes were."
+            },
+            "visuospatial_transformation_orientation": {
+                "mission": "Imagine yourself on the grid at row {{row}}, column {{column}}, facing {{orientation}}. Follow each turn mentally and keep track of both your new position and the direction you are facing.\n\nRows run from top to bottom. Columns run from left to right.",
+                "afterTitle": "After the beep",
+                "after": "When the recording ends, we will ask for your final row, column and direction."
+            },
             "divergent_ideation": {
-                "prompt": "English prompt: {{prompt}}",
-                "response": "Generate ideas silently; you will capture each idea on a separate line afterward."
+                "mission": "Think of as many different ideas as you can in response to the prompt you hear or see. Keep the ideas in mind and do not say or type them yet.",
+                "afterTitle": "After the beep",
+                "after": "When the recording ends, enter each idea on a separate line.",
+                "promptLanguageNotice": "The prompt for this task is presented in English."
             },
-            "dual_task_rule_switching": "Start at {{startValue}}. Before the switch, {{beforeOperation}} {{beforeDelta}} at every Update cue. After Switch, {{afterOperation}} {{afterDelta}} at every Update cue. Count high tones throughout.",
+            "dual_task_rule_switching": {
+                "mission": "You have two things to track at the same time:\n\nKeep a running number in your head. Start at {{startValue}}. At each Update cue, apply the instructed change ({{beforeOperation}} {{beforeDelta}} before the switch, {{afterOperation}} {{afterDelta}} after). After you hear Switch, use the new rule for every following Update.\n\nAt the same time, silently count every high tone you hear.",
+                "afterTitle": "After the beep",
+                "after": "When the recording ends, we will ask for your final number and your high-tone count."
+            },
             "rule_based_anomaly_detection": {
-                "rule": "Every code must contain exactly one letter, a hyphen, and two digits in that same order.",
-                "response": "Silently count anomalies and remember their types; do not click during the stream."
+                "mission": "Each code should follow this rule: one letter, then a hyphen, then two digits. Watch the codes and silently count every code that breaks the rule. Also remember what was wrong with the codes you noticed.",
+                "afterTitle": "After the beep",
+                "after": "Do not click during the task. When the recording ends, we will ask how many anomalies you noticed and what types they were."
             },
-            "rapid_visual_comparison": "Maintain central gaze while both code strings update in synchrony. Press DETECT once, as soon as one gradual mismatch appears, then remain still until the timed block ends.",
-            "pattern_closure_visual_noise": "A fragmented target will emerge gradually from dense visual noise. Press RECOGNIZED once when you know what it is, then remain still until the timed block ends.",
-            "speech_in_noise_comprehension": "Listen to the entire English passage in moderate background noise. Answer only after the sound and EEG scoring stop.",
-            "written_comprehension_synthesis": "Read each centrally paced English section. Then plan a concise synthesis silently; typing begins only after EEG stops.",
+            "rapid_visual_comparison": {
+                "mission": "Keep looking at the centre while the two code strings change. As soon as you notice that they no longer match, press DETECT once.",
+                "afterTitle": "After detection",
+                "after": "After pressing DETECT, keep looking at the screen and remain still until the recording ends."
+            },
+            "pattern_closure_visual_noise": {
+                "mission": "An image will gradually become recognizable through visual noise. Press RECOGNIZED once as soon as you know what the image is.",
+                "afterTitle": "After recognition",
+                "after": "After pressing RECOGNIZED, remain still until the recording ends. We will ask what you recognized afterward."
+            },
+            "speech_in_noise_comprehension": {
+                "mission": "Listen carefully to the entire passage, even when the background noise makes parts difficult to hear. Do not answer while the passage is playing.",
+                "afterTitle": "After the beep",
+                "after": "When the sound and recording have ended, answer the questions about what you heard.",
+                "englishStimulusNotice": "This listening task is presented in English."
+            },
+            "written_comprehension_synthesis": {
+                "mission": "Read each section carefully as it appears. Keep the main ideas in mind and silently plan a short summary. Do not type while the recording is running.",
+                "afterTitle": "After the beep",
+                "after": "When the recording ends, write the requested summary."
+            },
             "common": {
-                "block": "This is one uninterrupted {{duration}}-second EEG scoring block.",
-                "eyes": "Keep your eyes {{eyeState}} and minimise blinking, jaw tension, and movement.",
-                "response": "Do not speak or type until the recording has ended and the response form appears."
+                "duringRecordingTitle": "During the recording",
+                "duringRecordingBody": "Keep your eyes {{eyeState}} and stay as still as you comfortably can. Relax your jaw and forehead. Think silently and do not speak or type until the recording ends.",
+                "startingTitle": "Starting",
+                "startingBody": "You will hear a 5-second countdown. Your Mind Mission starts after the final beep. A double beep tells you when the recording has ended."
             }
         }
     }
