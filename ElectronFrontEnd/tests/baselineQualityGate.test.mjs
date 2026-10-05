@@ -14,6 +14,19 @@ import { evaluateBaselineSignalStats } from '../src/service/baselineQualityGate.
   assert.equal(result.acceptable, true);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 {
   const result = evaluateBaselineSignalStats({
     total: 20,
