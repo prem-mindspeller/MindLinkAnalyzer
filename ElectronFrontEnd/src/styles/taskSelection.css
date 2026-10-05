@@ -989,6 +989,11 @@
     line-height: 1.5;
 }
 
+.optimized-response-card > p.optimized-response-prompt {
+    color: #1e293b;
+    font-weight: 600;
+}
+
 .optimized-response-field {
     display: grid;
     gap: 7px;

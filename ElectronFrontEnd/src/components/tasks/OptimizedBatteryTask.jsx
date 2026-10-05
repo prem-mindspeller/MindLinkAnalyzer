@@ -1544,6 +1544,7 @@ const OptimizedBatteryTask = ({ taskId, sessionDepth, onComplete, onBack }) => {
           </ResponseField>
         </div>
       )}
+      {taskId === TASK_IDS.IDEATION && <p className="optimized-response-prompt">{form.prompt}</p>}
       {taskId === TASK_IDS.IDEATION && (
         <ResponseField label={t('optimizedBattery.responses.ideas')}>
           <textarea rows="8" required value={response.ideas || ''} onChange={(event) => setResponse({ ...response, ideas: event.target.value })} />

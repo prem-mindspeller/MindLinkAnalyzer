@@ -216,6 +216,11 @@ test('pre-recording instructions use localized keys while retaining form values'
 test('language-notice sections exist only for the tasks whose stimulus can stay English', () => {
   const ideation = taskIntroduction(TASK_IDS.IDEATION, FORM_REGISTRY_FOR_TESTS[TASK_IDS.IDEATION][0]);
   assert.ok(ideation.some((section) => section.id === 'promptLanguageNotice'));
+  // The block is silent, so the instructions must state the prompt itself.
+  assert.equal(
+    ideation.find((section) => section.id === 'prompt')?.body,
+    FORM_REGISTRY_FOR_TESTS[TASK_IDS.IDEATION][0].prompt,
+  );
 
   const speech = taskIntroduction(TASK_IDS.SPEECH_NOISE, FORM_REGISTRY_FOR_TESTS[TASK_IDS.SPEECH_NOISE][0]);
   assert.ok(speech.some((section) => section.id === 'englishStimulusNotice'));

@@ -736,9 +736,11 @@
                 "after": "When the recording ends, we will ask for your final row, column and direction."
             },
             "divergent_ideation": {
-                "mission": "Think of as many different ideas as you can in response to the prompt you hear or see. Keep the ideas in mind and do not say or type them yet.",
+                "mission": "Think of as many different ideas as you can in response to the prompt shown below. Keep the ideas in mind and do not say or type them yet.",
                 "afterTitle": "After the beep",
                 "after": "When the recording ends, enter each idea on a separate line.",
+                "promptTitle": "Your prompt",
+                "prompt": "{{prompt}}",
                 "promptLanguageNotice": "The prompt for this task is presented in English."
             },
             "dual_task_rule_switching": {

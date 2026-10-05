@@ -711,9 +711,11 @@
                 "after": "Na de opname vragen we naar uw laatste rij, kolom en kijkrichting."
             },
             "divergent_ideation": {
-                "mission": "Bedenk zoveel mogelijk verschillende ideeën als antwoord op de opdracht die u hoort of ziet. Houd ze in gedachten en spreek of typ ze nog niet.",
+                "mission": "Bedenk zoveel mogelijk verschillende ideeën als antwoord op de opdracht hieronder. Houd ze in gedachten en spreek of typ ze nog niet.",
                 "afterTitle": "Na de piep",
                 "after": "Voer na de opname elk idee op een aparte regel in.",
+                "promptTitle": "Uw opdracht",
+                "prompt": "{{prompt}}",
                 "promptLanguageNotice": "De opdracht voor deze taak wordt in het Engels aangeboden."
             },
             "dual_task_rule_switching": {

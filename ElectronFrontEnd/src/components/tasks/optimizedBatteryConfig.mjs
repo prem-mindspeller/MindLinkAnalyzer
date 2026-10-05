@@ -1074,7 +1074,7 @@ function taskIntroductionEnglish(taskId, form) {
     [TASK_IDS.AUDITORY_COUNT]: () => 'Listen to the tones and silently count only the high tones. Ignore the low tones.',
     [TASK_IDS.SEMANTIC]: () => 'Listen to the words and work out what they have in common. At some point, that common theme may change. Keep thinking silently.',
     [TASK_IDS.VISUOSPATIAL]: () => `Imagine yourself on the grid at row ${form.start.y + 1}, column ${form.start.x + 1}, facing ${form.start.orientation}. Follow each turn mentally and keep track of both your new position and the direction you are facing.\n\nRows run from top to bottom. Columns run from left to right.`,
-    [TASK_IDS.IDEATION]: () => 'Think of as many different ideas as you can in response to the prompt you hear or see. Keep the ideas in mind and do not say or type them yet.',
+    [TASK_IDS.IDEATION]: () => 'Think of as many different ideas as you can in response to the prompt shown below. Keep the ideas in mind and do not say or type them yet.',
     [TASK_IDS.DUAL_TASK]: () => {
       const beforeText = form.beforeDelta < 0 ? `subtract ${Math.abs(form.beforeDelta)}` : `add ${form.beforeDelta}`;
       const afterText = form.afterDelta < 0 ? `subtract ${Math.abs(form.afterDelta)}` : `add ${form.afterDelta}`;
@@ -1108,6 +1108,9 @@ function taskIntroductionEnglish(taskId, form) {
   ];
 
   if (taskId === TASK_IDS.IDEATION) {
+    // The block itself is silent and eyes-closed, so this is the only place the
+    // participant can learn what to generate ideas about.
+    sections.push({ id: 'prompt', titleDefault: 'Your prompt', body: form.prompt });
     sections.push({ id: 'promptLanguageNotice', titleDefault: null, body: 'The prompt for this task is presented in English.' });
   }
   if (taskId === TASK_IDS.SPEECH_NOISE) {
@@ -1141,6 +1144,7 @@ const titleKeyFor = (taskId, id) => {
   if (id === 'duringRecording') return 'optimizedBattery.instructions.common.duringRecordingTitle';
   if (id === 'starting') return 'optimizedBattery.instructions.common.startingTitle';
   if (id === 'after') return `optimizedBattery.instructions.${taskId}.afterTitle`;
+  if (id === 'prompt') return `optimizedBattery.instructions.${taskId}.promptTitle`;
   return null;
 };
 
